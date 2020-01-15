@@ -24,4 +24,4 @@ jobs:
     - name: Check types with mypy
       run: |
         pip install mypy
-        mypy blackjax
+        mypy mcmx
