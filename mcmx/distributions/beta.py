@@ -1,0 +1,24 @@
+from jax import random
+from jax.scipy import stats
+
+from . import constraints
+from .distribution import Distribution
+from .utils import broadcast_batch_shape
+
+
+class Beta(Distribution):
+    params_constraints = {"a": constraints.positive, "b": constraints.positive}
+    support = constraints.interval(0, 1)
+
+    def __init__(self, a, b):
+        self.event_shape = ()
+        self.batch_shape = broadcast_batch_shape(a, b)
+        self.a = a
+        self.b = b
+
+    def sample(self, rng_key, sample_shape):
+        shape = sample_shape + self.batch_shape + self.event_shape
+        return random.beta(rng_key, self.a, self.b, shape=shape)
+
+    def logpdf(self, x):
+        return stats.beta(x, self.a, self.b)
