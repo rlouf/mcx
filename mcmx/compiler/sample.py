@@ -1,8 +1,8 @@
 import ast
-import astor
 import inspect
 from typing import Callable, Dict, List, Union
 
+import astor
 import jax
 
 from .utils import read_object_name
@@ -30,7 +30,6 @@ def compile_to_sampler(model: Callable, namespace: Dict) -> Callable:
 
     compiler = SamplerCompiler()
     tree = compiler.visit(tree)
-    print(astor.code_gen.to_source(tree))
 
     sampler_fn = compile(tree, filename="<ast>", mode="exec")
     exec(sampler_fn, namespace)  # execute the function in the model definition's scope
@@ -56,9 +55,9 @@ class SamplerCompiler(ast.NodeTransformer):
         self.fn_name = new_node.name
         self.model_arguments = [argument.arg for argument in node.args.args]
 
-        # We recursively visit nodes *after* having changed the function's
-        # signature. We subsequently return the node once the children have
-        # been modified.
+        # We recursively visit children nodes *after* having changed the
+        # function's signature. We subsequently return the node once the
+        # children have been modified.
         self.generic_visit(node)
         ast.copy_location(new_node, node)
         ast.fix_missing_locations(new_node)
@@ -147,15 +146,15 @@ class SamplerCompiler(ast.NodeTransformer):
                     new_node = new_sample_expression(
                         var_name, distribution, arguments, do_add_sample_shape
                     )
+
+                    ast.copy_location(new_node, node)
+                    ast.fix_missing_locations(new_node)
+                    return new_node
                 else:
                     raise ValueError(
                         "Expected a distribution initialization on the right of the random variable assignement, got {}",
                         astor.code_gen.to_source(node.value.right),
                     )
-
-                ast.copy_location(new_node, node)
-                ast.fix_missing_locations(new_node)
-                return new_node
 
         return node
 
