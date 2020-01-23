@@ -3,7 +3,7 @@ from jax.scipy.special import xlogy, xlog1py
 
 from .distribution import Distribution
 from . import constraints
-from .utils import broadcast_batch_shape
+from .utils import broadcast_batch_shape, enforce_support
 
 
 class Bernoulli(Distribution):
@@ -19,6 +19,7 @@ class Bernoulli(Distribution):
         shape = sample_shape + self.batch_shape + self.event_shape
         return random.bernoulli(rng_key, self.p, shape=shape)
 
+    @enforce_support
     def logpdf(self, x):
         """ (TODO): Check that x belongs to support, return -infty otherwise
         """

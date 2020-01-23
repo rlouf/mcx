@@ -43,6 +43,16 @@ class BernoulliTest(unittest.TestCase):
             logprob = Bernoulli(case["p"]).logpdf(case["x"])
             self.assertEqual(logprob.item(), case["expected"])
 
+    def test_logpdf_out_of_support(self):
+        test_cases = [
+            {"p": .5, "x": .5, "expected": -np.inf},
+            {"p": .5, "x": 3, "expected": -np.inf},
+            {"p": .5, "x": -1.1, "expected": -np.inf},
+        ]
+        for case in test_cases:
+            logprob = Bernoulli(case["p"]).logpdf(case["x"])
+            self.assertEqual(logprob.item(), case["expected"])
+
     def test_logpdf_few_cases(self):
         """Values obtained from `scipy.stats.bernoulli.logpmf`
 
