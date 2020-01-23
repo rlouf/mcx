@@ -48,6 +48,8 @@ class NormalTest(unittest.TestCase):
         """Test the correctness of broadcasting when both arguments are
         scalars. They are tested separately as scalars are an edge case when
         it comes to broadcasting.
+
+        The trailing `1` stands for the batch size.
         """
         test_cases = [
             {"sample_shape": (), "expected_shape": (1,)},
