@@ -12,16 +12,6 @@ class NormalTest(unittest.TestCase):
         self.rng_key = jax.random.PRNGKey(0)
 
     #
-    # INITIALIZATION
-    #
-
-    def test_negative_sigma(self):
-        """Check that we raise a ValueError when the distribution is
-        initialized with a negative standard deviation.  """
-        with self.assertRaises(ValueError):
-            Normal(0, -1)
-
-    #
     # SAMPLING CORRECTNESS
     #
 

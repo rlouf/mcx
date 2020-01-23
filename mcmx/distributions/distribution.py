@@ -57,19 +57,9 @@ class Distribution(ABC):
     param_constraints: Dict[str, Constraint]
     support: Constraint
 
-    event_shape: Tuple
-    batch_shape: Tuple
-
     @abstractmethod
     def __init__(self, *args) -> None:
-        for parameter, constraint in self.params_constraints.items():
-            is_valid = np.all(constraint(getattr(self, parameter)))
-            if not is_valid:
-                raise ValueError(
-                    "Parameter {}: expected {}, got {}".format(
-                        parameter, constraint, getattr(self, parameter)
-                    )
-                )
+        pass
 
     @abstractmethod
     def sample(
