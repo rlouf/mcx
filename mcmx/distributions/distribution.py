@@ -2,7 +2,6 @@ from abc import ABC, abstractmethod
 from typing import Dict, Tuple
 
 import jax
-from jax import numpy as np
 
 from .constraints import Constraint
 
