@@ -13,7 +13,7 @@ class Bernoulli(Distribution):
     def __init__(self, p):
         self.event_shape = ()
         self.batch_shape = broadcast_batch_shape(p)
-        self.p = p * 1.  # will fail if p is int
+        self.p = p * 1.0  # will fail if p is int
 
     def sample(self, rng_key, sample_shape=()):
         shape = sample_shape + self.batch_shape + self.event_shape

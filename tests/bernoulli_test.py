@@ -45,9 +45,9 @@ class BernoulliTest(unittest.TestCase):
 
     def test_logpdf_out_of_support(self):
         test_cases = [
-            {"p": .5, "x": .5, "expected": -np.inf},
-            {"p": .5, "x": 3, "expected": -np.inf},
-            {"p": .5, "x": -1.1, "expected": -np.inf},
+            {"p": 0.5, "x": 0.5, "expected": -np.inf},
+            {"p": 0.5, "x": 3, "expected": -np.inf},
+            {"p": 0.5, "x": -1.1, "expected": -np.inf},
         ]
         for case in test_cases:
             logprob = Bernoulli(case["p"]).logpdf(case["x"])
@@ -60,12 +60,12 @@ class BernoulliTest(unittest.TestCase):
             Comparison fails at the 8th decimal place.
         """
         test_cases = [
-            {"p": .5, "x": 0, "expected": -0.6931471805599453},
-            {"p": .5, "x": 1, "expected": -0.6931471805599453},
-            {"p": .2, "x": 1, "expected": -1.6094379124341003},
-            {"p": .2, "x": 0, "expected": -0.22314355131420976},
-            {"p": .7, "x": 1, "expected": -0.35667494393873245},
-            {"p": .7, "x": 0, "expected": -1.203972804325936},
+            {"p": 0.5, "x": 0, "expected": -0.6931471805599453},
+            {"p": 0.5, "x": 1, "expected": -0.6931471805599453},
+            {"p": 0.2, "x": 1, "expected": -1.6094379124341003},
+            {"p": 0.2, "x": 0, "expected": -0.22314355131420976},
+            {"p": 0.7, "x": 1, "expected": -0.35667494393873245},
+            {"p": 0.7, "x": 0, "expected": -1.203972804325936},
         ]
         for case in test_cases:
             logprob = Bernoulli(case["p"]).logpdf(case["x"])
@@ -95,14 +95,26 @@ class BernoulliTest(unittest.TestCase):
     def test_sample_shape_array_parameter(self):
         test_cases = [
             {"p": np.array([0.3, 0.5]), "sample_shape": (), "expected_shape": (2,)},
-            {"p": np.array([[0.3, 0.5], [0.1, 0.2]]), "sample_shape": (), "expected_shape": (2, 2)},
-            {"p": np.array([0.3, 0.5]), "sample_shape": (10,), "expected_shape": (10, 2)},
+            {
+                "p": np.array([[0.3, 0.5], [0.1, 0.2]]),
+                "sample_shape": (),
+                "expected_shape": (2, 2),
+            },
+            {
+                "p": np.array([0.3, 0.5]),
+                "sample_shape": (10,),
+                "expected_shape": (10, 2),
+            },
             {
                 "p": np.array([[0.3, 0.5], [0.1, 0.2]]),
                 "sample_shape": (10,),
                 "expected_shape": (10, 2, 2),
             },
-            {"p": np.array([0.3, 0.5]), "sample_shape": (10, 10), "expected_shape": (10, 10, 2)},
+            {
+                "p": np.array([0.3, 0.5]),
+                "sample_shape": (10, 10),
+                "expected_shape": (10, 10, 2),
+            },
             {
                 "p": np.array([[0.3, 0.5], [0.1, 0.2]]),
                 "sample_shape": (10, 10),
@@ -120,7 +132,7 @@ class BernoulliTest(unittest.TestCase):
     def test_logpdf_shape(self):
         test_cases = [
             {"x": 1, "p": 0, "expected_shape": ()},
-            {"x": 1, "p": np.array([.1, .2]), "expected_shape": (2,)},
+            {"x": 1, "p": np.array([0.1, 0.2]), "expected_shape": (2,)},
         ]
         for case in test_cases:
             log_prob = Bernoulli(case["p"]).logpdf(case["x"])

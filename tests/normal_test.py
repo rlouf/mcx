@@ -18,13 +18,13 @@ class NormalTest(unittest.TestCase):
     def test_sample_mean(self):
         means = [0, -1, 10, 100]
         for mu in means:
-            samples = Normal(mu, .01).sample(self.rng_key, (1_000_000,))
+            samples = Normal(mu, 0.01).sample(self.rng_key, (1_000_000,))
             avg = np.mean(samples, axis=0).block_until_ready().item()
             self.assertAlmostEqual(avg, mu, places=4)
 
     def test_sample_mean_vectorized(self):
         means = np.array([0, -1, 10, 100])
-        samples = Normal(means, .01).sample(self.rng_key, (100_000,))
+        samples = Normal(means, 0.01).sample(self.rng_key, (100_000,))
         avg = np.mean(samples, axis=0).block_until_ready().__array__()
         assert_array_almost_equal(means, avg, decimal=4)
 
@@ -64,8 +64,18 @@ class NormalTest(unittest.TestCase):
     def test_sample_shape_array_arguments_no_sample_shape(self):
         """Test the correctness of broadcasting when arguments can be arrays."""
         test_cases = [
-            {"mu": 1, "sigma": np.array([1, 2, 3]), "sample_shape": (), "expected_shape": (3,)},
-            {"mu": np.array([1, 2, 3]), "sigma": 1, "sample_shape": (), "expected_shape": (3,)},
+            {
+                "mu": 1,
+                "sigma": np.array([1, 2, 3]),
+                "sample_shape": (),
+                "expected_shape": (3,),
+            },
+            {
+                "mu": np.array([1, 2, 3]),
+                "sigma": 1,
+                "sample_shape": (),
+                "expected_shape": (3,),
+            },
             {
                 "mu": 1,
                 "sigma": np.array([[1, 2], [3, 4]]),
@@ -80,7 +90,9 @@ class NormalTest(unittest.TestCase):
             },
         ]
         for case in test_cases:
-            samples = Normal(case["mu"], case["sigma"]).sample(self.rng_key, case["sample_shape"])
+            samples = Normal(case["mu"], case["sigma"]).sample(
+                self.rng_key, case["sample_shape"]
+            )
             self.assertEqual(samples.shape, case["expected_shape"])
 
     def test_sample_shape_array_arguments_1d_sample_shape(self):
@@ -111,7 +123,9 @@ class NormalTest(unittest.TestCase):
             },
         ]
         for case in test_cases:
-            samples = Normal(case["mu"], case["sigma"]).sample(self.rng_key, case["sample_shape"])
+            samples = Normal(case["mu"], case["sigma"]).sample(
+                self.rng_key, case["sample_shape"]
+            )
             self.assertEqual(samples.shape, case["expected_shape"])
 
     def test_sample_shape_array_arguments_2d_sample_shape(self):
@@ -142,7 +156,9 @@ class NormalTest(unittest.TestCase):
             },
         ]
         for case in test_cases:
-            samples = Normal(case["mu"], case["sigma"]).sample(self.rng_key, case["sample_shape"])
+            samples = Normal(case["mu"], case["sigma"]).sample(
+                self.rng_key, case["sample_shape"]
+            )
             self.assertEqual(samples.shape, case["expected_shape"])
 
     #

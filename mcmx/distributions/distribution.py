@@ -126,7 +126,10 @@ class Distribution(ABC):
         """User-friendly representation of the probability distribution.
         """
         constraints_str = "\n  ".join(
-            ["{0}: {1!s}".format(key, value) for key, value in self.params_constraints.items()]
+            [
+                "{0}: {1!s}".format(key, value)
+                for key, value in self.params_constraints.items()
+            ]
         )
         support_str = str(self.support)
         return (

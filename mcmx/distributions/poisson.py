@@ -22,7 +22,8 @@ class Poisson(Distribution):
 
     def logpdf(self, x):
         return lax.add(
-            lax.prod(x, lax.log(self.lmbda)), lax.add(lax.neg(self.lmbda), lax.neg(lax.lgamma(x))),
+            lax.prod(x, lax.log(self.lmbda)),
+            lax.add(lax.neg(self.lmbda), lax.neg(lax.lgamma(x))),
         )
 
 
