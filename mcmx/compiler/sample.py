@@ -11,6 +11,10 @@ from .utils import read_object_name
 def compile_to_sampler(model: Callable, namespace: Dict) -> Callable:
     """Compile the model in a function that generates prior predictive samples.
 
+    (TODO): Check that the parameters used to initialize distributions respect
+    the constraints. This cannot be done dynamically once the model is JIT
+    compiled.
+
     Args:
         model: A probabilistic program definition.
         namespace: The model definition's global scope.
@@ -26,17 +30,19 @@ def compile_to_sampler(model: Callable, namespace: Dict) -> Callable:
 
     compiler = SamplerCompiler()
     tree = compiler.visit(tree)
+    print(astor.code_gen.to_source(tree))
 
     sampler_fn = compile(tree, filename="<ast>", mode="exec")
     exec(sampler_fn, namespace)  # execute the function in the model definition's scope
     sampler_fn = namespace[compiler.fn_name]
-    sampler_fn = jax.jit(sampler_fn)
+    sampler_fn = jax.jit(sampler_fn, static_argnums=(1,))
     return sampler_fn
 
 
 class SamplerCompiler(ast.NodeTransformer):
     def __init__(self) -> None:
         super(SamplerCompiler, self).__init__()
+        self.model_arguments: List[str] = []
         self.model_vars: List[str] = []
         self.fn_name: str = ""
 
@@ -44,11 +50,11 @@ class SamplerCompiler(ast.NodeTransformer):
         new_node = node
         new_node.args.args.insert(0, ast.arg(arg="rng_key", annotation=None, type_comment=None))
         new_node.args.args.append(ast.arg(arg="sample_shape", annotation=None, type_comment=None))
-        new_node.args.defaults.append(ast.Tuple(elts=[], ctx=ast.Load()))
-        new_node.decorator_list = []
+        new_node.decorator_list = []  # remove decorators, if any
         new_node.name = node.name + "_sampler"
 
         self.fn_name = new_node.name
+        self.model_arguments = [argument.arg for argument in node.args.args]
 
         # We recursively visit nodes *after* having changed the function's
         # signature. We subsequently return the node once the children have
@@ -57,6 +63,15 @@ class SamplerCompiler(ast.NodeTransformer):
         ast.copy_location(new_node, node)
         ast.fix_missing_locations(new_node)
         return new_node
+
+    def visit_Assign(self, node: ast.Assign) -> ast.Assign:
+        """Visit the assign nodes to record the name of the assignment targets.
+        """
+        for target in node.targets:
+            if isinstance(target, ast.Name):
+                self.model_vars.append(target.id)
+
+        return node
 
     def visit_Expr(self, node: ast.Expr) -> Union[ast.Expr, ast.Assign]:
         """Visit the ast.Expr nodes.
@@ -101,6 +116,7 @@ class SamplerCompiler(ast.NodeTransformer):
                 # definition into a probabilistic DAG that we can then compile with graph traversals.
                 if isinstance(node.value.right, ast.Call):
                     distribution = read_object_name(node.value.right.func)
+
                     arguments = node.value.right.args
                     for arg in arguments:
                         if not (isinstance(arg, ast.Name) or isinstance(arg, ast.Constant)):
@@ -114,6 +130,19 @@ class SamplerCompiler(ast.NodeTransformer):
                                     var_name, astor.code_gen.to_source(arg)
                                 )
                             )
+
+                    args = arguments_not_defined(arguments, self.model_vars, self.model_arguments)
+                    if args:
+                        raise ValueError(
+                            "The random variable `{}` assignment {} "
+                            "references arguments {} that have not been previously defined in the model definition's local scope.\n"
+                            "Maybe you made a typo, forgot a definition or used a variable defined outside "
+                            "of the model's definition. In the later case, please move the variable's definition "
+                            "within the function that specified the model".format(
+                                var_name, astor.code_gen.to_source(node.value.right), ",".join(args)
+                            )
+                        )
+
                     do_add_sample_shape = is_leaf_node(arguments, self.model_vars)
                     new_node = new_sample_expression(
                         var_name, distribution, arguments, do_add_sample_shape
@@ -129,6 +158,30 @@ class SamplerCompiler(ast.NodeTransformer):
                 return new_node
 
         return node
+
+
+def arguments_not_defined(
+    params: List[Union[ast.expr, ast.Name, ast.Constant]],
+    model_vars: List[str],
+    model_arguments: List[str],
+) -> List[str]:
+    """Checks that all arguments to the distribution's initialization are either constants
+    or were passed as arguments to the model definition.
+
+    Args:
+        params: The parameters used to initialized the current random variable's distribution.
+        model_vars: The random variables that have been visited so far in the traversal.
+
+    Returns:
+       A list that contains the names of the arguments that are not defined.
+    """
+    local_scope = model_vars + model_arguments
+    args = []
+    for p in params:
+        if isinstance(p, ast.Name):
+            if p.id not in local_scope:
+                args.append(p.id)
+    return args
 
 
 def is_leaf_node(
