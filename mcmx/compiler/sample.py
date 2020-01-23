@@ -9,6 +9,38 @@ from .utils import read_object_name
 
 
 def compile_to_sampler(model: Callable, namespace: Dict) -> Callable:
+    """Compile the model in a function that generates prior samples from the
+    model's random variables.
+
+    (TODO): Check that the parameters used to initialize distributions respect
+    the constraints. This cannot be done dynamically once the model is JIT
+    compiled.
+
+    Args:
+        model: A probabilistic program definition.
+        namespace: The model definition's global scope.
+
+    Returns:
+        sample_fn: A JIT compiled function that returns prior predictive
+            samples from the model. The function's signature is of the form:
+
+            `model_sampler(rng_key, *args, sample_shape=())`
+    """
+    source = inspect.getsource(model)
+    tree = ast.parse(source)
+
+    compiler = SamplerCompiler(sample_all=True)
+    tree = compiler.visit(tree)
+    randvar_names = compiler.model_randvars
+
+    sampler_fn = compile(tree, filename="<ast>", mode="exec")
+    exec(sampler_fn, namespace)  # execute the function in the model definition's scope
+    sampler_fn = namespace[compiler.fn_name]
+    sampler_fn = jax.jit(sampler_fn, static_argnums=(1,))
+    return sampler_fn, randvar_names
+
+
+def compile_to_predictive_sampler(model: Callable, namespace: Dict) -> Callable:
     """Compile the model in a function that generates prior predictive samples.
 
     (TODO): Check that the parameters used to initialize distributions respect
@@ -39,10 +71,12 @@ def compile_to_sampler(model: Callable, namespace: Dict) -> Callable:
 
 
 class SamplerCompiler(ast.NodeTransformer):
-    def __init__(self) -> None:
+    def __init__(self, sample_all: bool = False) -> None:
         super(SamplerCompiler, self).__init__()
+        self.sample_all = sample_all
         self.model_arguments: List[str] = []
         self.model_vars: List[str] = []
+        self.model_randvars: List[str] = []
         self.fn_name: str = ""
 
     def visit_FunctionDef(self, node: ast.FunctionDef) -> ast.FunctionDef:
@@ -100,6 +134,7 @@ class SamplerCompiler(ast.NodeTransformer):
                 if isinstance(node.value.left, ast.Name):
                     var_name = node.value.left.id
                     self.model_vars.append(var_name)
+                    self.model_randvars.append(var_name)
                 else:
                     raise ValueError(
                         "Expected a name on the left of the random variable assignement, got {}",
@@ -156,6 +191,17 @@ class SamplerCompiler(ast.NodeTransformer):
                         astor.code_gen.to_source(node.value.right),
                     )
 
+        return node
+
+    def visit_Return(self, node: ast.Return) -> ast.Return:
+        if self.sample_all:
+            args = [ast.Name(id=name, ctx=ast.Load()) for name in self.model_randvars]
+            new_node = ast.Return(
+                value=ast.Tuple(elts=args, ctx=ast.Load(), type_ignores=[]), ctx=ast.Load(), decorator_list=[]
+            )
+            ast.copy_location(new_node, node)
+            ast.fix_missing_locations(new_node)
+            return new_node
         return node
 
 
