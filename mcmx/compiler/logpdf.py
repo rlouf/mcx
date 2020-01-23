@@ -30,7 +30,7 @@ def compile_to_logpdf(
 
     compiler = LogpdfCompiler()
     tree = compiler.visit(tree)
-    var_names = compiler.var_names
+    randvar_names = compiler.model_randvars
     print(astor.code_gen.to_source(tree))
 
     logpdf = compile(tree, filename="<ast>", mode="exec")
@@ -39,14 +39,15 @@ def compile_to_logpdf(
     if grad:
         logpdf = jax.grad(logpdf)
     logpdf = jax.jit(logpdf)
-    return logpdf, var_names
+    return logpdf, randvar_names
 
 
 class LogpdfCompiler(ast.NodeTransformer):
     def __init__(self) -> None:
         super(LogpdfCompiler, self).__init__()
         self.model_arguments: List[str] = []
-        self.var_names: List[str] = []
+        self.model_randvars: List[str] = []
+        self.model_vars: List[str] = []
         self.logpdf_names: List[str] = []
         self.fn_name: str = ""
 
@@ -59,12 +60,21 @@ class LogpdfCompiler(ast.NodeTransformer):
 
         new_node = node
         new_node.name = node.name + "_logpdf"
-        new_node.args.args = new_logpdf_args(self.var_names)
+        new_node.args.args = new_logpdf_args(self.model_randvars)
 
         self.fn_name = new_node.name
 
         ast.copy_location(new_node, node)
         ast.fix_missing_locations(new_node)
+        return node
+
+    def visit_Assign(self, node: ast.Assign) -> ast.Assign:
+        """Visit the assign nodes to record the name of the assignment targets.
+        """
+        for target in node.targets:
+            if isinstance(target, ast.Name):
+                self.model_vars.append(target.id)
+
         return node
 
     def visit_Expr(self, node: ast.Expr) -> ast.Expr:
@@ -94,7 +104,8 @@ class LogpdfCompiler(ast.NodeTransformer):
                 # Check that we have a variable name on the let-hand side of `@`
                 if isinstance(node.value.left, ast.Name):
                     var_name = node.value.left.id
-                    self.var_names.append(var_name)
+                    self.model_vars.append(var_name)
+                    self.model_randvars.append(var_name)
                 else:
                     raise ValueError(
                         "Expected a name on the left of the random variable assignement, got {}",
@@ -118,7 +129,7 @@ class LogpdfCompiler(ast.NodeTransformer):
                                 )
                             )
 
-                    args = arguments_not_defined(arguments, self.var_names, self.model_arguments)
+                    args = arguments_not_defined(arguments, self.model_vars, self.model_arguments)
                     if args:
                         raise ValueError(
                             "The random variable `{}` assignment {} "
