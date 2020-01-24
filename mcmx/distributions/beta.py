@@ -3,7 +3,7 @@ from jax.scipy import stats
 
 from . import constraints
 from .distribution import Distribution
-from .utils import broadcast_batch_shape
+from .utils import broadcast_batch_shape, limit_to_support
 
 
 class Beta(Distribution):
@@ -20,5 +20,6 @@ class Beta(Distribution):
         shape = sample_shape + self.batch_shape + self.event_shape
         return random.beta(rng_key, self.a, self.b, shape=shape)
 
+    @limit_to_support
     def logpdf(self, x):
-        return stats.beta(x, self.a, self.b)
+        return stats.beta.logpdf(x, self.a, self.b)
