@@ -74,7 +74,7 @@ class _Interval(Constraint):
         return "a real number in [{},{}]".format(self.lower_bound, self.upper_bound)
 
     def __call__(self, x):
-        return (x >= self.lower_bound) & (x <= self.upper_bound)
+        return (x > self.lower_bound) & (x < self.upper_bound)
 
 
 class _Integer(Constraint):
