@@ -1,14 +1,20 @@
+from functools import partial
+
+from jax import jit
 from jax import numpy as np
+from jax import random
 from jax.scipy.special import xlog1py, xlogy, gammaln
 
 from . import constraints
-from .bernoulli import Bernoulli
 from .distribution import Distribution
-from .utils import broadcast_batch_shape
+from .utils import broadcast_batch_shape, limit_to_support
 
 
 class Binomial(Distribution):
-    params_constraints = {"p": constraints.probability}
+    params_constraints = {
+        "p": constraints.probability,
+        "n": constraints.positive_integer,
+    }
 
     def __init__(self, p, n):
         self.support = constraints.integer_interval(0, n)
@@ -20,15 +26,21 @@ class Binomial(Distribution):
 
     def sample(self, rng_key, sample_shape=()):
         shape = sample_shape + self.batch_shape + self.event_shape
-        return _random_binomial(rng_key, self.p, self.n, shape)
+        n_max = np.max(self.n).item()
+        return _random_binomial(rng_key, self.p, self.n, n_max, shape)
 
+    @limit_to_support
     def logpdf(self, k):
+        k = np.floor(k)
         unnormalized = xlogy(k, self.p) + xlog1py(self.n - k, -self.p)
-        normalization = gammaln(self.n) - gammaln(k) * gammaln(self.n - k)
-        return unnormalized / normalization
+        binomialcoeffln = gammaln(self.n + 1) - (
+            gammaln(k + 1) + gammaln(self.n - k + 1)
+        )
+        return unnormalized + binomialcoeffln
 
 
-def _random_binomial(rng_key, p, n, shape):
+@partial(jit, static_argnums=(3, 4))
+def _random_binomial(rng_key, p, n, n_max, shape):
     """Sample from the binomial distribution.
 
     The general idea is to take `n` samples from a Bernoulli distribution of
@@ -41,12 +53,13 @@ def _random_binomial(rng_key, p, n, shape):
     We then sum the obtained the samples after applying a mask that removes the
     extra samples.
     """
-    n_max = np.max(n)
-    bernoulli_sampling_shape = shape + (n_max,)
-    samples = Bernoulli(p).sample(rng_key, sample_shape=bernoulli_sampling_shape)
+    shape = shape + (n_max,)
 
-    batch_shape = broadcast_batch_shape(p, n)
-    augmented_n = np.ones(shape=batch_shape) * n
-    mask = np.arange(n_max) < np.expand_dims(augmented_n, axis=-1)
+    p = np.expand_dims(p, axis=-1)
+    n = np.expand_dims(n, axis=-1)
+
+    samples = random.bernoulli(rng_key, p, shape=shape)
+    mask = (np.arange(n_max) < n).astype(samples.dtype)
     samples = np.sum(samples * mask, axis=-1)
+
     return samples

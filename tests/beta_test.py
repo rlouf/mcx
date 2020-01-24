@@ -17,7 +17,7 @@ class BetaTest(unittest.TestCase):
     def test_sample_mean(self):
         test_cases = [
             {"a": 1, "b": 1, "expected": beta_mean(1, 1)},
-            {"a": .1, "b": 1, "expected": beta_mean(.1, 1)},
+            {"a": 0.1, "b": 1, "expected": beta_mean(0.1, 1)},
             {"a": 10, "b": 10, "expected": beta_mean(10, 10)},
             {"a": 10, "b": 100, "expected": beta_mean(10, 100)},
         ]
@@ -29,7 +29,7 @@ class BetaTest(unittest.TestCase):
     def test_sample_variance(self):
         test_cases = [
             {"a": 1, "b": 1, "expected": beta_variance(1, 1)},
-            {"a": .1, "b": 1, "expected": beta_variance(.1, 1)},
+            {"a": 0.1, "b": 1, "expected": beta_variance(0.1, 1)},
             {"a": 10, "b": 10, "expected": beta_variance(10, 10)},
             {"a": 10, "b": 100, "expected": beta_variance(10, 100)},
         ]
@@ -48,7 +48,10 @@ class BetaTest(unittest.TestCase):
         test_cases = [
             {"x": -0.1, "expected": -np.inf},
             {"x": 1.1, "expected": -np.inf},
-            {"x": 0, "expected": -np.inf},  # the logpdf is defined on the *open* interval ]0, 1[
+            {
+                "x": 0,
+                "expected": -np.inf,
+            },  # the logpdf is defined on the *open* interval ]0, 1[
             {"x": 1, "expected": -np.inf},  # idem
         ]
         for case in test_cases:
@@ -182,8 +185,8 @@ class BetaTest(unittest.TestCase):
 
     def test_logpdf_shape(self):
         test_cases = [
-            {"x": .5, "a": 0, "b": 1, "expected_shape": ()},
-            {"x": .5, "a": np.array([1, 2]), "b": 1, "expected_shape": (2,)},
+            {"x": 0.5, "a": 0, "b": 1, "expected_shape": ()},
+            {"x": 0.5, "a": np.array([1, 2]), "b": 1, "expected_shape": (2,)},
         ]
         for case in test_cases:
             log_prob = Beta(case["a"], case["b"]).logpdf(case["x"])
@@ -192,6 +195,7 @@ class BetaTest(unittest.TestCase):
 
 def beta_mean(a, b):
     return a / (a + b)
+
 
 def beta_variance(a, b):
     return (a * b) / ((a + b) ** 2 * (a + b + 1))

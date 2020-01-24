@@ -30,8 +30,6 @@ class BernoulliTest(unittest.TestCase):
 
     #
     # LOGPDF CORRECTNESS
-    # We currently do not check that the value belongs to the support,
-    # and the logpdf will output a number regardless.
     #
 
     def test_logpdf_edge_cases(self):

@@ -1,7 +1,7 @@
 import unittest
 
-import jax
 from jax import numpy as np
+from jax import random
 from numpy.testing import assert_array_almost_equal
 
 from mcmx.distributions import Normal
@@ -9,7 +9,7 @@ from mcmx.distributions import Normal
 
 class NormalTest(unittest.TestCase):
     def setUp(self):
-        self.rng_key = jax.random.PRNGKey(0)
+        self.rng_key = random.PRNGKey(0)
 
     #
     # SAMPLING CORRECTNESS

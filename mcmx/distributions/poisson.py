@@ -9,7 +9,7 @@ from .utils import broadcast_batch_shape
 
 class Poisson(Distribution):
     params = {"lambda": constraints.positive}
-    support = constraints.natural_number
+    support = constraints.positive_integer
 
     def __init__(self, lmbda):
         self.event_shape = ()

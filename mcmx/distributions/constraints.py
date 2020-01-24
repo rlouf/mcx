@@ -33,7 +33,7 @@ __all__ = [
     "interval",
     "integer",
     "integer_interval",
-    "natural_number",
+    "positive_integer",
     "positive",
     "probability",
     "real",
@@ -120,7 +120,7 @@ boolean = _Boolean()
 integer = _Integer()
 integer_interval = _IntegerInterval
 interval = _Interval
-natural_number = _IntegerGreaterThan(0)
+positive_integer = _IntegerGreaterThan(0)
 positive = _GreaterThan(0.0)
 probability = _Interval(0.0, 1.0)
 real = _Real()
