@@ -93,7 +93,7 @@ class _IntegerGreaterThan(Constraint):
         return "an integer > {}".format(self.lower_bound)
 
     def __call__(self, x):
-        return (x == np.floor(x)) & (x >= self.lower_bound)
+        return (x == np.floor(x)) & (x > self.lower_bound)
 
 
 class _IntegerInterval(Constraint):
