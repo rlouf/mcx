@@ -37,6 +37,7 @@ __all__ = [
     "positive",
     "probability",
     "real",
+    "simplex",
 ]
 
 
@@ -116,6 +117,15 @@ class _Real(Constraint):
         return np.isfinite(x)
 
 
+class _Simplex(Constraint):
+    def __str__(self):
+        return "a vector of numbers that sums to one up to 1e-6 (probability simplex)"
+
+    def __call__(self, x):
+        x_sum = np.sum(x, axis=-1)
+        return np.all(x > 0, axis=-1) & (x_sum <= 1) & (x_sum > 1 - 1e-6)
+
+
 boolean = _Boolean()
 integer = _Integer()
 integer_interval = _IntegerInterval
@@ -124,3 +134,4 @@ positive_integer = _IntegerGreaterThan(0)
 positive = _GreaterThan(0.0)
 probability = _Interval(0.0, 1.0)
 real = _Real()
+simplex = _Simplex()
