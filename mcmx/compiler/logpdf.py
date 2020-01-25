@@ -5,7 +5,7 @@ from typing import Callable, Dict, List, Tuple, Union, Optional
 import astor
 import jax
 
-from .utils import read_object_name
+from mcmx.compiler.utils import read_object_name
 
 
 def compile_to_logpdf(
@@ -117,7 +117,9 @@ class LogpdfCompiler(ast.NodeTransformer):
 
                     arguments = node.value.right.args
                     for arg in arguments:
-                        if not (isinstance(arg, ast.Name) or isinstance(arg, ast.Constant)):
+                        if not (
+                            isinstance(arg, ast.Name) or isinstance(arg, ast.Constant)
+                        ):
                             raise ValueError(
                                 "Expected a random variable of a constant to initialize {}'s distribution, got {} instead.\n"
                                 "Maybe you are trying to initialize a distribution directly, or call a function inside the "
@@ -129,7 +131,9 @@ class LogpdfCompiler(ast.NodeTransformer):
                                 )
                             )
 
-                    args = arguments_not_defined(arguments, self.model_vars, self.model_arguments)
+                    args = arguments_not_defined(
+                        arguments, self.model_vars, self.model_arguments
+                    )
                     if args:
                         raise ValueError(
                             "The random variable `{}` assignment {} "
@@ -137,11 +141,15 @@ class LogpdfCompiler(ast.NodeTransformer):
                             "Maybe you made a typo, forgot a definition or used a variable defined outside "
                             "of the model's definition. In the later case, please move the variable's definition "
                             "within the function that specified the model".format(
-                                var_name, astor.code_gen.to_source(node.value.right), ",".join(args)
+                                var_name,
+                                astor.code_gen.to_source(node.value.right),
+                                ",".join(args),
                             )
                         )
 
-                    new_node, logpdf_name = new_logpdf_expression(var_name, distribution, arguments)
+                    new_node, logpdf_name = new_logpdf_expression(
+                        var_name, distribution, arguments
+                    )
                     self.logpdf_names.append(logpdf_name)
 
                     ast.copy_location(new_node, node)
@@ -162,7 +170,9 @@ class LogpdfCompiler(ast.NodeTransformer):
 
 
 def new_logpdf_expression(
-    var_name: str, distribution_name: str, arguments: List[Union[ast.expr, ast.Name, ast.Constant]]
+    var_name: str,
+    distribution_name: str,
+    arguments: List[Union[ast.expr, ast.Name, ast.Constant]],
 ):
     """Transform a random variable definition into a logpdf evaluation.
 
@@ -243,10 +253,14 @@ def recursive_sum_generation(
         return expr
     if not expr:
         l, r = nodes.pop(), nodes.pop()
-        return recursive_sum_generation(nodes, ast.BinOp(left=l, op=ast.Add(), right=r,),)
+        return recursive_sum_generation(
+            nodes, ast.BinOp(left=l, op=ast.Add(), right=r,),
+        )
 
     node = nodes.pop()
-    return recursive_sum_generation(nodes, ast.BinOp(left=expr, op=ast.Add(), right=node))
+    return recursive_sum_generation(
+        nodes, ast.BinOp(left=expr, op=ast.Add(), right=node)
+    )
 
 
 def arguments_not_defined(

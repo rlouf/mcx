@@ -1,14 +1,14 @@
 import ast
 import inspect
-from typing import Callable, Dict, List, Union
+from typing import Callable, Dict, List, Tuple, Union
 
 import astor
 import jax
 
-from .utils import read_object_name
+from mcmx.compiler.utils import read_object_name
 
 
-def compile_to_sampler(model: Callable, namespace: Dict) -> Callable:
+def compile_to_sampler(model: Callable, namespace: Dict) -> Tuple[Callable, List[str]]:
     """Compile the model in a function that generates prior samples from the
     model's random variables.
 
@@ -81,8 +81,12 @@ class SamplerCompiler(ast.NodeTransformer):
 
     def visit_FunctionDef(self, node: ast.FunctionDef) -> ast.FunctionDef:
         new_node = node
-        new_node.args.args.insert(0, ast.arg(arg="rng_key", annotation=None, type_comment=None))
-        new_node.args.args.append(ast.arg(arg="sample_shape", annotation=None, type_comment=None))
+        new_node.args.args.insert(
+            0, ast.arg(arg="rng_key", annotation=None, type_comment=None)
+        )
+        new_node.args.args.append(
+            ast.arg(arg="sample_shape", annotation=None, type_comment=None)
+        )
         new_node.decorator_list = []  # remove decorators, if any
         new_node.name = node.name + "_sampler"
 
@@ -153,7 +157,9 @@ class SamplerCompiler(ast.NodeTransformer):
 
                     arguments = node.value.right.args
                     for arg in arguments:
-                        if not (isinstance(arg, ast.Name) or isinstance(arg, ast.Constant)):
+                        if not (
+                            isinstance(arg, ast.Name) or isinstance(arg, ast.Constant)
+                        ):
                             raise ValueError(
                                 "Expected a random variable of a constant to initialize {}'s distribution, got {} instead.\n"
                                 "Maybe you are trying to initialize a distribution directly, or call a function inside the "
@@ -165,7 +171,9 @@ class SamplerCompiler(ast.NodeTransformer):
                                 )
                             )
 
-                    args = arguments_not_defined(arguments, self.model_vars, self.model_arguments)
+                    args = arguments_not_defined(
+                        arguments, self.model_vars, self.model_arguments
+                    )
                     if args:
                         raise ValueError(
                             "The random variable `{}` assignment {} "
@@ -173,7 +181,9 @@ class SamplerCompiler(ast.NodeTransformer):
                             "Maybe you made a typo, forgot a definition or used a variable defined outside "
                             "of the model's definition. In the later case, please move the variable's definition "
                             "within the function that specified the model".format(
-                                var_name, astor.code_gen.to_source(node.value.right), ",".join(args)
+                                var_name,
+                                astor.code_gen.to_source(node.value.right),
+                                ",".join(args),
                             )
                         )
 
@@ -197,7 +207,9 @@ class SamplerCompiler(ast.NodeTransformer):
         if self.sample_all:
             args = [ast.Name(id=name, ctx=ast.Load()) for name in self.model_randvars]
             new_node = ast.Return(
-                value=ast.Tuple(elts=args, ctx=ast.Load(), type_ignores=[]), ctx=ast.Load(), decorator_list=[]
+                value=ast.Tuple(elts=args, ctx=ast.Load(), type_ignores=[]),
+                ctx=ast.Load(),
+                decorator_list=[],
             )
             ast.copy_location(new_node, node)
             ast.fix_missing_locations(new_node)
@@ -301,7 +313,9 @@ def new_sample_expression(
         value=ast.Call(
             func=ast.Attribute(
                 value=ast.Call(
-                    func=ast.Name(id=distribution, ctx=ast.Load()), args=arguments, keywords=[],
+                    func=ast.Name(id=distribution, ctx=ast.Load()),
+                    args=arguments,
+                    keywords=[],
                 ),
                 attr="sample",
                 ctx=ast.Load(),
