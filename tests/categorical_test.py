@@ -2,9 +2,14 @@ import unittest
 
 from jax import numpy as np
 from jax import random
+<<<<<<< HEAD
 import scipy
 
 from mcx.distributions import Categorical
+=======
+
+from mcmx.distributions import Categorical
+>>>>>>> [WIP] add tests for categorical distribution
 
 
 class CategoricalTest(unittest.TestCase):
