@@ -3,7 +3,7 @@ import unittest
 from jax import numpy as np
 from jax import random
 
-from mcmx.distributions import LogNormal
+from mcx.distributions import LogNormal
 
 
 class LogNormalTest(unittest.TestCase):

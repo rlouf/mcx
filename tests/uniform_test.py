@@ -3,7 +3,7 @@ import unittest
 from jax import numpy as np
 from jax import random
 
-from mcmx.distributions import Uniform
+from mcx.distributions import Uniform
 
 
 class UniformTest(unittest.TestCase):

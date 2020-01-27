@@ -4,7 +4,7 @@ from jax import numpy as np
 from jax import random
 from scipy.stats import binom as scipy_binom
 
-from mcmx.distributions import Binomial
+from mcx.distributions import Binomial
 
 
 class BinomialTest(unittest.TestCase):

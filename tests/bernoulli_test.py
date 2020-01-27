@@ -4,7 +4,7 @@ import jax
 from jax import numpy as np
 from numpy.testing import assert_array_almost_equal
 
-from mcmx.distributions import Bernoulli
+from mcx.distributions import Bernoulli
 
 
 class BernoulliTest(unittest.TestCase):

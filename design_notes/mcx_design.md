@@ -1,4 +1,4 @@
-# MCMX design
+# MCX design
 
 ## Philosophy
 
@@ -31,11 +31,11 @@ and their use. Mainly:
   and the random variables may need to be transformed depending on their
   support, but also purely to ease convergence.
 
-The philosophy behind mcmx is simple:
+The philosophy behind mcx is simple:
 
 > Probabilistic models are programs. Samplers are execution engines.
 
-Like any programming language, mcmx has a specific syntax (extremely close to
+Like any programming language, mcx has a specific syntax (extremely close to
 that of Python) that allows to express programs, and a "compiler" (note: let me
 know if there is a better way to call this) that transforms the program into a
 way that is understandable by the execution engine. This compiler can perform
@@ -59,7 +59,7 @@ engine-specific optimizations.
 
 **This idea is not new.** It is at the hear of languages such as Stan, Bugs,
 JAGS, Anglican, HackPPL, Joss.jl and many that I am unfortunately not aware of.
-The only innovation of `mcmx` is to apply this idea to a python library.
+The only innovation of `mcx` is to apply this idea to a python library.
 
 **There is a huge caveat.** Source code transformation/generation implies **a
 lot of black magic** under the hood. If this is not done carefully, at best the
@@ -135,7 +135,7 @@ returned can be observed.*
 
 Each model has a `sample` and a `logpdf` method, and can thus be treated as 
 a distribution. This implies that once can separate a model into modules that
-allow code re-use. This is valid `mcmx` code:
+allow code re-use. This is valid `mcx` code:
 
 ```python
 from mymodule import my_other_prior
@@ -154,7 +154,7 @@ def linear_regression(x):
 
 ### Models can call any function in scope
 
-Which allows to define complex models in a modular way. This is valid `mcmx`
+Which allows to define complex models in a modular way. This is valid `mcx`
 code:
 
 ```python
@@ -185,7 +185,7 @@ def linear_regression(x):
 ### Bayesian Neural Networks are distributions over functions
 
 *the API for random layers is not yet fixed. Many details need to be ironed.*
-The following will be valid `mcmx` code. The execution of the generative model
+The following will be valid `mcx` code. The execution of the generative model
 is as follows:
 
 1. Generate a function called `nn` by getting a sample of its weights' layers;
@@ -196,7 +196,7 @@ is as follows:
 
 ```python
 def mnist_classifier(image):
-    nn @ mcmx.layers.Serial(
+    nn @ mcx.layers.Serial(
         dense(400, Normal(0, 1)),
         dense(400, Normal(0, 1)),
         dense(10, Normal(0, 1)),

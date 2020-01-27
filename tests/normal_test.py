@@ -4,7 +4,7 @@ from jax import numpy as np
 from jax import random
 from numpy.testing import assert_array_almost_equal
 
-from mcmx.distributions import Normal
+from mcx.distributions import Normal
 
 
 class NormalTest(unittest.TestCase):

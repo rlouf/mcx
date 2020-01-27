@@ -25,8 +25,7 @@
 # POSSIBILITY OF SUCH DAMAGE.
 from abc import ABC, abstractmethod
 
-import jax.numpy as np
-
+from jax import numpy as np
 
 __all__ = [
     "boolean",

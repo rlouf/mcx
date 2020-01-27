@@ -4,7 +4,7 @@ from jax import numpy as np
 from jax import random
 import scipy
 
-from mcmx.distributions import Categorical
+from mcx.distributions import Categorical
 
 
 class CategoricalTest(unittest.TestCase):

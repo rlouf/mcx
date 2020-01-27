@@ -3,7 +3,7 @@ import unittest
 from jax import numpy as np
 from jax import random
 
-from mcmx.distributions import Poisson
+from mcx.distributions import Poisson
 
 
 class PoissonTest(unittest.TestCase):

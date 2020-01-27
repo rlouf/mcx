@@ -3,7 +3,7 @@ import unittest
 from jax import numpy as np
 from jax import random
 
-from mcmx.distributions import Beta
+from mcx.distributions import Beta
 
 
 class BetaTest(unittest.TestCase):
