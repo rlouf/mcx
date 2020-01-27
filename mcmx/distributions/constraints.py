@@ -30,6 +30,7 @@ import jax.numpy as np
 
 __all__ = [
     "boolean",
+    "closed_interval",
     "interval",
     "integer",
     "integer_interval",
@@ -72,10 +73,22 @@ class _Interval(Constraint):
         self.upper_bound = upper_bound
 
     def __str__(self):
-        return "a real number in [{},{}]".format(self.lower_bound, self.upper_bound)
+        return "a real number in ]{},{}[".format(self.lower_bound, self.upper_bound)
 
     def __call__(self, x):
         return (x > self.lower_bound) & (x < self.upper_bound)
+
+
+class _ClosedInterval(Constraint):
+    def __init__(self, lower_bound, upper_bound):
+        self.lower_bound = lower_bound
+        self.upper_bound = upper_bound
+
+    def __str__(self):
+        return "a real number in [{},{}]".format(self.lower_bound, self.upper_bound)
+
+    def __call__(self, x):
+        return (x >= self.lower_bound) & (x <= self.upper_bound)
 
 
 class _Integer(Constraint):
@@ -127,6 +140,7 @@ class _Simplex(Constraint):
 
 
 boolean = _Boolean()
+closed_interval = _ClosedInterval
 integer = _Integer()
 integer_interval = _IntegerInterval
 interval = _Interval

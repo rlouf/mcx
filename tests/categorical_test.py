@@ -23,7 +23,9 @@ class CategoricalTest(unittest.TestCase):
             {"probs": np.array([1.0]), "mode": 0},
         ]
         for case in test_cases:
-            samples = Categorical(case["probs"]).sample(self.rng_key, (100_000,)).__array__()
+            samples = (
+                Categorical(case["probs"]).sample(self.rng_key, (100_000,)).__array__()
+            )
             mode = scipy.stats.mode(samples, axis=0)
             self.assertEqual(mode, case["mode"])
 
@@ -93,14 +95,19 @@ class CategoricalTest(unittest.TestCase):
             },
             {
                 "probs": np.array(
-                    [[[0.1, 0.9], [0.2, 0.3], [0.5, 0.5]], [[0.1, 0.9], [0.2, 0.3], [0.5, 0.5]]]
+                    [
+                        [[0.1, 0.9], [0.2, 0.3], [0.5, 0.5]],
+                        [[0.1, 0.9], [0.2, 0.3], [0.5, 0.5]],
+                    ]
                 ),
                 "sample_shape": (100, 10),
                 "expected_shape": (100, 10, 2, 3),
             },
         ]
         for case in test_cases:
-            samples = Categorical(case["probs"]).sample(self.rng_key, case["sample_shape"])
+            samples = Categorical(case["probs"]).sample(
+                self.rng_key, case["sample_shape"]
+            )
             self.assertEqual(samples.shape, case["expected_shape"])
 
     #
@@ -110,7 +117,11 @@ class CategoricalTest(unittest.TestCase):
     def test_logpdf_shape(self):
         test_cases = [
             {"x": 0, "probs": np.array([0.4, 0.1, 0.5]), "expected_shape": ()},
-            {"x": 1, "probs": np.array([[0.1, 0.9], [0.2, 0.8]]), "expected_shape": (2,)},
+            {
+                "x": 1,
+                "probs": np.array([[0.1, 0.9], [0.2, 0.8]]),
+                "expected_shape": (2,),
+            },
         ]
         for case in test_cases:
             log_prob = Categorical(case["probs"]).logpdf(case["x"])

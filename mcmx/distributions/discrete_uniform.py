@@ -3,7 +3,7 @@ from jax import random
 
 from . import constraints
 from .distribution import Distribution
-from .utils import broadcast_batch_shape
+from .utils import broadcast_batch_shape, limit_to_support
 
 
 class DiscreteUniform(Distribution):
@@ -12,7 +12,7 @@ class DiscreteUniform(Distribution):
     params_constraints = {"lower": constraints.integer, "upper": constraints.integer}
 
     def __init__(self, lower, upper):
-        self.suport = constraints.integer_interval(self.lower, self.upper)
+        self.support = constraints.integer_interval(lower, upper)
 
         self.event_shape = ()
         self.batch_shape = broadcast_batch_shape(lower, upper)
@@ -23,5 +23,6 @@ class DiscreteUniform(Distribution):
         shape = sample_shape + self.batch_shape + self.event_shape
         return random.randint(rng_key, shape, self.lower, self.upper)
 
+    @limit_to_support
     def logpdf(self, x):
-        return -np.log(self.upper - self.lower - 1)
+        return -np.log(self.upper - self.lower + 1)

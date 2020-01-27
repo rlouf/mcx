@@ -1,14 +1,18 @@
+from functools import partial
+
+import jax
 from jax import lax
 from jax import numpy as np
 from jax import random
+from jax.scipy.special import xlogy
 
 from . import constraints
 from .distribution import Distribution
-from .utils import broadcast_batch_shape
+from .utils import broadcast_batch_shape, limit_to_support
 
 
 class Poisson(Distribution):
-    params = {"lambda": constraints.positive}
+    params_constraints = {"lambda": constraints.positive}
     support = constraints.positive_integer
 
     def __init__(self, lmbda):
@@ -20,13 +24,16 @@ class Poisson(Distribution):
         shape = sample_shape + self.batch_shape + self.event_shape
         return _random_poisson(rng_key, self.lmbda, shape)
 
+    @limit_to_support
     def logpdf(self, x):
+        x = x * 1.0
         return lax.add(
-            lax.prod(x, lax.log(self.lmbda)),
+            xlogy(x, lax.log(self.lmbda)),
             lax.add(lax.neg(self.lmbda), lax.neg(lax.lgamma(x))),
         )
 
 
+@partial(jax.jit, static_argnums=(2,))
 def _random_poisson(rng_key, lmbda, shape):
     """
     References
