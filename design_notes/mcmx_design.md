@@ -63,7 +63,7 @@ The only innovation of `mcmx` is to apply this idea to a python library.
 
 **There is a huge caveat.** Source code transformation/generation implies **a
 lot of black magic** under the hood. If this is not done carefully, at best the
-code will fail in unexpected way, make translation mistakes that affect the
+code will fail in unexpected way, at worst we make silent translation mistakes that affect the
 inference.  
 However, these issues can be mitigated by (1) staying as close to the Python
 syntax as possible to benefit from the decades of development around its
