@@ -5,7 +5,7 @@ from typing import Callable, Dict, List, Tuple, Union, Optional
 import astor
 import jax
 
-from mcmx.compiler.utils import read_object_name
+from .utils import read_object_name
 
 
 def compile_to_logpdf(
