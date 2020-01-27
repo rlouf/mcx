@@ -1,6 +1,8 @@
 # MCX
+   
+/ˈmɪks/   
 
-Pronounced /ˈmɪks/ (mix). A Probabilistic Programming Library with a laser-focus
+A Probabilistic Programming Library with a laser-focus
 on user-friendliness, sampling and performance. Powered by JAX.
 
 Using a Beta-Binomial model is as simple as:
@@ -9,16 +11,21 @@ Using a Beta-Binomial model is as simple as:
 import mcx
 import mcx.distributions as md
 
-@mcx.model
 def beta_binomial():
     p @ md.Beta(1, 3)
     success @ md.Bernoulli(p)
     return success
 
-model = beta_binomial()
+model = mcx.model(beta_binomial)
+
+print(model())
+# {'b': 0.342, 'success': 1}
+
+print(model.do(b=.5))
+# {'success': 0}
 
 # Prior predictive samples
-prior_samples = model.sample(10_000, seed=0)
+prior_samples = model.sample(10_000)
 
 # Inference
 sampler = MCMC(model, 10_000)
@@ -52,7 +59,7 @@ MCX currently provides basic functionalities for Bayesian Neural Networks, and
 is welcoming contributions. MXMC simply subclasses `trax`'s layers to turn them
 into random functions.
 
-```
+```python
 import mcx.layers as ml
 import mcx.distributions as md
 
