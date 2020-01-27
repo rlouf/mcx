@@ -9,7 +9,7 @@ We want a probabilistic programming library that
    possible. Knowing how to express a probabilistic graphical model and
    manipulating Numpy arrays should be enough. It should provide a "no surprise"
    API.
-2. Leverages **modern hardware** for inference, namely GPUs and TPUs. Performance
+2. Leverages **modern hardware** for inference, namely GPUs and TPUs. Inference
    should be performant to allow **fast iteration** in the exploration phase.
 3. **Focuses exclusively on sampling** to approximate the posterior.
 4. Welcomes **sequential sampling** as a first-class citizen.
