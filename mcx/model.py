@@ -1,8 +1,8 @@
-from typing import Callable, Any, Optional
+import functools
+from typing import Callable
 from types import FunctionType
 
 import numpy
-import jax
 
 from mcx.compiler import to_graph, to_logpdf, to_prior_sampler
 from mcx.distributions import Distribution
@@ -12,13 +12,13 @@ class model(Distribution):
     """Representation of a model.
 
     Since it represents a probability graphical model, the `model` instance is
-    a probability distribution, and as such inherits from the `Distribution`
-    class. It implements the `sample` and `logpdf` methods.
+    a (multivariate) probability distribution, and as such inherits from the
+    `Distribution` class. It implements the `sample` and `logpdf` methods.
 
     Models are expressed as functions. The expression of the model within the
-    function should match the way it would be expressed mathematically as
-    possible. The only difference with standard python code is the use of
-    the "@" operator for random variable assignments.
+    function should be as close to the mathematical expression as possible. The
+    only difference with standard python code is the use of the "@" operator
+    for random variable assignments.
 
     The models are then parsed into an internal representation that can be
     conditioned on data, compiled into a logpdf or a forward sampler. The
@@ -33,30 +33,15 @@ class model(Distribution):
 
         Let us work with the following linear model to illustrate:
 
-        >>> def linear_model(X):
+        >>> @mcx.model
+        ... def linear_model(X):
         ...     weights @ Normal(0, 1)
         ...     sigma @ HalfNormal(0, 1)
         ...     y @ Normal(np.dot(X, weights), sigma)
         ...     return y
         ...
-        ... mymodel = model(linear_model)
+        ... mymodel = linear_model
 
-        We can call the model with the data and get samples. It is not clear at
-        the moment whether I should only return samples from `y` or every other
-        weight too.
-
-        >>> mymodel(X)  # single data point
-        {'weights': 1.8, 'sigma': 0.1, 'y': 3.7}
-        ... mymodel(X)
-        -3.4
-
-        To explore the model, we can also use the "do" operator to fix the value of
-        a random variable. This returns a copy of the model where all connections
-        with the parent nodes have been removed:
-
-        >>> conditioned = mymodel.do(sigma=0.2)
-        ... print(conditioned(X))  # single data point
-        {'weights': 1.8, 'sigma': 0.2, 'y': 4.1}
 
         To perform forward sampling with a full input dataset, use the `sample`
         method. The `sample_shape` denotes the shape of the sample tensor to
@@ -66,6 +51,14 @@ class model(Distribution):
         ... samples = model.sample(X, sample_shape=(100, 10))
         ... print(samples.shape)
         (3, 100, 10)
+
+        To explore the model, we can also use the "do" operator to fix the value of
+        a random variable. This returns a copy of the model where all connections
+        with the parent nodes have been removed:
+
+        >>> conditioned = mymodel.do(sigma=0.2)
+        ... conditioned.sample(rng_key, X, sample_shape=(1000,)  # single data point
+        {'weights': 1.8, 'sigma': 0.2, 'y': 4.1}
 
         Unlike calling the model directly, this function is JIT-compiled and
         can be run on GPU. It should be quite fast to run, which should allow
@@ -85,6 +78,7 @@ class model(Distribution):
 
         >>> from utils import mult
         ...
+        ... @mcx.model
         ... def linear_model(X):
         ...     weights @ Normal(0, 1)
         ...     sigma @ HalfNormal(0, 1)
@@ -93,14 +87,14 @@ class model(Distribution):
 
         will work as the first example above.
 
-        In the same vein, following PyMC4's philosophy [2]_, we can define complex
-        distribution with the `mcmx` syntax:
+        In the same vein, following PyMC4's philosophy [2]_, we would like to
+        define complex distribution with the `mcmx` syntax:
 
-        >>> @mcx.distribution
+        >>> @mcx.model
         ... def Prior():
         ...     return Normal(0, 1)
         ...
-        ... @mcx.distribution
+        ... @mcx.model
         ... def Horseshoe(tau0 , n):
         ...     tau @ HalfCauchy(0 , tau0)
         ...     delta @ HalfCauchy(0 , 1 , plate=n)
@@ -128,19 +122,39 @@ class model(Distribution):
                Framework." (2019).
     """
 
-    def __init__(self, model: FunctionType, rng_key: Optional[jax.random.PRNGKey] = None) -> None:
-        self.model_fn = model
-        self.namespace = model.__globals__
+    def __init__(self, fn: FunctionType) -> None:
+        self.model_fn = fn
+        self.namespace = fn.__globals__
+        functools.update_wrapper(self, fn)
 
-        self.graph = to_graph(model)
+        # (TODO) Parse the source code here into intermediate representation
+        # self.graph = parse(self.model_fn)
 
-        self.rng_key = rng_key
-        if rng_key is None:
-            self.rng_key = jax.random.PRNGKey(0)
+    def __call__(self) -> "model":
+        return self
 
-    def __call__(self, *args, rng_key=None) -> numpy.ndarray:
-        _, self.rng_key = jax.random.split(self.rng_key)
-        return self.sample(*args, rng_key=self.rng_key, sample_shape=(1,))
+    def __print__(self):
+        # random variables
+        # deterministic variables
+        # model source definition
+        raise NotImplementedError
+
+    def do(self, **kwargs) -> "model":
+        """Apply the do operator to the graph and return a copy.
+
+        The do-operator do(X=x) sets the value of the variable X to x and
+        removes all edges between X and its parents. Applying the do-operator
+        may be useful to analyze the behavior of the model pre-inference.
+
+        References:
+            Pearl, Judea. Causality. Cambridge university press, 2009.
+        """
+        for key in kwargs.keys():
+            assert key in self.randvars
+
+        conditionned_model = self.graph.do(kwargs)
+        new_model = type("new_mode", (self,), {"graph": conditionned_model})
+        return new_model
 
     def sample(self, *args, rng_key=None, sample_shape=(1000,)) -> numpy.ndarray:
         sampler = to_prior_sampler(self.model_fn, self.namespace)
