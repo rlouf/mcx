@@ -1,36 +1,26 @@
-# MCX
+<h2 align="center">
+  /ˈmɪks/   
+</h2>
    
-/ˈmɪks/   
+<h3 align="center">
+  Probabilistic Programming in Python based on source code transformation
+</h3>
 
-A Probabilistic Programming Library with a laser-focus
-on user-friendliness, sampling and performance. Powered by JAX.
+<p align="center">
+  <a href="https://github.com/rlouf/mcx/actions?query=workflow%3Abuild"><img src="https://github.com/rlouf/mcx/workflows/build/badge.svg?branch=master"></a>
+  <a href="https://github.com/rlouf/mcx/actions?query=workflow%3Alint"><img src="https://github.com/rlouf/mcx/workflows/lint/badge.svg?branch=master"></a>
+  <a href="https://github.com/psf/black"><img src="https://img.shields.io/badge/code%20style-black-000000.svg"></a>
+</p>
 
-Using a Beta-Binomial model is as simple as:
 
-```python
-import mcx
-import mcx.distributions as md
+MCX is a probabilistic programing library with a laser-focus on sampling
+methods. MCX transforms the model definitions to generate logpdf or sampling
+functions. These functions are JIT-compiled with JAX; they support batching and
+can be exectuted on CPU, GPU or TPU transparently.
 
-def beta_binomial():
-    p @ md.Beta(1, 3)
-    success @ md.Bernoulli(p)
-    return success
-
-model = mcx.model(beta_binomial)
-
-print(model())
-# {'b': 0.342, 'success': 1}
-
-print(model.do(b=.5))
-# {'success': 0}
-
-# Prior predictive samples
-prior_samples = model.sample(10_000)
-
-# Inference
-sampler = MCMC(model, 10_000)
-trace = sampler.run()
-```
+The project is currently at its infancy and a moonshot towards providing
+sequential inference as a first-class citizen, and performant sampling methods
+for bayesian deep learning.
 
 MCX's philosophy
 
@@ -39,6 +29,24 @@ MCX's philosophy
 2. Models should be modular and re-usable.
 3. Inference should be performant. Sequential inference should be a first class
    citizen.
+
+## Currently implemented
+
+* Parsing simple model definitions and compilation to `logpdf` or prior sampler;
+* Sampling from the model's prior definition, prior predictive sampling;
+* Bernoulli, Beta, Binomial, Categorical, Discrete Uniform, Log-Normal, Normal,
+  Poisson, Uniform distributions;
+* Sampling with the Random Walk Metropolis algorithm.
+
+## Roadmap
+
+* Gamma, Dirichlet, Multivariate Normal distribution
+* Hamiltonian Monte Carlo
+* NUTS
+* Metropolis within Gibbs block sampling for discrete variables
+* Bayesian deep learning layers
+* Sequential Markov Chain Monte Carlo
+* Discrete Hamiltonian Monte Carlo
 
 ## Sequential Markov Chain Monte Carlo
 
@@ -53,27 +61,6 @@ application:
   progressively arrives. Think A/B testing for instance, where we need to update
   our knowledge as more users arive.
 
-## Bayesian Neural Networks
-
-MCX currently provides basic functionalities for Bayesian Neural Networks, and
-is welcoming contributions. MXMC simply subclasses `trax`'s layers to turn them
-into random functions.
-
-```python
-import mcx.layers as ml
-import mcx.distributions as md
-
-def mnist_classifier(images):
-    nn @ ml.Serial(
-        ml.dense(400, dist=Normal(0, 1)),
-        ml.dense(400, dist=Normal(0, 1)),
-        ml.dense(10, dist=Normal(0, 1)),
-        ml.softmax(),
-    )
-    p = nn(images)
-    cat @ md.Categorical(p)
-    return cat
-```
 
 ## Important note
 

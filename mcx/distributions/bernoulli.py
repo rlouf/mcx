@@ -1,8 +1,8 @@
 from jax import random
-from jax.scipy.special import xlogy, xlog1py
+from jax.scipy.special import xlog1py, xlogy
 
-from .distribution import Distribution
 from . import constraints
+from .distribution import Distribution
 from .utils import broadcast_batch_shape, limit_to_support
 
 

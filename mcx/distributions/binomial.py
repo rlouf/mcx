@@ -3,7 +3,7 @@ from functools import partial
 from jax import jit
 from jax import numpy as np
 from jax import random
-from jax.scipy.special import xlog1py, xlogy, gammaln
+from jax.scipy.special import gammaln, xlog1py, xlogy
 
 from . import constraints
 from .distribution import Distribution

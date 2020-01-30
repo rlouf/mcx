@@ -45,9 +45,9 @@ def rw_metropolis_generator(
     while True:
         rng_key, sample_key = jax.random.split(rng_key)
         chains_keys = jax.random.split(sample_key, n_chains)
-        position, log_prob = jax.vmap(rw_metropolis_kernel, in_axes=(0, None, 0, 0), out_axes=0)(
-            chains_keys, logpdf, move_scale, position, log_prob
-        )
+        position, log_prob = jax.vmap(
+            rw_metropolis_kernel, in_axes=(0, None, 0, 0), out_axes=0
+        )(chains_keys, logpdf, move_scale, position, log_prob)
         yield numpy.as_array(position)
 
 
@@ -73,13 +73,17 @@ def rw_metropolis_sampler(
     """
     n_chains = initial_position.shape[0]
     rng_keys = jax.random.split(rng_key, n_chains)  # (nchains,)
-    run_mcmc = jax.vmap(rw_metropolis_single_chain, in_axes=(0, None, None, 0), out_axes=0)
+    run_mcmc = jax.vmap(
+        rw_metropolis_single_chain, in_axes=(0, None, None, 0), out_axes=0
+    )
     position = run_mcmc(rng_keys, n_samples, logpdf, initial_position)
     return numpy.as_array(position)
 
 
 @partial(jax.jit, static_argnums=(1, 2, 3))
-def rw_metropolis_single_chain(rng_key, n_samples, move_scale, logpdf, initial_position):
+def rw_metropolis_single_chain(
+    rng_key, n_samples, move_scale, logpdf, initial_position
+):
     """Generate samples for a single chain using the Random Walk Metropolis
     algorithm. Used for the sampler.
 
@@ -103,7 +107,9 @@ def rw_metropolis_single_chain(rng_key, n_samples, move_scale, logpdf, initial_p
     def mh_update(_, state):
         key, position, log_prob = state
         _, key = jax.random.split(key)
-        position, log_prob = rw_metropolis_kernel(key, logpdf, move_scale, position, log_prob)
+        position, log_prob = rw_metropolis_kernel(
+            key, logpdf, move_scale, position, log_prob
+        )
         return (key, position, log_prob)
 
     position = initial_position

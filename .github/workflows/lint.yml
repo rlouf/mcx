@@ -17,6 +17,10 @@ jobs:
         pip install flake8
         # stop the build if there are Python syntax errors or undefined names
         flake8 . --count --ignore=E501,E203,E731,W503 --show-source --statistics
+    - name: Check imports order with isort
+      run: |
+        pip install isort
+        isort -recursive --check .
     - name: Check formatting with black
       run: |
         pip install black

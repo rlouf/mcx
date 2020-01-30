@@ -1,10 +1,10 @@
 import functools
-from typing import Callable
 from types import FunctionType
+from typing import Callable
 
 import numpy
 
-from mcx.compiler import to_graph, to_logpdf, to_prior_sampler
+from mcx import core
 from mcx.distributions import Distribution
 
 
@@ -125,10 +125,11 @@ class model(Distribution):
     def __init__(self, fn: FunctionType) -> None:
         self.model_fn = fn
         self.namespace = fn.__globals__
+        self.graph = core.parse_definition(self.model_fn)
         functools.update_wrapper(self, fn)
 
         # (TODO) Parse the source code here into intermediate representation
-        # self.graph = parse(self.model_fn)
+        # self.randvars = graph.randvars
 
     def __call__(self) -> "model":
         return self

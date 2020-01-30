@@ -1,5 +1,4 @@
-from jax import random
-from jax import scipy
+from jax import random, scipy
 
 from . import constraints
 from .distribution import Distribution

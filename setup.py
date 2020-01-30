@@ -1,7 +1,7 @@
 import setuptools
 
 setuptools.setup(
-    name="mcmx",
+    name="mcx",
     version="0.0.1",
     author="Rémi Louf",
     author_email="remilouf@gmail.com",
@@ -10,7 +10,7 @@ setuptools.setup(
     long_description_content_type="text/markdown",
     url="https://github.com/rlouf/mcmx",
     licence="Apache Licence Version 2.0",
-    packages=["mcmx"],
+    packages=["mcx"],
     python_requires=">=3.5",
-    install_requires=["numpy", "jax", "jaxlib"],
+    install_requires=["astor", "jax", "jaxlib", "networkx", "numpy"],
 )

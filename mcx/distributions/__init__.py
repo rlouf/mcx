@@ -1,18 +1,15 @@
-from .distribution import Distribution
-
 # Discrete random variables
 from .bernoulli import Bernoulli
+# Continuous random variables
+from .beta import Beta
 from .binomial import Binomial
 from .categorical import Categorical
 from .discrete_uniform import DiscreteUniform
-from .poisson import Poisson
-
-# Continuous random variables
-from .beta import Beta
-from .normal import Normal
+from .distribution import Distribution
 from .lognormal import LogNormal
+from .normal import Normal
+from .poisson import Poisson
 from .uniform import Uniform
-
 
 __all__ = [
     "Distribution",

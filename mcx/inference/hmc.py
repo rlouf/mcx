@@ -2,8 +2,8 @@
 """
 Sampling methods using the Random Walk Metropolis algorithm.
 """
-from typing import Callable, Generator
 from functools import partial
+from typing import Callable, Generator
 
 import jax
 import jax.numpy as np
@@ -152,7 +152,9 @@ def hmc_kernel(rng_key, logpdf, integrator, path_length, step_size, state):
 
 
 @partial(jax.jit, static_argnums=(4,))
-def leapfrog_integrator(position, momentum, potential, potential_grad, path_length, step_size):
+def leapfrog_integrator(
+    position, momentum, potential, potential_grad, path_length, step_size
+):
     """Second order symplectic integrator that uses the leapfrog algorithm
     """
     position, momentum = np.copy(position), np.copy(momentum)
