@@ -8,8 +8,8 @@ import networkx as nx
 
 import mcx
 
-from graph import GraphicalModel
-from nodes import Argument, RandVar, Transformation, Var
+from mcx.core.graph import GraphicalModel
+from mcx.core.nodes import Argument, RandVar, Transformation, Var
 
 
 def compile_to_logpdf(
@@ -49,7 +49,7 @@ def compile_to_logpdf(
     ] + [
         ast.arg(arg=node[1]["content"].name, annotation=None)
         for node in graph.nodes(data=True)
-        if not isinstance(node[1]["content"], Argument)
+        if isinstance(node[1]["content"], RandVar)
     ]
 
     body = []

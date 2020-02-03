@@ -125,11 +125,8 @@ class model(Distribution):
     def __init__(self, fn: FunctionType) -> None:
         self.model_fn = fn
         self.namespace = fn.__globals__
-        self.graph = core.parse_definition(self.model_fn)
+        self.graph = core.parse_definition(fn, self.namespace)
         functools.update_wrapper(self, fn)
-
-        # (TODO) Parse the source code here into intermediate representation
-        # self.randvars = graph.randvars
 
     def __call__(self) -> "model":
         return self
@@ -139,6 +136,10 @@ class model(Distribution):
         # deterministic variables
         # model source definition
         raise NotImplementedError
+
+    def __getitem__(self, var):
+        nodes = self.graph.nodes(data=True)
+        return nodes[var]["content"]
 
     def do(self, **kwargs) -> "model":
         """Apply the do operator to the graph and return a copy.
@@ -150,17 +151,16 @@ class model(Distribution):
         References:
             Pearl, Judea. Causality. Cambridge university press, 2009.
         """
-        for key in kwargs.keys():
-            assert key in self.randvars
-
-        conditionned_model = self.graph.do(kwargs)
-        new_model = type("new_mode", (self,), {"graph": conditionned_model})
+        conditionned_graph = self.graph.do(**kwargs)
+        new_model = model(self.model_fn)
+        new_model.graph = conditionned_graph
         return new_model
 
     def sample(self, *args, rng_key=None, sample_shape=(1000,)) -> numpy.ndarray:
-        sampler = to_prior_sampler(self.model_fn, self.namespace)
+        print(args)
+        sampler, _, _ = core.compile_to_sampler(self.graph, self.namespace)
         return sampler(rng_key, *args, sample_shape)
 
     def logpdf(self, *args) -> float:
-        logpdf = to_logpdf(self.model_fn, self.namespace)
+        logpdf, _ , _ = core.compile_to_logpdf(self.graph, self.namespace)
         return logpdf(*args)

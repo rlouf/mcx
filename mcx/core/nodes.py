@@ -102,7 +102,7 @@ class Transformation(object):
         self.is_returned = is_returned
 
     def __str__(self):
-        return "{} ~ {}".format(self.name, astor.code_gen.to_source(self.expression))
+        return "{} = {}".format(self.name, astor.code_gen.to_source(self.expression))
 
     def to_logpdf(self):
         return ast.Assign(

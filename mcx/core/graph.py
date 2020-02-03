@@ -3,7 +3,7 @@ from typing import List
 import astor
 import networkx as nx
 
-from nodes import Argument, RandVar, Transformation, Var
+from mcx.core.nodes import Argument, RandVar, Transformation, Var
 
 
 class GraphicalModel(nx.DiGraph):
