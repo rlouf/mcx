@@ -47,7 +47,7 @@ class GraphicalModel(nx.DiGraph):
         for name, value in kwargs.items():
             if name not in self.nodes:
                 raise NameError("The specified node {} does not exist.")
-            
+
             ast_value = ast.Constant(value=value)
             new_model.nodes[name]["content"] = Var(name, ast_value, False)
 
@@ -58,14 +58,16 @@ class GraphicalModel(nx.DiGraph):
 
             for predecessor in to_remove:
                 new_model.remove_edge(predecessor, name)
-        
+
         # The do-operator will likely separate the graph in different
         # connected components. We only keep the component(s) that contain
         # returned nodes.
         nodes_to_keep: List[str] = []
         connected_components = nx.algorithms.weakly_connected_components(new_model)
         for component in connected_components:
-            has_returned = sum([new_model.nodes[node]["content"].is_returned for node in component])
+            has_returned = sum(
+                [new_model.nodes[node]["content"].is_returned for node in component]
+            )
             if has_returned:
                 nodes_to_keep += [node for node in component]
 

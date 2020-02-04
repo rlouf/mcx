@@ -1,6 +1,5 @@
 import functools
 from types import FunctionType
-from typing import Callable
 
 import numpy
 
@@ -162,7 +161,9 @@ class model(Distribution):
         At the difference of the regular sampler, the forward sampler only returns the
         "generated" variables, i.e. the returned variables in the model definition.
         """
-        forward_sampler, _, src = core.compile_to_forward_sampler(self.graph, self.namespace)
+        forward_sampler, _, src = core.compile_to_forward_sampler(
+            self.graph, self.namespace
+        )
         return forward_sampler(rng_key, *args, sample_shape)
 
     def sample(self, *args, rng_key=None, sample_shape=(1000,)) -> numpy.ndarray:
@@ -170,5 +171,5 @@ class model(Distribution):
         return sampler(rng_key, *args, sample_shape)
 
     def logpdf(self, *args) -> float:
-        logpdf, _ , _ = core.compile_to_logpdf(self.graph, self.namespace)
+        logpdf, _, _ = core.compile_to_logpdf(self.graph, self.namespace)
         return logpdf(*args)

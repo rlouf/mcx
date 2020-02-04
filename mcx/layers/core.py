@@ -3,7 +3,6 @@ from typing import Callable, Optional
 import jax.numpy as np
 
 import mcx.distributions as md
-import mcx.layers as ml
 import trax.layers as tl
 
 
@@ -22,7 +21,7 @@ class Dense(tl.Dense, md.Distribution):
         bias_initializer=tl.init.RandomNormalInitializer(1e-6),
     ):
         super(tl.Dense, self).__init__(n_units, kernel_initializer, bias_initializer)
-        self.distribution = distribution if distribution else md.Deterministic
+        self.distribution = distribution
         self.fn = fn if fn else lambda x: x
 
     def forward(self, x, weights):

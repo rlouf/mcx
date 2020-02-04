@@ -1,15 +1,13 @@
 import ast
 from types import FunctionType
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Union
 
 import astor
-import jax
 import networkx as nx
 
 import mcx
-
 from mcx.core.graph import GraphicalModel
-from mcx.core.nodes import Argument, RandVar, Transformation, Var
+from mcx.core.nodes import Argument, RandVar
 
 
 def compile_to_logpdf(
@@ -52,7 +50,7 @@ def compile_to_logpdf(
         if isinstance(node[1]["content"], RandVar)
     ]
 
-    body = []
+    body: List[Union[ast.Assign, ast.Constant, ast.Num, ast.Return]] = []
     body.append(
         ast.Assign(
             targets=[ast.Name(id="logpdf", ctx=ast.Store())],

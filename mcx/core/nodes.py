@@ -6,6 +6,7 @@ import networkx as nx
 
 from mcx.distributions import Distribution
 
+
 class Argument(object):
     def __init__(self, name: str):
         self.name = name
@@ -72,7 +73,7 @@ class RandVar(object):
 
 class Var(object):
     def __init__(
-        self, name: str, value: Optional[Union[int, float]], is_returned: bool,
+        self, name: str, value: Union[ast.Constant, ast.Num], is_returned: bool,
     ):
         self.name = name
         self.value = value

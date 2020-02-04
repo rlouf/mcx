@@ -1,5 +1,6 @@
 # Discrete random variables
 from .bernoulli import Bernoulli
+
 # Continuous random variables
 from .beta import Beta
 from .binomial import Binomial

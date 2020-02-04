@@ -127,11 +127,11 @@ class Parser(ast.NodeVisitor):
         if isinstance(target, ast.Name):
             var_name = target.id
             if isinstance(node.value, ast.Constant):
-                value = node.value
-                self.model.add_variable(var_name, value=value)
+                constant_value = node.value
+                self.model.add_variable(var_name, value=constant_value)
             elif isinstance(node.value, ast.Num):
-                value = node.value
-                self.model.add_variable(var_name, value=value)
+                num_value = node.value
+                self.model.add_variable(var_name, value=num_value)
             else:
                 arg_names = find_variable_arguments(node)
                 if arg_names:
@@ -187,10 +187,10 @@ class Parser(ast.NodeVisitor):
         args = self.visit_Call(node.right)
         self.model.add_randvar(name, distribution, args)
 
-    def visit_Call(self, node: ast.Call) -> List[Union[str, float, int]]:
+    def visit_Call(self, node: ast.Call) -> List[Union[str, int, float, complex]]:
         return self.visit_Arguments(node.args)
 
-    def visit_Arguments(self, args: List[Any]) -> List[Union[str, float, int]]:
+    def visit_Arguments(self, args: List[Any]) -> List[Union[str, float, int, complex]]:
         """Visits and returns the arguments used to initialize the distribution.
 
         Returns
@@ -200,10 +200,10 @@ class Parser(ast.NodeVisitor):
         Raises
         ------
         SyntaxError
-           If the distribution is initialized with anything different from a constant 
+           If the distribution is initialized with anything different from a constant
            or a previously defined variable.
         """
-        arguments = []
+        arguments: List[Union[str, float, int, complex]] = []
         for arg in args:
             if isinstance(arg, ast.Name):
                 arguments.append(arg.id)

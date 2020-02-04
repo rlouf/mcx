@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Dict, Tuple
+from typing import Dict, Tuple, Union
 
 import jax
 
@@ -62,7 +62,7 @@ class Distribution(ABC):
 
     @abstractmethod
     def sample(
-        self, rng_key: jax.random.PRNGKey, sample_shape: Tuple[int]
+        self, rng_key: jax.random.PRNGKey, sample_shape: Union[Tuple[()], Tuple[int]]
     ) -> jax.numpy.DeviceArray:
         """Obtain samples from the distribution.
 
@@ -82,7 +82,9 @@ class Distribution(ABC):
         pass
 
     def forward(
-        self, rng_key: jax.random.PRNGKey, sample_shape: Tuple[int] = ()
+        self,
+        rng_key: jax.random.PRNGKey,
+        sample_shape: Union[Tuple[()], Tuple[int]] = (),
     ) -> jax.numpy.DeviceArray:
         """Generate forward samples from the distribution. Defined for compatibility with
         Bayesian networks and Bayesian layers.
