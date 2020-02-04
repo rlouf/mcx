@@ -129,6 +129,9 @@ class Parser(ast.NodeVisitor):
             if isinstance(node.value, ast.Constant):
                 value = node.value
                 self.model.add_variable(var_name, value=value)
+            elif isinstance(node.value, ast.Num):
+                value = node.value
+                self.model.add_variable(var_name, value=value)
             else:
                 arg_names = find_variable_arguments(node)
                 if arg_names:
@@ -206,6 +209,8 @@ class Parser(ast.NodeVisitor):
                 arguments.append(arg.id)
             elif isinstance(arg, ast.Constant):
                 arguments.append(arg.value)
+            elif isinstance(arg, ast.Num):
+                arguments.append(arg.n)
             else:
                 raise SyntaxError(
                     "Expected a random variable of a constant to initialize distribution, got {} instead.\n"
@@ -255,7 +260,7 @@ def find_variable_arguments(node) -> List[str]:
         if isinstance(node, ast.BinOp):
             if isinstance(node.left, ast.Name):
                 var_names.append(node.left.id)
-            elif isinstance(node.right, ast.Name):
+            if isinstance(node.right, ast.Name):
                 var_names.append(node.right.id)
         elif isinstance(node, ast.Call):
             for arg in node.args:

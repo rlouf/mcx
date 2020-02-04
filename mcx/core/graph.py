@@ -1,3 +1,4 @@
+import ast
 from typing import List
 
 import astor
@@ -43,16 +44,21 @@ class GraphicalModel(nx.DiGraph):
         ... {'weight': 1.0, 'y': 2}
         """
         new_model = self.copy()
-        for name, value in kwargs:
+        for name, value in kwargs.items():
             if name not in self.nodes:
                 raise NameError("The specified node {} does not exist.")
+            
+            ast_value = ast.Constant(value=value)
+            new_model.nodes[name]["content"] = Var(name, ast_value, False)
 
-            new_model.nodes[name]["content"] = Var(name, value, False)
-
-            predecessors = nx.predecessors(new_model, name)
+            predecessors = new_model.predecessors(name)
+            to_remove = []
             for predecessor in predecessors:
-                new_model.remove_edge(predecessor, name)
+                to_remove.append(predecessor)
 
+            for predecessor in to_remove:
+                new_model.remove_edge(predecessor, name)
+        
         # The do-operator will likely separate the graph in different
         # connected components. We only keep the component(s) that contain
         # returned nodes.
@@ -99,7 +105,7 @@ class GraphicalModel(nx.DiGraph):
                     self.add_edge(arg, name)
                 else:
                     raise SyntaxError(
-                        "The variable {} referenced in the exression {} ~ {} is undefined".format(
+                        "The variable {} referenced in the expression {} ~ {} is undefined".format(
                             arg, name, astor.code_gen.to_source(expression)
                         )
                     )

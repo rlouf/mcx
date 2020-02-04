@@ -9,6 +9,7 @@ from mcx.distributions import Distribution
 class Argument(object):
     def __init__(self, name: str):
         self.name = name
+        self.is_returned = False
 
     def to_logpdf(self):
         return ast.arg(arg=self.name, annotation=None)
@@ -61,7 +62,7 @@ class RandVar(object):
             targets=[ast.Name(id=self.name, ctx=ast.Store())],
             value=ast.Call(
                 func=ast.Attribute(
-                    value=self.distribution, attr="sample", ctx=ast.Load(),
+                    value=self.distribution, attr="forward", ctx=ast.Load(),
                 ),
                 args=args,
                 keywords=[],
