@@ -81,6 +81,14 @@ class Distribution(ABC):
         """
         pass
 
+    def forward(
+        self, rng_key: jax.random.PRNGKey, sample_shape: Tuple[int] = ()
+    ) -> jax.numpy.DeviceArray:
+        """Generate forward samples from the distribution. Defined for compatibility with
+        Bayesian networks and Bayesian layers.
+        """
+        return self.sample(rng_key, sample_shape)
+
     @abstractmethod
     def logpdf(self, x: jax.numpy.DeviceArray) -> jax.numpy.DeviceArray:
         """Compute the value of the log-probability density function at a given

@@ -144,7 +144,7 @@ class model(Distribution):
     def do(self, **kwargs) -> "model":
         """Apply the do operator to the graph and return a copy.
 
-        The do-operator do(X=x) sets the value of the variable X to x and
+        The do-operator :math:`do(X=x)` sets the value of the variable X to x and
         removes all edges between X and its parents. Applying the do-operator
         may be useful to analyze the behavior of the model pre-inference.
 
@@ -156,8 +156,16 @@ class model(Distribution):
         new_model.graph = conditionned_graph
         return new_model
 
+    def forward(self, *args, rng_key=None, sample_shape=(1,)) -> numpy.ndarray:
+        """Forward sampling of the model.
+
+        At the difference of the regular sampler, the forward sampler only returns the
+        "generated" variables, i.e. the returned variables in the model definition.
+        """
+        forward_sampler, _, src = core.compile_to_forward_sampler(self.graph, self.namespace)
+        return forward_sampler(rng_key, *args, sample_shape)
+
     def sample(self, *args, rng_key=None, sample_shape=(1000,)) -> numpy.ndarray:
-        print(args)
         sampler, _, _ = core.compile_to_sampler(self.graph, self.namespace)
         return sampler(rng_key, *args, sample_shape)
 

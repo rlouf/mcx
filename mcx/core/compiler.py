@@ -175,3 +175,81 @@ def compile_to_sampler(graph, namespace, jit=False):
     args = [arg.arg for arg in args]
 
     return namespace[fn_name], args, astor.code_gen.to_source(sampler_ast)
+
+
+def compile_to_forward_sampler(graph, namespace, jit=False):
+    """Compile the model in a function that generates prior samples from the
+    model's generated variables.
+
+    (TODO): Check that the parameters used to initialize distributions respect
+    the constraints. This cannot be done dynamically once the model is JIT
+    compiled.
+
+    Args:
+        model: A probabilistic program definition.
+        namespace: The model definition's global scope.
+    Returns:
+        sample_fn: A JIT compiled function that returns prior predictive
+            samples from the model. The function's signature is of the form:
+            `model_sampler(rng_key, *args, sample_shape=())`
+    """
+    fn_name = graph.name + "_forward_sampler"
+    args = (
+        [ast.arg(arg="rng_key", annotation=None)]
+        + [
+            node[1]["content"].to_sampler()
+            for node in graph.nodes(data=True)
+            if isinstance(node[1]["content"], Argument)
+        ]
+        + [ast.arg(arg="sample_shape", annotation=None)]
+    )
+
+    defaults = [ast.Tuple(elts=[], ctx=ast.Load())]
+
+    body = []
+    ordered_nodes = [
+        graph.nodes[node]["content"]
+        for node in nx.topological_sort(graph)
+        if not isinstance(graph.nodes[node]["content"], Argument)
+    ]
+    for node in ordered_nodes:
+        body.append(node.to_sampler(graph))
+
+    returned_vars = [
+        ast.Name(id=node.name, ctx=ast.Load())
+        for node in ordered_nodes
+        if not isinstance(node, mcx.core.graph.Var) and node.is_returned
+    ]
+    if len(returned_vars) == 1:
+        returned = ast.Return(returned_vars[0])
+    else:
+        returned = ast.Return(value=ast.Tuple(elts=returned_vars, ctx=ast.Load(),))
+    body.append(returned)
+
+    sampler_ast = ast.Module(
+        body=[
+            ast.FunctionDef(
+                name=fn_name,
+                args=ast.arguments(
+                    args=args,
+                    vararg=None,
+                    kwarg=None,
+                    posonlyargs=[],
+                    kwonlyargs=[],
+                    defaults=defaults,
+                    kw_defaults=[],
+                ),
+                body=body,
+                decorator_list=[],
+            )
+        ],
+        type_ignores=[],
+    )
+    sampler_ast = ast.fix_missing_locations(sampler_ast)
+
+    sampler = compile(sampler_ast, filename="<ast>", mode="exec")
+    exec(sampler, namespace)
+
+    args = [arg.arg for arg in args]
+
+    return namespace[fn_name], args, astor.code_gen.to_source(sampler_ast)
