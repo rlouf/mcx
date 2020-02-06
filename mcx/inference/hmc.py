@@ -3,88 +3,13 @@
 Sampling methods using the Random Walk Metropolis algorithm.
 """
 from functools import partial
-from typing import Callable, Generator
+from typing import Callable, Tuple, Union
 
 import jax
 import jax.numpy as np
-import numpy as onp
+import numpy
 
-
-def hmc_generator(
-    rng_key: jax.random.PRNGKey,
-    logpdf: Callable,
-    integrator: Callable,
-    initial_position: jax.numpy.ndarray,
-    initial_step_size: float = 0.1,
-    path_length: int = 1,
-) -> Generator[onp.ndarray, None, None]:
-    """Returns one sample at a time for an arbitrary numbre of chains using the
-    Hamiltonian Monte Carlo algorithm.
-
-    Parameters
-    ----------
-    rng_key: jax.random.PRNGKey
-        The key for Jax's pseudo random number generator.
-    logpdf: function
-        The target being sampled. Evaluated at the current position it
-        returns the model's log probability of the current position and
-        the gradient of the log probability at this position.
-    integrator: function
-        The function used to integrate the hamiltonian dymamics.
-    initial_position: np.ndarray (n_features, n_chains)
-        The initial state of the chain. For a unique starting point a
-        simple vector that contain the initial position from which to
-        sample. For several starting point, a matrix.
-    initial_step_size: float
-        The initial size of the integration steps.
-    path_length: int
-        The length of the integration path.
-
-    Yields
-    ------
-    jax.numpy.array (1 ,n_vars)
-        The samples
-    """
-    n_chains = initial_position.shape[0]
-    position = initial_position
-    log_prob, log_prob_grad = logpdf(initial_position)  # compiled, autograd
-    yield onp.as_array(position)
-
-    step_size = initial_step_size
-    while True:
-        rng_key, sample_key = jax.random.split(rng_key)
-        chains_keys = jax.random.split(sample_key, n_chains)
-        position, log_prob, logprob_grad = jax.vmap(
-            hmc_kernel, in_axes=(0, None, None, None, None, 0, 0, 0), out_axes=(0,)
-        )(
-            chains_keys,
-            logpdf,
-            integrator,
-            step_size,
-            path_length,
-            position,
-            log_prob,
-            log_prob_grad,
-        )
-        yield onp.as_array(position)
-
-
-def hmc_sampler(
-    rng_key: jax.random.PRNGKey,
-    logpdf: Callable,
-    integrator: Callable,
-    initial_position: jax.numpy.ndarray,
-    n_samples: int = 1000,
-    initial_step_size: float = 0.1,
-    path_length: int = 1,
-) -> onp.ndarray:
-
-    n_chains = initial_position.shape[0]
-    rng_keys = jax.random.split(rng_key, n_chains)
-    position = jax.vmap(hmc_single_chain, in_axes=(0, None, None, None, 0), out_axes=0)(
-        rng_keys, n_samples, logpdf, integrator, initial_position
-    )
-    return onp.as_array(position)
+Array = Union[numpy.ndarray, jax.numpy.DeviceArray]
 
 
 @partial(jax.jit, static_argnums=(1, 2, 3))
@@ -107,17 +32,51 @@ def hmc_single_chain(
     return position
 
 
-@partial(jax.jit, static_argnums=(1, 2, 3, 4))
-def hmc_kernel(rng_key, logpdf, integrator, path_length, step_size, state):
-    """
+HMCState = Tuple[Array, Array, Array]
+
+
+@partial(jax.jit, static_argnums=(1, 2))
+def hmc_kernel(
+    rng_key: jax.random.PRNGKey,
+    logpdf: Callable,
+    integrator: Callable,
+    mass_matrix: Array,
+    path_length: float,
+    step_size: float,
+    state: HMCState,
+) -> HMCState:
+    """Hamiltonian Monte Carlo transition kernel.
+
+    Moves the chains by one step using the Hamiltonian Monte Carlo algorithm.
+    The kernel implementation is made as general as possible to ease re-use by
+    different Monte Carlo algorithms; adaptive schemes are left for algorithm to
+    use.
+
+    Arguments
+    ---------
+    rng_key:
+       The pseudo-random number generator key used to generate random numbers.
+    logpdf:
+        The logpdf of the model whose posterior we want to sample. Returns the
+        log probability and gradient when evaluated at a position.
+    integrator:
+        The function used to integrate the equations of motion.
+    mass_matrix:
+        The mass matrix of the euclidean metric.
+    path_length:
+        The current number of integration steps.
+    step_size:
+        The current size of integration steps.
+    state:
+        The current state of the chain: position, log-probability and gradient
+        of the log-probability.
+
 
     Returns
     -------
-    tuple
+    HMCState
         The new position, log-probability at the position and the gradient
         of the log-pobability at this position.
-    float
-        The acceptance probability.
     """
     momentum_key, uniform_key = jax.random.split(rng_key)
 
@@ -126,6 +85,7 @@ def hmc_kernel(rng_key, logpdf, integrator, path_length, step_size, state):
 
     # Hamiltonian proposal
     # Implicitly a diagonal, constant, mass matrix
+    # Add mass matrix here
     momentum = jax.random.normal(momentum_key, (1, n_features))
     proposal, p_new, proposal_log_prob, proposal_log_prob_grad = integrator(
         position,
@@ -149,22 +109,3 @@ def hmc_kernel(rng_key, logpdf, integrator, path_length, step_size, state):
     state = (position, log_prob, log_prob_grad)
 
     return state
-
-
-@partial(jax.jit, static_argnums=(4,))
-def leapfrog_integrator(
-    position, momentum, potential, potential_grad, path_length, step_size
-):
-    """Second order symplectic integrator that uses the leapfrog algorithm
-    """
-    position, momentum = np.copy(position), np.copy(momentum)
-    momentum -= step_size * potential_grad / 2  # half step
-    for _ in np.arange(np.round(path_length / step_size) - 1):
-        position = position + step_size * momentum  # whole step
-        potential_value, potential_grad = potential(position)
-        momentum = momentum - step_size * potential_grad  # whole step
-    position = position + step_size * momentum  # whole step
-    potential_value, potential_grad = potential(position)
-    momentum = momentum - step_size * potential_grad / 2  # half step
-
-    return position, -momentum, potential_value, potential_grad
