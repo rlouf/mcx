@@ -142,13 +142,13 @@ def rw_metropolis_kernel(rng_key, logpdf, move_scale, position, log_prob):
     Returns:
         The next position of the chains along with its log probability.
     """
-    key1, key2 = jax.random.split(rng_key)
+    key_move, key_uniform = jax.random.split(rng_key)
 
-    move_proposal = jax.random.normal(key1, shape=position.shape) * move_scale
+    move_proposal = jax.random.normal(key_move, shape=position.shape) * move_scale
     proposal = position + move_proposal
     proposal_log_prob = logpdf(proposal)
 
-    log_uniform = np.log(jax.random.uniform(key2))
+    log_uniform = np.log(jax.random.uniform(key_uniform))
     do_accept = log_uniform < proposal_log_prob - log_prob
 
     position = np.where(do_accept, proposal, position)
