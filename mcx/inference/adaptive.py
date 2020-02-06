@@ -1,10 +1,30 @@
 """Adaptive algorithms for Markov Chain Monte Carlo.
+
+This is a collection of re-usable adaptive schemes for monte carlo algorithms.
+It only contains algorithms that are used during the warm-up phase of the
+inference and are decorrelated from any particular kernel (NUTS' adaptive
+choice of path length is not included, for instance).
+
+The Stan Manual [1]_ is a very good reference on automatic tuning of
+parameters used in Hamiltonian Monte Carlo.
+
+.. [1]: "HMC Algorithm Parameters", Stan Manual
+        https://mc-stan.org/docs/2_20/reference-manual/hmc-algorithm-parameters.html
 """
-from typing import Callable, Tuple
+from typing import Callable, NamedTuple, Tuple
 
 from jax import numpy as np
 
-DAState = Tuple[float, float, int, float, float]
+
+__all__ = ["dual_averaging"]
+
+
+class DualAveragingState(NamedTuple):
+    log_step_size: float
+    log_step_size_avg: float
+    t: int
+    avg_error: float
+    mu: float
 
 
 def dual_averaging(
@@ -66,7 +86,7 @@ def dual_averaging(
            of Machine Learning Research 15.1 (2014): 1593-1623.
     """
 
-    def init(inital_step_size: float) -> DAState:
+    def init(inital_step_size: float) -> DualAveragingState:
         """Initialize the state of the dual averaging scheme.
 
         The current state of the dual averaging scheme consists, following [2]_,
@@ -84,9 +104,9 @@ def dual_averaging(
         avg_error: float = 0
         log_step_size: float = 0
         log_step_size_avg: float = 0
-        return log_step_size, log_step_size_avg, t, avg_error, mu
+        return DualAveragingState(log_step_size, log_step_size_avg, t, avg_error, mu)
 
-    def update(p_accept: float, state: DAState) -> DAState:
+    def update(p_accept: float, state: DualAveragingState) -> DualAveragingState:
         """Update the state of the Dual Averaging adaptive scheme.
 
         Arguments:
@@ -101,6 +121,6 @@ def dual_averaging(
         avg_error = (1 - (1 / t)) * avg_error + (target - p_accept) / t
         log_step_size = mu - (np.sqrt(t) / gamma) * avg_error
         log_step_size_avg = eta_t * log_step + (1 - eta_t) * avg_log_step
-        return log_step_size, log_step_size_avg, t, avg_error, mu
+        return DualAveragingState(log_step_size, log_step_size_avg, t, avg_error, mu)
 
     return init, update
