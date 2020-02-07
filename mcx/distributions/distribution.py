@@ -53,7 +53,7 @@ class Distribution(ABC):
     ..[4] Pytorch Distributions. https://pytorch.org/docs/stable/distributions.html
     """
 
-    param_constraints: Dict[str, Constraint]
+    parameters: Dict[str, Constraint]
     support: Constraint
 
     @abstractmethod

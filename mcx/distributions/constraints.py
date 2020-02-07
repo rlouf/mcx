@@ -38,6 +38,7 @@ __all__ = [
     "probability",
     "real",
     "simplex",
+    "strictly_positive",
 ]
 
 
@@ -56,6 +57,17 @@ class _Boolean(Constraint):
 
 
 class _GreaterThan(Constraint):
+    def __init__(self, lower_bound):
+        self.lower_bound = lower_bound
+
+    def __call__(self, x):
+        return x >= self.lower_bound
+
+    def __str__(self):
+        return "a real number >= {}".format(self.lower_bound)
+
+
+class _StrictlyGreaterThan(Constraint):
     def __init__(self, lower_bound):
         self.lower_bound = lower_bound
 
@@ -148,3 +160,4 @@ positive = _GreaterThan(0.0)
 probability = _Interval(0.0, 1.0)
 real = _Real()
 simplex = _Simplex()
+strictly_positive = _StrictlyGreaterThan(0.0)

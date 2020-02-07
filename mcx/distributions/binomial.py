@@ -11,7 +11,7 @@ from .utils import broadcast_batch_shape, limit_to_support
 
 
 class Binomial(Distribution):
-    params_constraints = {
+    parameters = {
         "p": constraints.probability,
         "n": constraints.positive_integer,
     }

@@ -12,7 +12,7 @@ from .utils import broadcast_batch_shape, limit_to_support
 
 
 class Poisson(Distribution):
-    params_constraints = {"lambda": constraints.positive}
+    parameters = {"lambda": constraints.positive}
     support = constraints.positive_integer
 
     def __init__(self, lmbda):

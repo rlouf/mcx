@@ -7,8 +7,8 @@ from .utils import broadcast_batch_shape, limit_to_support
 
 
 class LogNormal(Distribution):
-    params_constraints = {"mu": constraints.real, "sigma": constraints.positive}
-    support = constraints.positive
+    parameters = {"mu": constraints.real, "sigma": constraints.positive}
+    support = constraints.strictly_positive
 
     def __init__(self, mu, sigma):
         self.event_shape = ()

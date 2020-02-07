@@ -6,7 +6,10 @@ from .utils import broadcast_batch_shape
 
 
 class Normal(Distribution):
-    params_constraints = {"mu": constraints.real, "sigma": constraints.positive}
+    params_constraints = {
+        "mu": constraints.real,
+        "sigma": constraints.strictly_positive,
+    }
     support = constraints.real
 
     def __init__(self, mu, sigma):

@@ -7,7 +7,10 @@ from .utils import broadcast_batch_shape, limit_to_support
 
 
 class Beta(Distribution):
-    params_constraints = {"a": constraints.positive, "b": constraints.positive}
+    parameters = {
+        "a": constraints.strictly_positive,
+        "b": constraints.strictly_positive,
+    }
     support = constraints.interval(0, 1)
 
     def __init__(self, a, b):

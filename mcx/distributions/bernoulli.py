@@ -7,7 +7,7 @@ from .utils import broadcast_batch_shape, limit_to_support
 
 
 class Bernoulli(Distribution):
-    param_constraints = {"p": constraints.probability}
+    parameters = {"p": constraints.probability}
     support = constraints.boolean
 
     def __init__(self, p):

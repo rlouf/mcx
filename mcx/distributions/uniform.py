@@ -7,7 +7,7 @@ from .utils import broadcast_batch_shape, limit_to_support
 
 
 class Uniform(Distribution):
-    params_constraints = {"lower": constraints.real, "upper": constraints.real}
+    parameters = {"lower": constraints.real, "upper": constraints.real}
 
     def __init__(self, lower, upper):
         self.support = constraints.closed_interval(lower, upper)

@@ -8,7 +8,7 @@ from .utils import limit_to_support
 
 
 class Categorical(Distribution):
-    param_constraints = {"probs": constraints.simplex}
+    parameters = {"probs": constraints.simplex}
 
     def __init__(self, probs):
         self.support = constraints.integer_interval(0, probs.shape[-1] - 1)

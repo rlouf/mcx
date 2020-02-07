@@ -9,7 +9,7 @@ from .utils import broadcast_batch_shape, limit_to_support
 class DiscreteUniform(Distribution):
     """Random variable with a uniform distribution on a range of integers.  """
 
-    params_constraints = {"lower": constraints.integer, "upper": constraints.integer}
+    parameters = {"lower": constraints.integer, "upper": constraints.integer}
 
     def __init__(self, lower, upper):
         self.support = constraints.integer_interval(lower, upper)
