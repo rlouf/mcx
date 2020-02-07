@@ -32,7 +32,7 @@ def broadcast_batch_shape(*args):
 # Sourced from numpyro.distributions.utils.py
 # Copyright Contributors to the NumPyro project.
 # SPDX-License-Identifier: Apache-2.0
-def limit_to_support(logpdf):
+def contain(logpdf):
     """Decorator that enforces the distrbution's support by returning `-np.inf`
     if the value passed to the logpdf is out of support.
     """

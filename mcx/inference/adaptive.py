@@ -16,7 +16,7 @@ from typing import Callable, NamedTuple, Tuple
 from jax import numpy as np
 
 
-__all__ = ["dual_averaging"]
+__all__ = ["dual_averaging", "welford_algorithm"]
 
 
 class DualAveragingState(NamedTuple):
@@ -25,6 +25,12 @@ class DualAveragingState(NamedTuple):
     t: int
     avg_error: float
     mu: float
+
+
+class WelfordAlgorithmState(NamedTuple):
+    mean: float  # the current sample mean
+    m2: float  # the current value of the sum of difference of squares
+    count: int  # the sample size
 
 
 def dual_averaging(
@@ -124,3 +130,65 @@ def dual_averaging(
         return DualAveragingState(log_step_size, log_step_size_avg, t, avg_error, mu)
 
     return init, update
+
+
+def welford_algorithm(is_diagonal_matrix: bool) -> Tuple[Callable, Callable, Callable]:
+    """Welford's online estimator of covariance.
+
+    It is possible to compute the variance of a population of values in an
+    on-line fashion to avoid storing intermediate results. The naive recurrence
+    relations between the sample mean and variance at a step and the next are
+    however not numerically stable.
+
+    Welford's algorithm uses the sum of square of differences
+    :math:`M_{2,n} = \\sum_{i=1}^n \\left(x_i-\\overline{x_n}\right)^2`
+    for updating where :math:`x_n` is the current mean and the following
+    recurrence relationships
+
+    .. math:
+        M_{2,n} = M_{2, n-1} + (x_n-\\overline{x}_{n-1})(x_n-\\overline{x}_n)
+        \\sigma_n^2 = \\frac{M_{2,n}}{n}
+    """
+
+    def init(n_dims: int) -> WelfordAlgorithmState:
+        """Initialize the covariance estimation.
+
+        When the matrix is diagonal it is sufficient to work with an array that contains
+        the diagonal value. Otherwise we need to work with the matrix in full.
+
+        Argument
+        --------
+        n_dims: int
+            The number of dimensions of the problem, which corresponds to the size
+            of the corresponding square mass matrix.
+        """
+        count = 0
+        mean = np.zeros(n_dims)
+        if is_diagonal_matrix:
+            m2 = np.zeros(n_dims)
+        else:
+            m2 = np.zeros((n_dims, n_dims))
+        return WelfordAlgorithmState(mean, m2, count)
+
+    def update(
+        state: WelfordAlgorithmState, value: np.DeviceArray
+    ) -> WelfordAlgorithmState:
+        mean, m2, count = state
+        count = count + 1
+
+        delta = value - mean
+        mean = mean + delta / count
+        updated_delta = value - mean
+        if is_diagonal_matrix:
+            m2 = m2 + delta * updated_delta
+        else:
+            m2 = m2 + np.outer(delta, updated_delta)
+
+        return WelfordAlgorithmState(mean, m2, count)
+
+    def covariance(state: WelfordAlgorithmState) -> np.DeviceArray:
+        mean, m2, count = state
+        covariance = m2 / (count - 1)
+        return covariance
+
+    return init, update, covariance
