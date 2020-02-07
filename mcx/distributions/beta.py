@@ -19,7 +19,7 @@ class Beta(Distribution):
         self.a = a
         self.b = b
 
-    def sample(self, rng_key, sample_shape):
+    def sample(self, rng_key, sample_shape=()):
         shape = sample_shape + self.batch_shape + self.event_shape
         return random.beta(rng_key, self.a, self.b, shape=shape)
 
