@@ -14,7 +14,7 @@ from mcx.inference.kernels import rwm_kernel
 def rw_metropolis_generator(
     rng_key: jax.random.PRNGKey,
     logpdf: Callable,
-    initial_position: jax.DeviceArray,
+    initial_position: jax.numpy.DeviceArray,
     move_scale: float = 0.1,
 ) -> Generator[numpy.ndarray, None, None]:
     """Returns one sample at a time from an arbitrary number of chains using
