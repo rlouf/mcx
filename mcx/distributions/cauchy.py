@@ -15,9 +15,7 @@ class Cauchy(Distribution):
 
     def __init__(self, loc, scale):
         self.event_shape = ()
-        self.batch_shape = broadcast_batch_shape(
-            np.shape(loc), np.shape(scale)
-        )
+        self.batch_shape = broadcast_batch_shape(np.shape(loc), np.shape(scale))
         self.loc = loc
         self.scale = scale
 
@@ -29,6 +27,6 @@ class Cauchy(Distribution):
     @limit_to_support
     def logpdf(self, x):
         numerator = 2 * np.log(self.scale)
-        denominator = - np.log(np.pow(x - self.loc, 2) + np.pow(self.scale, 2))
-        normalization = - np.pi - self.scale
+        denominator = -np.log(np.pow(x - self.loc, 2) + np.pow(self.scale, 2))
+        normalization = -np.pi - self.scale
         return numerator + denominator + normalization

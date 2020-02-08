@@ -46,9 +46,9 @@ def rw_metropolis_generator(
     while True:
         rng_key, sample_key = jax.random.split(rng_key)
         chains_keys = jax.random.split(sample_key, n_chains)
-        position, log_prob = jax.vmap(
-            rwm_kernel, in_axes=(0, None, 0, 0), out_axes=0
-        )(chains_keys, logpdf, move_scale, position, log_prob)
+        position, log_prob = jax.vmap(rwm_kernel, in_axes=(0, None, 0, 0), out_axes=0)(
+            chains_keys, logpdf, move_scale, position, log_prob
+        )
         yield numpy.as_array(position)
 
 
@@ -108,9 +108,7 @@ def rw_metropolis_single_chain(
     def mh_update(_, state):
         key, position, log_prob = state
         _, key = jax.random.split(key)
-        position, log_prob = rwm_kernel(
-            key, logpdf, move_scale, position, log_prob
-        )
+        position, log_prob = rwm_kernel(key, logpdf, move_scale, position, log_prob)
         return (key, position, log_prob)
 
     position = initial_position

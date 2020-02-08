@@ -140,6 +140,13 @@ class model(Distribution):
         nodes = self.graph.nodes(data=True)
         return nodes[var]["content"]
 
+    def __setitem__(self, var, str_value):
+        """Dynamically change the graph.
+
+        >> model["x"] = 'Normal(0, 1)'
+        """
+        pass
+
     def do(self, **kwargs) -> "model":
         """Apply the do operator to the graph and return a copy.
 
