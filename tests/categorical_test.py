@@ -18,7 +18,7 @@ class CategoricalTest(unittest.TestCase):
     def test_sample_mode(self):
         test_cases = [
             {"probs": np.array([0, 1.0]), "mode": 1},
-            {"probs": np.array([0.501, 0.499]), "mode": 0},
+            {"probs": np.array([0.51, 0.49]), "mode": 0},
             {"probs": np.array([0.2, 0.7, 0.1]), "mode": 1},
             {"probs": np.array([1.0]), "mode": 0},
         ]
@@ -26,7 +26,7 @@ class CategoricalTest(unittest.TestCase):
             samples = (
                 Categorical(case["probs"]).sample(self.rng_key, (100_000,)).__array__()
             )
-            mode = scipy.stats.mode(samples, axis=0)
+            mode = scipy.stats.mode(samples, axis=0)[0]
             self.assertEqual(mode, case["mode"])
 
     #

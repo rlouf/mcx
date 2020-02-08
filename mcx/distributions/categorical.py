@@ -4,22 +4,21 @@ from jax.scipy.special import xlogy
 
 from . import constraints
 from .distribution import Distribution
-from .utils import limit_to_support
+from .utils import broadcast_batch_shape, limit_to_support
 
 
 class Categorical(Distribution):
     parameters = {"probs": constraints.simplex}
 
     def __init__(self, probs):
-        self.support = constraints.integer_interval(0, probs.shape[-1] - 1)
-
+        self.support = constraints.integer_interval(0, np.shape(probs)[-1] - 1)
         self.event_shape = ()
-        self.batch_shape = probs.shape[:-1]
+        self.batch_shape = broadcast_batch_shape(np.shape(probs)[:-1])
         self.probs = probs
 
     def sample(self, rng_key, sample_shape):
         shape = sample_shape + self.batch_shape + self.event_shape
-        return random.categorical(rng_key, self.probs, axis=0, shape=shape)
+        return random.categorical(rng_key, self.probs, axis=-1, shape=shape)
 
     @limit_to_support
     def logpdf(self, x):
