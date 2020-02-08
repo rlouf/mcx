@@ -12,7 +12,7 @@ class LogNormal(Distribution):
 
     def __init__(self, mu, sigma):
         self.event_shape = ()
-        self.batch_shape = broadcast_batch_shape(mu, sigma)
+        self.batch_shape = broadcast_batch_shape(np.shape(mu), np.shape(sigma))
         self.mu = mu
         self.sigma = sigma
 

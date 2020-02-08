@@ -17,7 +17,7 @@ class Poisson(Distribution):
 
     def __init__(self, lmbda):
         self.event_shape = ()
-        self.batch_shape = broadcast_batch_shape(lmbda)
+        self.batch_shape = broadcast_batch_shape(np.shape(lmbda))
         self.lmbda = lmbda
 
     def sample(self, rng_key, sample_shape):

@@ -15,7 +15,7 @@ class DiscreteUniform(Distribution):
         self.support = constraints.integer_interval(lower, upper)
 
         self.event_shape = ()
-        self.batch_shape = broadcast_batch_shape(lower, upper)
+        self.batch_shape = broadcast_batch_shape(np.shape(lower), np.shape(upper))
         self.lower = np.floor(lower)
         self.upper = np.floor(upper)
 

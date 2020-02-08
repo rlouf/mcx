@@ -13,7 +13,7 @@ class Uniform(Distribution):
         self.support = constraints.closed_interval(lower, upper)
 
         self.event_shape = ()
-        self.batch_shape = broadcast_batch_shape(lower, upper)
+        self.batch_shape = broadcast_batch_shape(np.shape(lower), np.shape(upper))
         self.lower = lower
         self.upper = upper
 

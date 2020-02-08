@@ -20,7 +20,7 @@ class Binomial(Distribution):
         self.support = constraints.integer_interval(0, n)
 
         self.event_shape = ()
-        self.batch_shape = broadcast_batch_shape(p, n)
+        self.batch_shape = broadcast_batch_shape(np.shape(p), np.shape(n))
         self.n = n
         self.p = p
 

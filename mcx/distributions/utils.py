@@ -2,7 +2,7 @@ from jax import lax
 from jax import numpy as np
 
 
-def broadcast_batch_shape(*args):
+def broadcast_batch_shape(*shapes):
     """Compute the batch shape by broadcasting the arguments.
 
     We use `lax.broadcast_shapes` to get the shape of broadcasted arguments. We
@@ -22,7 +22,6 @@ def broadcast_batch_shape(*args):
     the fact that a distribution initiated with scalar arguments has a batch
     size of 1.
     """
-    shapes = [np.shape(arg) for arg in args]
     broadcasted_shape = lax.broadcast_shapes(*shapes)
     if len(broadcasted_shape) == 0:
         return (1,)
