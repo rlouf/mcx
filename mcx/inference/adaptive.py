@@ -173,6 +173,15 @@ def welford_algorithm(is_diagonal_matrix: bool) -> Tuple[Callable, Callable, Cal
     def update(
         state: WelfordAlgorithmState, value: np.DeviceArray
     ) -> WelfordAlgorithmState:
+        """Update the M2 matrix using the new value.
+
+        Arguments:
+        ----------
+        state:
+            The current state of the Welford Algorithm
+        value: jax.numpy.DeviceArray, shape (1,)
+            The new sample used to update m2
+        """
         mean, m2, count = state
         count = count + 1
 
