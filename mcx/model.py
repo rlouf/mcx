@@ -184,9 +184,19 @@ class model(Distribution):
         _, self.rng_key = self.rng_key.split()
         return sampler(self.rng_key, *args, sample_shape)
 
+    @property
+    def sample_fn(self) -> str:
+        _, _, fn = core.compile_to_sampler(self.graph, self.namespace)
+        return fn
+
     def logpdf(self, *args) -> float:
         logpdf, _, _ = core.compile_to_logpdf(self.graph, self.namespace)
         return logpdf(*args)
+
+    @property
+    def logpdf_fn(self) -> str:
+        _, _, fn = core.compile_to_logpdf(self.graph, self.namespace)
+        return fn
 
 
 def seed(model: model, rng_key: jax.random.PRNGKey) -> model:
