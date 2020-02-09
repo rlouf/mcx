@@ -1,10 +1,14 @@
 import functools
 from types import FunctionType
 
+import jax
 import numpy
 
 from mcx import core
 from mcx.distributions import Distribution
+
+
+__all__ = ["model", "seed"]
 
 
 class model(Distribution):
@@ -125,6 +129,7 @@ class model(Distribution):
         self.model_fn = fn
         self.namespace = fn.__globals__
         self.graph = core.parse_definition(fn, self.namespace)
+        self.rng_key = jax.random.PRNGKey(53)
         functools.update_wrapper(self, fn)
 
     def __call__(self) -> "model":
@@ -162,7 +167,7 @@ class model(Distribution):
         new_model.graph = conditionned_graph
         return new_model
 
-    def forward(self, *args, rng_key=None, sample_shape=(1,)) -> numpy.ndarray:
+    def forward(self, *args, sample_shape=(1,)) -> numpy.ndarray:
         """Forward sampling of the model.
 
         At the difference of the regular sampler, the forward sampler only returns the
@@ -171,12 +176,20 @@ class model(Distribution):
         forward_sampler, _, src = core.compile_to_forward_sampler(
             self.graph, self.namespace
         )
-        return forward_sampler(rng_key, *args, sample_shape)
+        _, self.rng_key = self.rng_key.split()
+        return forward_sampler(self.rng_key, *args, sample_shape)
 
-    def sample(self, *args, rng_key=None, sample_shape=(1000,)) -> numpy.ndarray:
+    def sample(self, *args, sample_shape=(1000,)) -> numpy.ndarray:
         sampler, _, _ = core.compile_to_sampler(self.graph, self.namespace)
-        return sampler(rng_key, *args, sample_shape)
+        _, self.rng_key = self.rng_key.split()
+        return sampler(self.rng_key, *args, sample_shape)
 
     def logpdf(self, *args) -> float:
         logpdf, _, _ = core.compile_to_logpdf(self.graph, self.namespace)
         return logpdf(*args)
+
+
+def seed(model: model, rng_key: jax.random.PRNGKey) -> model:
+    """Set the random seed of the model."""
+    model.rng_key = rng_key
+    return model
