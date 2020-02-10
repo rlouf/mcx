@@ -20,9 +20,10 @@ from typing import Callable, NamedTuple, Tuple
 
 from jax import numpy as np
 from jax import scipy
+from jax.numpy import DeviceArray as Array
 
 
-__all__ = ["dual_averaging", "mass_matrix_adaptation"]
+__all__ = ["dual_averaging", "find_reasonable_step_size", "mass_matrix_adaptation"]
 
 
 class DualAveragingState(NamedTuple):
@@ -40,8 +41,8 @@ class WelfordAlgorithmState(NamedTuple):
 
 
 class MassMatrixAdaptationState(NamedTuple):
-    inverse_mass_matrix: np.DeviceArray
-    mass_matrix_sqrt: np.DeviceArray
+    inverse_mass_matrix: Array
+    mass_matrix_sqrt: Array
     wc_state: WelfordAlgorithmState
 
 
@@ -163,7 +164,7 @@ def mass_matrix_adaptation(
         )
 
     def update(
-        state: MassMatrixAdaptationState, value: np.DeviceArray
+        state: MassMatrixAdaptationState, value: Array
     ) -> MassMatrixAdaptationState:
         mass_matrix_sqrt, inverse_mass_matrix, wc_state = state
         wc_state = wc_update(wc_state, value)
@@ -171,9 +172,7 @@ def mass_matrix_adaptation(
             mass_matrix_sqrt, inverse_mass_matrix, wc_state
         )
 
-    def mass_matrix(
-        state: MassMatrixAdaptationState,
-    ) -> Tuple[np.DeviceArray, np.DeviceArray]:
+    def final(state: MassMatrixAdaptationState,) -> Tuple[Array, Array]:
         mass_matrix_sqrt, inverse_mass_matrix, wc_state = state
         covariance, count, mean = wc_final(wc_state)
 
@@ -235,9 +234,7 @@ def welford_algorithm(is_diagonal_matrix: bool) -> Tuple[Callable, Callable, Cal
             m2 = np.zeros((n_dims, n_dims))
         return WelfordAlgorithmState(mean, m2, count)
 
-    def update(
-        state: WelfordAlgorithmState, value: np.DeviceArray
-    ) -> WelfordAlgorithmState:
+    def update(state: WelfordAlgorithmState, value: Array) -> WelfordAlgorithmState:
         """Update the M2 matrix using the new value.
 
         Arguments:
@@ -271,7 +268,7 @@ def welford_algorithm(is_diagonal_matrix: bool) -> Tuple[Callable, Callable, Cal
 # Sourced from numpyro.distributions.utils.py
 # Copyright Contributors to the NumPyro project.
 # SPDX-License-Identifier: Apache-2.0
-def cholesky_triangular(matrix):
+def cholesky_triangular(matrix: Array) -> Array:
     tril_inv = np.swapaxes(
         np.linalg.cholesky(matrix[..., ::-1, ::-1])[..., ::-1, ::-1], -2, -1
     )
