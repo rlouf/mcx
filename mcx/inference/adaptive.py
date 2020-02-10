@@ -19,9 +19,10 @@ parameters used in Hamiltonian Monte Carlo.
 from typing import Callable, NamedTuple, Tuple
 
 from jax import numpy as np
+from jax import scipy
 
 
-__all__ = ["dual_averaging", "welford_algorithm"]
+__all__ = ["dual_averaging", "mass_matrix_adaptation"]
 
 
 class DualAveragingState(NamedTuple):
@@ -36,6 +37,12 @@ class WelfordAlgorithmState(NamedTuple):
     mean: float  # the current sample mean
     m2: float  # the current value of the sum of difference of squares
     count: int  # the sample size
+
+
+class MassMatrixAdaptationState(NamedTuple):
+    inverse_mass_matrix: np.DeviceArray
+    mass_matrix_sqrt: np.DeviceArray
+    wc_state: WelfordAlgorithmState
 
 
 def dual_averaging(
@@ -137,6 +144,59 @@ def dual_averaging(
     return init, update
 
 
+def mass_matrix_adaptation(
+    is_diagonal_matrix: bool = True,
+) -> Tuple[Callable, Callable, Callable]:
+    wc_init, wc_update, wc_final = welford_algorithm(is_diagonal_matrix)
+
+    def init(n_dims: int) -> MassMatrixAdaptationState:
+        if is_diagonal_matrix:
+            inverse_mass_matrix = np.ones(n_dims)
+        else:
+            inverse_mass_matrix = np.identity(n_dims)
+        mass_matrix_sqrt = inverse_mass_matrix
+
+        wc_state = wc_init(n_dims)
+
+        return MassMatrixAdaptationState(
+            inverse_mass_matrix, mass_matrix_sqrt, wc_state
+        )
+
+    def update(
+        state: MassMatrixAdaptationState, value: np.DeviceArray
+    ) -> MassMatrixAdaptationState:
+        mass_matrix_sqrt, inverse_mass_matrix, wc_state = state
+        wc_state = wc_update(wc_state, value)
+        return MassMatrixAdaptationState(
+            mass_matrix_sqrt, inverse_mass_matrix, wc_state
+        )
+
+    def mass_matrix(
+        state: MassMatrixAdaptationState,
+    ) -> Tuple[np.DeviceArray, np.DeviceArray]:
+        mass_matrix_sqrt, inverse_mass_matrix, wc_state = state
+        covariance, count, mean = wc_final(wc_state)
+
+        # Regularize the covariance matrix, see Stan
+        scaled_covariance = (count / (count + 5)) * covariance
+        shrinkage = 1e-3 * (5 / (count + 5))
+        if is_diagonal_matrix:
+            inverse_mass_matrix = scaled_covariance + shrinkage
+        else:
+            inverse_mass_matrix = scaled_covariance + shrinkage * np.identity(
+                mean.shape[0]
+            )
+
+        if np.ndim(inverse_mass_matrix) == 2:
+            mass_matrix_sqrt = cholesky_triangular(inverse_mass_matrix)
+        else:
+            mass_matrix_sqrt = np.sqrt(np.reciprocal(inverse_mass_matrix))
+
+        return inverse_mass_matrix, mass_matrix_sqrt
+
+    return init, update, mass_matrix
+
+
 def welford_algorithm(is_diagonal_matrix: bool) -> Tuple[Callable, Callable, Callable]:
     """Welford's online estimator of covariance.
 
@@ -203,6 +263,17 @@ def welford_algorithm(is_diagonal_matrix: bool) -> Tuple[Callable, Callable, Cal
     def covariance(state: WelfordAlgorithmState) -> np.DeviceArray:
         mean, m2, count = state
         covariance = m2 / (count - 1)
-        return covariance
+        return covariance, count, mean
 
     return init, update, covariance
+
+
+# Sourced from numpyro.distributions.utils.py
+# Copyright Contributors to the NumPyro project.
+# SPDX-License-Identifier: Apache-2.0
+def cholesky_triangular(matrix):
+    tril_inv = np.swapaxes(
+        np.linalg.cholesky(matrix[..., ::-1, ::-1])[..., ::-1, ::-1], -2, -1
+    )
+    identity = np.broadcast_to(np.identity(matrix.shape[-1]), tril_inv.shape)
+    return scipy.linalg.solve_triangular(tril_inv, identity, lower=True)
