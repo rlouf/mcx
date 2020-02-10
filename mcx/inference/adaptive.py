@@ -8,6 +8,11 @@ choice of path length is not included, for instance).
 The Stan Manual [1]_ is a very good reference on automatic tuning of
 parameters used in Hamiltonian Monte Carlo.
 
+.. note:
+    This is a "flat zone": values used to update the step size or the mass
+    matrix are 1D arrays. Raveling/unraveling logic should happen at a higher
+    level.
+
 .. [1]: "HMC Algorithm Parameters", Stan Manual
         https://mc-stan.org/docs/2_20/reference-manual/hmc-algorithm-parameters.html
 """
