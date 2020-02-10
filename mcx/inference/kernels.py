@@ -1,13 +1,21 @@
-from functools import partial
-from typing import Callable, Tuple, Union
+"""Sampling kernels.
 
-import numpy
+.. note:
+    This file is a "flat zone": positions and logprobs are 1 dimensional
+    arrays. Raveling and unraveling logic must happen outside.
+"""
+from functools import partial
+from typing import Callable, Tuple
+
 import jax
 import jax.numpy as np
+import jax.numpy.DeviceArray as Array
 import jax.scipy.stats as st
 
-Array = Union[numpy.ndarray, jax.numpy.DeviceArray]
+__all__ = ["hmc_kernel", "rwm_kernel"]
+
 HMCState = Tuple[Array, Array, Array]
+RWMState = Tuple[Array, Array]
 
 
 @partial(jax.jit, static_argnums=(1, 2))
@@ -79,6 +87,44 @@ def hmc_kernel(
         log_prob = proposal_log_prob
         log_prob_grad = proposal_log_prob_grad
 
-    state = (position, log_prob, log_prob_grad)
+    return position, log_prob, log_prob_grad
 
-    return state
+
+@partial(jax.jit, static_argnums=(1, 2))
+def rwm_kernel(
+    rng_key: jax.random.PRNGKey, logpdf: Callable, move_scale: float, state: RWMState
+) -> RWMState:
+    """Random Walk Metropolis transition kernel.
+
+    Moves the chains by one step using the Random Walk Metropolis algorithm.
+
+    Arguments
+    ---------
+    rng_key: jax.random.PRNGKey
+        Key for the pseudo random number generator.
+    logpdf: function
+        Returns the log-probability of the model given a position.
+    move_scale: float
+        Standard deviation of the Gaussian distribution from which the
+        move proposals are sampled.
+    state: RWMState
+        The current state of the markov chain.
+
+    Returns
+    -------
+    The next state of the markov chain.
+    """
+    key_move, key_uniform = jax.random.split(rng_key)
+
+    position, log_prob = state
+
+    move_proposal = jax.random.normal(key_move, shape=position.shape) * move_scale
+    proposal = position + move_proposal
+    proposal_log_prob = logpdf(proposal)
+
+    log_uniform = np.log(jax.random.uniform(key_uniform))
+    do_accept = log_uniform < proposal_log_prob - log_prob
+
+    position = np.where(do_accept, proposal, position)
+    log_prob = np.where(do_accept, proposal_log_prob, log_prob)
+    return position, log_prob
