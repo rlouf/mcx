@@ -30,10 +30,9 @@ def hmc_kernel(
 ) -> HMCState:
     """Hamiltonian Monte Carlo transition kernel.
 
-    Moves the chains by one step using the Hamiltonian Monte Carlo algorithm.
+    Moves the chain by one step using the Hamiltonian Monte Carlo algorithm.
     The kernel implementation is made as general as possible to ease re-use by
-    different Monte Carlo algorithms; adaptive schemes are left for algorithm to
-    use.
+    different Monte Carlo algorithms.
 
     Arguments
     ---------
@@ -45,7 +44,7 @@ def hmc_kernel(
     integrator:
         The function used to integrate the equations of motion.
     mass_matrix:
-        The mass matrix of the euclidean metric.
+        The mass matrix in the euclidean metric.
     path_length:
         The current number of integration steps.
     step_size:
@@ -96,7 +95,7 @@ def rwm_kernel(
 ) -> RWMState:
     """Random Walk Metropolis transition kernel.
 
-    Moves the chains by one step using the Random Walk Metropolis algorithm.
+    Moves the chain by one step using the Random Walk Metropolis algorithm.
 
     Arguments
     ---------
@@ -112,7 +111,8 @@ def rwm_kernel(
 
     Returns
     -------
-    The next state of the markov chain.
+    RMWState
+        The new state of the markov chain.
     """
     key_move, key_uniform = jax.random.split(rng_key)
 
