@@ -1,3 +1,9 @@
+"""Generate dynamics on a Euclidean Manifold or Riemannian Manifold.
+
+.. note:
+    This file is a "flat zone": positions and logprobs are 1 dimensional
+    arrays. Raveling and unraveling logic must happen outside.
+"""
 from typing import Callable, Tuple
 
 from jax import numpy as np
@@ -33,13 +39,13 @@ def euclidean_manifold_dynamics() -> Tuple[Callable, Callable]:
             )
 
     def kinetic_energy(
-        p: np.DeviceArray, inverse_mass_matrix: np.DeviceArray
+        momentum: np.DeviceArray, inverse_mass_matrix: np.DeviceArray
     ) -> np.DeviceArray:
         if inverse_mass_matrix.ndim == 1:
-            v = np.matmul(inverse_mass_matrix, p)
+            v = np.matmul(inverse_mass_matrix, momentum)
         elif inverse_mass_matrix.ndim == 2:
-            v = np.dot(inverse_mass_matrix, p)
+            v = np.dot(inverse_mass_matrix, momentum)
 
-        return 0.5 * np.dot(v, p)
+        return 0.5 * np.dot(v, momentum)
 
     return momentum_generator, kinetic_energy
