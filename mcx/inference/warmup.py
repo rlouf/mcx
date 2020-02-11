@@ -16,8 +16,8 @@ def hmc_warmup():
 def warmup_schedule(num_steps, initial_buffer=75, first_window=25, final_buffer=50):
     """Returns an adaptation warmup schedule.
 
-    The schedule is a reproduction of _[1] as close as possible
-    to Stan's. The warmup period is split into three stages:
+    The schedule below is intended to be as close as possible to Stan's _[1]. 
+    The warmup period is split into three stages:
 
     1. An initial fast interval to reach the typical set.
     2. "Slow" parameters that require global information (typically covariance)
