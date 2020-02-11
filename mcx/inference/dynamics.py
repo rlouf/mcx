@@ -34,7 +34,7 @@ def euclidean_manifold_dynamics() -> Tuple[Callable, Callable]:
             return np.dot(std, mass_matrix_sqrt)
         else:
             raise ValueError(
-                "The mass matrix has the wrong number of shapes: "
+                "The mass matrix has the wrong number of dimensioms: "
                 + "expected 1 or 2, got {}.".format(mass_matrix_sqrt.ndim)
             )
 
