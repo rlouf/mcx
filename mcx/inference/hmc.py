@@ -3,7 +3,7 @@
 Sampling methods using the Random Walk Metropolis algorithm.
 """
 from functools import partial
-from typing import Callable, Generator, Union
+from typing import Callable, Generator, Tuple, Union
 
 import jax
 import numpy
@@ -13,11 +13,73 @@ from mcx.inference.kernels import hmc_kernel
 Array = Union[numpy.ndarray, jax.numpy.DeviceArray]
 
 
+HMCState = Tuple[Array, Array, Array]
+
+
+def hmc(
+    rng_key: jax.random.RNGKey,
+    logpdf: Callable,
+    integrator: Callable,
+    momentum_generator: Callable,
+    kinetic_energy: Callable,
+    position: jax.numpy.DeviceArray,
+    step_size: float,
+    path_length: float,
+):
+    """Returns a HMC kernel that moves a chain by one step.
+    """
+
+    def step(rng_key, state: HMCState) -> HMCState:
+        position, log_prob, log_prob_grad = state
+        _, rng_key = jax.random.split(rng_key)
+
+        position, log_prob, log_prob_grad = hmc_kernel(
+            rng_key, logpdf, integrator, path_length, step_size, state
+        )
+        return position, log_prob, log_prob_grad
+
+    return step
+
+
+@partial(jax.jit, static_argnums=(1, 2, 3))
+def single_chain_stepper(
+    rng_key, kernel, initial_state, n_steps
+) -> jax.numpy.DeviceArray:
+    """Applies a kernel several times along a single trajectory
+    and returns the last state of the chain.
+    """
+
+    def update(_, rng_key, state):
+        _, rng_key = jax.random.split(rng_key)
+        new_state = kernel(rng_key, state)
+        return rng_key, new_state
+
+    state = jax.lax.fori_loop(0, n_steps, update, (rng_key, initial_state))
+    return state
+
+
+@partial(jax.jit, static_argnums=(1, 2, 3))
+def single_chain_sampler(
+    rng_key, kernel, initial_state, n_samples
+) -> jax.numpy.DeviceArray:
+    """Applies the kernel several times along a single trajectory
+    and returns all the intermediate states.
+    """
+
+    def update(state, rng_key):
+        new_state = kernel(rng_key, state)
+        return new_state, state
+
+    keys = jax.random.split(rng_key, n_samples)
+    state = jax.lax.scan(update, initial_state, keys)
+    return state
+
+
 def hmc_generator(
     rng_key: jax.random.PRNGKey,
     logpdf: Callable,
     integrator: Callable,
-    initial_position: jax.numpy.ndarray,
+    initial_position: jax.numpy.DeviceArray,
     initial_step_size: float = 0.1,
     path_length: int = 1,
 ) -> Generator[numpy.ndarray, None, None]:
