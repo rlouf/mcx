@@ -18,6 +18,7 @@ parameters used in Hamiltonian Monte Carlo.
 """
 from typing import Callable, NamedTuple, Tuple
 
+import jax
 from jax import numpy as np
 from jax import scipy
 from jax.numpy import DeviceArray as Array
@@ -145,6 +146,61 @@ def dual_averaging(
     return init, update
 
 
+def find_reasonable_step_size(
+    rng_key: jax.random.PRNGKey,
+    logpdf: Callable,
+    moment_generator: Callable,
+    kinetic_energy: Callable,
+    integrator: Callable,
+    inverse_mass_matrix: Array,
+    position: Array,
+    inital_step_size: float,
+    target_accept: float = 0.65,
+) -> float:
+    """Find a reasonable initial step size during warmup.
+
+    Reference
+    ---------
+    .. [1]: NUTS paper.
+    """
+    log_target = np.log(target_accept)
+    log_prob, log_prob_grad = logpdf(position)
+    fp_limit = np.finfo(np.dtype(inital_step_size))
+
+    def update(state):
+        rng_key, direction, _, step_size = state
+        rng_key, momentum_key = jax.random.split(rng_key)
+
+        step_size = (2 ** direction) * step_size
+        momentum = moment_generator(momentum_key, inverse_mass_matrix)
+        _, proposal_momentum, proposal_log_prob, _ = integrator(
+            position, momentum, log_prob_grad, log_prob, 1, step_size
+        )
+
+        initial_energy = log_prob + kinetic_energy(momentum, inverse_mass_matrix)
+        proposal_energy = proposal_log_prob + kinetic_energy(
+            proposal_momentum, momentum, inverse_mass_matrix
+        )
+        do_accept = log_target < initial_energy - proposal_energy
+        new_direction = np.where(do_accept, 1, -1)
+        return rng_key, new_direction, direction, step_size
+
+    def stopping_criterion(state):
+        _, direction, previous_direction, step_size = state
+
+        cond1 = (step_size > fp_limit.min) | (direction >= 0)
+        cond2 = (step_size < fp_limit.max) | (direction <= 0)
+        not_extreme = cond1 & cond2
+        return not_extreme & (
+            (previous_direction == 0) | (direction == previous_direction)
+        )
+
+    _, _, _, step_size = jax.while_loop(
+        stopping_criterion, update, (rng_key, 0, 0, inital_step_size)
+    )
+    return step_size
+
+
 def mass_matrix_adaptation(
     is_diagonal_matrix: bool = True,
 ) -> Tuple[Callable, Callable, Callable]:
@@ -193,7 +249,7 @@ def mass_matrix_adaptation(
 
         return inverse_mass_matrix, mass_matrix_sqrt
 
-    return init, update, mass_matrix
+    return init, update, final
 
 
 def welford_algorithm(is_diagonal_matrix: bool) -> Tuple[Callable, Callable, Callable]:
