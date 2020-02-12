@@ -100,27 +100,6 @@ class Distribution(ABC):
         Unlike PyTorch or Numpyro, the value's legal status is not checked
         dynamically but at compile time.
 
-        **Important**
-
-        Be careful when reasoning about the broadcasting behaviour of the
-        logpdf function! Consider the following example with a Normal
-        distribution and batch dimension 2:
-
-            >>> x = np.array([1, 3])
-            ... log_prob = Normal(mu=np.array([0, 1]), sigma=1).logpdf(x)
-            ... log_prob.shape
-            (2,)
-
-        `jax.numpy` did broadcast (as it should per broadcasting rules), which
-        is the *expected* behavior. The *desired* behavior is different: when
-        the event shape is different from 0, it is assumed that the values in a
-        `x` array should correspond to different proposals, and the output of
-        the logpdf would be a (2,2) array.
-
-        We shall thus asume in this library that `logpdf` computes the log
-        probability value for ONE proposal. To get the values for multiple
-        proposals, the computation should be vectorized using `jax.vmap`.
-
         Arguments
         ---------
         x: jax.numpy.DeviceArray, shape (n_points,)
