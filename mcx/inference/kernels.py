@@ -5,34 +5,39 @@
     arrays. Raveling and unraveling logic must happen outside.
 """
 from functools import partial
-from typing import Callable, Tuple
+from typing import Callable, NamedTuple, Tuple
 
 import jax
 import jax.numpy as np
 import jax.numpy.DeviceArray as Array
-import jax.scipy.stats as st
 
 __all__ = ["hmc_kernel", "rwm_kernel"]
 
-HMCState = Tuple[Array, Array, Array]
 RWMState = Tuple[Array, Array]
 
 
-@partial(jax.jit, static_argnums=(1, 2))
+class HMCState(NamedTuple):
+    position: Array
+    momentum: Array
+    log_prob: Array
+    log_prob_grad: Array
+
+
+@partial(jax.jit, static_argnums=(1, 2, 3, 4, 5))
 def hmc_kernel(
-    rng_key: jax.random.PRNGKey,
+    rng_key: jax.random.RNGKey,
     logpdf: Callable,
     integrator: Callable,
-    mass_matrix: Array,
-    path_length: float,
+    momentum_generator: Callable,
+    kinetic_energy: Callable,
+    path_length_generator: Callable,
     step_size: float,
-    state: HMCState,
-) -> HMCState:
+):
     """Hamiltonian Monte Carlo transition kernel.
 
-    Moves the chain by one step using the Hamiltonian Monte Carlo algorithm.
-    The kernel implementation is made as general as possible to ease re-use by
-    different Monte Carlo algorithms.
+    Provides three functions to propose one step using Hamiltonian dynamics,
+    accept or reject this step using the Metropolis-Hastings algorithm, and
+    finally a kernel function that provides both.
 
     Arguments
     ---------
@@ -43,50 +48,61 @@ def hmc_kernel(
         log probability and gradient when evaluated at a position.
     integrator:
         The function used to integrate the equations of motion.
-    mass_matrix:
-        The mass matrix in the euclidean metric.
-    path_length:
-        The current number of integration steps.
+    momentum_generator:
+        A function that returns a new value for the momentum when called.
+    kinetic_energy:
+        A function that computes the trajectory's kinetic energy.
+    path_length_generator:
+        A function that returns a new value for the path length when called.
     step_size:
-        The current size of integration steps.
+        The step size to use when integrating the trajectory.
     state:
         The current state of the chain: position, log-probability and gradient
         of the log-probability.
 
-
-    Returns
-    -------
-    HMCState
-        The new position, log-probability at the position and the gradient
-        of the log-pobability at this position.
     """
-    key_momentum, key_uniform = jax.random.split(rng_key)
 
-    position, log_prob, log_prob_grad = state
-    n_features = position.shape[0]  # may need to be updated as API matures
+    def step(rng_key, state: HMCState) -> HMCState:
+        """Moves the chain by one step using the Hamiltonian dynamics.
+        """
+        key_momentum, key_path = jax.random.split(rng_key)
+        position, momentum, log_prob, log_prob_grad = state
 
-    momentum = jax.random.normal(key_momentum, (1, n_features))
-    proposal, proposal_momentum, proposal_log_prob, proposal_log_prob_grad = integrator(
-        position,
-        momentum,
-        log_prob_grad,
-        log_prob,
-        path_length=path_length,
-        step_size=step_size,
-    )
+        momentum = (momentum_generator(key_momentum),)
+        new_state = integrator(
+            position,
+            momentum,
+            log_prob_grad,
+            log_prob,
+            path_length_generator(key_path),
+            step_size=step_size,
+        )
 
-    # Metropolis Hastings acceptance step to correct for integration errors.
-    initial_energy = np.sum(st.norm.logpdf(momentum)) - log_prob
-    proposal_energy = np.sum(st.norm.logpdf(proposal_momentum)) - proposal_log_prob
+        return new_state
 
-    log_uniform = np.log(jax.random.uniform(key_uniform))
-    do_accept = log_uniform < proposal_energy - initial_energy
-    if do_accept:
-        position = proposal
-        log_prob = proposal_log_prob
-        log_prob_grad = proposal_log_prob_grad
+    def accept(
+        rng_key: jax.random.PRNGKey, state: HMCState, previous_state: HMCState
+    ) -> HMCState:
+        position, momentum, log_prob, _ = previous_state
+        proposal, proposal_momentum, proposal_log_prob, _ = state
 
-    return position, log_prob, log_prob_grad
+        initial_energy = kinetic_energy(momentum) - log_prob
+        proposal_energy = kinetic_energy(proposal_momentum) - proposal_log_prob
+
+        log_uniform = np.log(jax.random.uniform(rng_key))
+        do_accept = log_uniform < proposal_energy - initial_energy
+        if do_accept:
+            return state
+
+        return previous_state
+
+    def kernel(rng_key, state: HMCState):
+        step_key, accept_key = jax.random.split(rng_key)
+        proposal_state = step(step_key, state)
+        final_state = accept(accept_key, proposal_state, state)
+        return final_state
+
+    return kernel, step, accept
 
 
 @partial(jax.jit, static_argnums=(1, 2))
