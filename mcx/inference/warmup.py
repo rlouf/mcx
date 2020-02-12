@@ -3,20 +3,77 @@
 .. note:
     This is a "flat zone": all positions are 1D array.
 """
+from typing import Callable
+
+from jax import numpy as np
+
+from mcx.inference.adaptive import (
+    dual_averaging,
+    find_reasonable_step_size,
+    mass_matrix_adaptation,
+)
 
 
-def hmc_warmup():
-    def init():
-        pass
+def hmc_warmup(
+    rng_key,
+    logpdf,
+    momentum_generator,
+    kinetic_energy,
+    integrator,
+    position,
+    inverse_mass_matrix,
+    inital_step_size,
+    diagonal_mass_matrix=True,
+) -> Callable:
+    """ Warmup scheme for sampling procedures based on euclidean manifold HMC.
 
-    def update():
-        pass
+    Separation between sampling and warmup ensures better modularity; a modification
+    in the warmup procedure should not affect the sampling implementation.
+
+    Returns
+    -------
+    position
+    mass_matrix
+    step_size
+    """
+    n_dims = np.shape(position)[-1]  # `position` is a 1D array
+
+    # Initialize the mass matrix adaptation
+    mm_init, _, _ = mass_matrix_adaptation(diagonal_mass_matrix)
+    mm_state = mm_init(n_dims)
+
+    # Find a reasonbale first value for the step size
+    step_size = find_reasonable_step_size(
+        rng_key,
+        logpdf,
+        momentum_generator,
+        kinetic_energy,
+        integrator,
+        mm_state.inverse_mass_matrix,
+        position,
+        inital_step_size,
+    )
+
+    # Initialize the dual averaging for step size
+    da_init, _ = dual_averaging()
+    _ = da_init(step_size)
+
+
+def ehmc_warmup(
+    num_hmc_warmup_steps, num_longest_batch=2000, is_mass_matrix_diagonal=True
+):
+    """Warmup scheme for empirical Hamiltonian Monte Carlo.
+
+    Same as HMC + computes the longest batch distribution
+    after the step size and mass matrix adaptation.
+    """
+    pass
 
 
 def warmup_schedule(num_steps, initial_buffer=75, first_window=25, final_buffer=50):
     """Returns an adaptation warmup schedule.
 
-    The schedule below is intended to be as close as possible to Stan's _[1]. 
+    The schedule below is intended to be as close as possible to Stan's _[1].
     The warmup period is split into three stages:
 
     1. An initial fast interval to reach the typical set.
