@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 from typing import Dict, Tuple, Union
 
 import jax
+from jax import numpy as np
 
 from .constraints import Constraint
 
@@ -131,6 +132,11 @@ class Distribution(ABC):
             The value(s) of the log-probability density function.
         """
         pass
+
+    def logpdf_sum(self, data):
+        """Return the logpdf of the distribution over the observations.
+        """
+        return np.sum(self.logpdf(data))
 
     def __str__(self):
         """User-friendly representation of the probability distribution.
