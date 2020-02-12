@@ -15,15 +15,7 @@ from mcx.inference.adaptive import (
 
 
 def hmc_warmup(
-    rng_key,
-    logpdf,
-    momentum_generator,
-    kinetic_energy,
-    integrator,
-    position,
-    inverse_mass_matrix,
-    inital_step_size,
-    diagonal_mass_matrix=True,
+    rng_key, kernel, position, inital_step_size, diagonal_mass_matrix=True,
 ) -> Callable:
     """ Warmup scheme for sampling procedures based on euclidean manifold HMC.
 
@@ -44,14 +36,7 @@ def hmc_warmup(
 
     # Find a reasonbale first value for the step size
     step_size = find_reasonable_step_size(
-        rng_key,
-        logpdf,
-        momentum_generator,
-        kinetic_energy,
-        integrator,
-        mm_state.inverse_mass_matrix,
-        position,
-        inital_step_size,
+        rng_key, kernel, mm_state.inverse_mass_matrix, position, inital_step_size,
     )
 
     # Initialize the dual averaging for step size

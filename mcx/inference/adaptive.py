@@ -148,12 +148,8 @@ def dual_averaging(
 
 def find_reasonable_step_size(
     rng_key: jax.random.PRNGKey,
-    logpdf: Callable,
-    moment_generator: Callable,
-    kinetic_energy: Callable,
-    integrator: Callable,
-    inverse_mass_matrix: Array,
-    position: Array,
+    hmc_kernel_partial,
+    hmc_state,
     inital_step_size: float,
     target_accept: float = 0.65,
 ) -> float:
@@ -163,27 +159,21 @@ def find_reasonable_step_size(
     ---------
     .. [1]: NUTS paper.
     """
+
     log_target = np.log(target_accept)
-    log_prob, log_prob_grad = logpdf(position)
     fp_limit = np.finfo(np.dtype(inital_step_size))
 
-    def update(state):
-        rng_key, direction, _, step_size = state
-        rng_key, momentum_key = jax.random.split(rng_key)
+    def update(search_state):
+        rng_key, direction, _, step_size = search_state
+        _, rng_key = jax.random.split(rng_key)
 
         step_size = (2 ** direction) * step_size
-        momentum = moment_generator(momentum_key, inverse_mass_matrix)
-        _, proposal_momentum, proposal_log_prob, _ = integrator(
-            position, momentum, log_prob_grad, log_prob, 1, step_size
-        )
+        step, _, _ = hmc_kernel_partial(step_size)
+        new_state = step(rng_key, hmc_state)
 
-        initial_energy = log_prob + kinetic_energy(momentum, inverse_mass_matrix)
-        proposal_energy = proposal_log_prob + kinetic_energy(
-            proposal_momentum, momentum, inverse_mass_matrix
-        )
-        do_accept = log_target < initial_energy - proposal_energy
+        do_accept = log_target < hmc_state.energy - new_state.energy
         new_direction = np.where(do_accept, 1, -1)
-        return rng_key, new_direction, direction, step_size
+        return (rng_key, new_direction, direction, step_size)
 
     def stopping_criterion(state):
         _, direction, previous_direction, step_size = state

@@ -18,9 +18,9 @@ RWMState = Tuple[Array, Array]
 
 class HMCState(NamedTuple):
     position: Array
-    momentum: Array
     log_prob: Array
     log_prob_grad: Array
+    energy: Array
 
 
 @partial(jax.jit, static_argnums=(1, 2, 3, 4, 5))
@@ -66,10 +66,10 @@ def hmc_kernel(
         """Moves the chain by one step using the Hamiltonian dynamics.
         """
         key_momentum, key_path = jax.random.split(rng_key)
-        position, momentum, log_prob, log_prob_grad = state
+        position, log_prob, log_prob_grad, _ = state
 
-        momentum = (momentum_generator(key_momentum),)
-        new_state = integrator(
+        momentum = momentum_generator(key_momentum)
+        position, momentum, log_prob, log_prob_grad = integrator(
             position,
             momentum,
             log_prob_grad,
@@ -77,20 +77,16 @@ def hmc_kernel(
             path_length_generator(key_path),
             step_size=step_size,
         )
+        energy = log_prob + kinetic_energy(momentum)
 
-        return new_state
+        return HMCState(position, log_prob, log_prob_grad, energy)
 
     def accept(
         rng_key: jax.random.PRNGKey, state: HMCState, previous_state: HMCState
     ) -> HMCState:
-        position, momentum, log_prob, _ = previous_state
-        proposal, proposal_momentum, proposal_log_prob, _ = state
-
-        initial_energy = kinetic_energy(momentum) - log_prob
-        proposal_energy = kinetic_energy(proposal_momentum) - proposal_log_prob
 
         log_uniform = np.log(jax.random.uniform(rng_key))
-        do_accept = log_uniform < proposal_energy - initial_energy
+        do_accept = log_uniform < state.energy - previous_state.energy
         if do_accept:
             return state
 
