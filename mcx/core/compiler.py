@@ -65,7 +65,7 @@ def compile_to_logpdf(
     for node in ordered_nodes:
         body.append(node.to_logpdf())
 
-    returned = ast.Return(value=ast.Name(id="logpdf", ctx=ast.Load()))
+    returned = ast.Return(value=ast.Name(id="logpdf_sum", ctx=ast.Load()))
     body.append(returned)
 
     logpdf_ast = ast.Module(
