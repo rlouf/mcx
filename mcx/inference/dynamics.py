@@ -14,7 +14,9 @@ from jax.numpy import DeviceArray as Array
 __all__ = ["euclidean_manifold_dynamics"]
 
 
-def euclidean_manifold_dynamics() -> Tuple[Callable, Callable]:
+def euclidean_manifold_dynamics(
+    mass_matrix_sqrt, inverse_mass_matrix
+) -> Tuple[Callable, Callable]:
     """Emulate dynamics on an Euclidean Manifold for vanilla Hamiltonian
     Monte Carlo.
 
@@ -25,7 +27,7 @@ def euclidean_manifold_dynamics() -> Tuple[Callable, Callable]:
             Information. Springer, Berlin, Heidelberg, 2013.
     """
 
-    def momentum_generator(rng_key: random.PRNGKey, mass_matrix_sqrt: Array) -> Array:
+    def momentum_generator(rng_key: random.PRNGKey) -> Array:
         shape = np.shape(mass_matrix_sqrt)[:1]
         std = random.normal(rng_key, shape)
         if mass_matrix_sqrt.ndim == 1:
@@ -38,7 +40,7 @@ def euclidean_manifold_dynamics() -> Tuple[Callable, Callable]:
                 + "expected 1 or 2, got {}.".format(mass_matrix_sqrt.ndim)
             )
 
-    def kinetic_energy(momentum: Array, inverse_mass_matrix: Array) -> Array:
+    def kinetic_energy(momentum: Array) -> Array:
         if inverse_mass_matrix.ndim == 1:
             v = np.matmul(inverse_mass_matrix, momentum)
         elif inverse_mass_matrix.ndim == 2:
