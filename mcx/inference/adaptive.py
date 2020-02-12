@@ -23,6 +23,8 @@ from jax import numpy as np
 from jax import scipy
 from jax.numpy import DeviceArray as Array
 
+from mcx.inference.kernels import HMCState
+
 
 __all__ = ["dual_averaging", "find_reasonable_step_size", "mass_matrix_adaptation"]
 
@@ -148,8 +150,8 @@ def dual_averaging(
 
 def find_reasonable_step_size(
     rng_key: jax.random.PRNGKey,
-    hmc_kernel_partial,
-    hmc_state,
+    hmc_kernel_partial: Callable,
+    hmc_state: HMCState,
     inital_step_size: float,
     target_accept: float = 0.65,
 ) -> float:

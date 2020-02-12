@@ -40,7 +40,7 @@ def euclidean_manifold_dynamics(
                 + "expected 1 or 2, got {}.".format(mass_matrix_sqrt.ndim)
             )
 
-    def kinetic_energy(momentum: Array) -> Array:
+    def kinetic_energy(momentum: Array) -> float:
         if inverse_mass_matrix.ndim == 1:
             v = np.matmul(inverse_mass_matrix, momentum)
         elif inverse_mass_matrix.ndim == 2:

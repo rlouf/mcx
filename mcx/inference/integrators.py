@@ -19,11 +19,11 @@ __all__ = ["leapfrog_integrator"]
 def leapfrog_integrator(
     potential: Callable,
     path_length: float,
-    step_size: Array,
+    step_size: float,
     position: Array,
     momentum: Array,
-    potential_grad: Array,
-) -> Tuple[Array, Array, Array, Array]:
+    potential_grad: float,
+) -> Tuple[Array, Array, float, float]:
     """Second order symplectic integrator that uses the leapfrog algorithm.
     """
     position, momentum = np.copy(position), np.copy(momentum)

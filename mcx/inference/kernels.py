@@ -16,9 +16,9 @@ __all__ = ["hmc_kernel", "rwm_kernel"]
 
 class HMCState(NamedTuple):
     position: Array
-    log_prob: Array
-    log_prob_grad: Array
-    energy: Array
+    log_prob: float
+    log_prob_grad: float
+    energy: float
 
 
 @partial(jax.jit, static_argnums=(1, 2, 3, 4, 5))
