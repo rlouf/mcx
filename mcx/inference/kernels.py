@@ -13,8 +13,6 @@ import jax.numpy.DeviceArray as Array
 
 __all__ = ["hmc_kernel", "rwm_kernel"]
 
-RWMState = Tuple[Array, Array]
-
 
 class HMCState(NamedTuple):
     position: Array
@@ -101,9 +99,14 @@ def hmc_kernel(
     return kernel, step, accept
 
 
+class RWMState(NamedTuple):
+    position: Array
+    log_prob: float
+
+
 @partial(jax.jit, static_argnums=(1, 2))
 def rwm_kernel(
-    rng_key: jax.random.PRNGKey, logpdf: Callable, move_scale: float, state: RWMState
+    rng_key: jax.random.PRNGKey, logpdf: Callable, proposal: Callable, state: RWMState
 ) -> RWMState:
     """Random Walk Metropolis transition kernel.
 
@@ -115,9 +118,8 @@ def rwm_kernel(
         Key for the pseudo random number generator.
     logpdf: function
         Returns the log-probability of the model given a position.
-    move_scale: float
-        Standard deviation of the Gaussian distribution from which the
-        move proposals are sampled.
+    proposal: function
+        Returns a move proposal.
     state: RWMState
         The current state of the markov chain.
 
@@ -130,7 +132,7 @@ def rwm_kernel(
 
     position, log_prob = state
 
-    move_proposal = jax.random.normal(key_move, shape=position.shape) * move_scale
+    move_proposal = proposal(key_move)
     proposal = position + move_proposal
     proposal_log_prob = logpdf(proposal)
 
@@ -139,4 +141,4 @@ def rwm_kernel(
 
     position = np.where(do_accept, proposal, position)
     log_prob = np.where(do_accept, proposal_log_prob, log_prob)
-    return position, log_prob
+    return RWMState(position, log_prob)
