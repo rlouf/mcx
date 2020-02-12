@@ -3,8 +3,9 @@
 .. note:
     This is a "flat zone": all positions are 1D array.
 """
-from typing import Callable
+from typing import Callable, Tuple
 
+import jax
 from jax import numpy as np
 
 from mcx.inference.adaptive import (
@@ -12,11 +13,20 @@ from mcx.inference.adaptive import (
     find_reasonable_step_size,
     mass_matrix_adaptation,
 )
+from mcx.inference.dynamics import euclidean_manifold_dynamics
+from mcx.inference.integrators import leapfrog_integrator
+from mcx.inference.kernels import HMCState, hmc_kernel
 
 
 def hmc_warmup(
-    rng_key, kernel, position, inital_step_size, diagonal_mass_matrix=True,
-) -> Callable:
+    rng_key: jax.random.PRNGKey,
+    logpdf: Callable,
+    initial_state: HMCState,
+    inital_step_size: float,
+    path_length: float,
+    num_steps: int,
+    diagonal_mass_matrix=True,
+) -> Tuple[HMCState, Callable]:
     """ Warmup scheme for sampling procedures based on euclidean manifold HMC.
 
     Separation between sampling and warmup ensures better modularity; a modification
@@ -24,24 +34,72 @@ def hmc_warmup(
 
     Returns
     -------
-    position
-    mass_matrix
-    step_size
+    Tuple
+        The current state of the chain and the warmed-up kernel.
     """
-    n_dims = np.shape(position)[-1]  # `position` is a 1D array
+
+    n_dims = np.shape(initial_state.position)[-1]  # `position` is a 1D array
 
     # Initialize the mass matrix adaptation
-    mm_init, _, _ = mass_matrix_adaptation(diagonal_mass_matrix)
+    mm_init, mm_update, mm_final = mass_matrix_adaptation(diagonal_mass_matrix)
     mm_state = mm_init(n_dims)
 
-    # Find a reasonbale first value for the step size
-    step_size = find_reasonable_step_size(
-        rng_key, kernel, mm_state.inverse_mass_matrix, position, inital_step_size,
+    # Initialize the HMC transition kernel
+    momentum_generator, kinetic_energy = euclidean_manifold_dynamics(
+        mm_state.mass_matrix_sqrt, mm_state.inverse_mass_matrix
+    )
+    hmc_partial_kernel = jax.partial(
+        hmc_kernel,
+        logpdf,
+        leapfrog_integrator,
+        momentum_generator,
+        kinetic_energy,
+        lambda x: path_length,
     )
 
-    # Initialize the dual averaging for step size
-    da_init, _ = dual_averaging()
-    _ = da_init(step_size)
+    # Initialize the dual averaging
+    step_size = find_reasonable_step_size(
+        rng_key, hmc_partial_kernel, initial_state, inital_step_size,
+    )
+    da_init, da_update = dual_averaging()
+    da_state = da_init(step_size)
+
+    # Get warmup schedule
+    schedule = warmup_schedule(num_steps)
+
+    state = initial_state
+    for i, window in enumerate(schedule):
+
+        for step in range(window):
+            accept = lambda x, y, z: x
+            proposal_state = hmc_partial_kernel(rng_key, step_size)
+            state = accept(rng_key, proposal_state, state)
+            if i != 0 and i != len(schedule) - 1:
+                mm_state = mm_update(mm_state, state.position)
+
+        if i == 0:
+            da_state = da_update(state.p_accept, da_state)
+            step_size = np.exp(da_state.log_step_size)
+        elif i == len(schedule) - 1:
+            da_state = da_update(state.p_accept, da_state)
+            step_size = np.exp(da_state.log_step_size_avg)
+        else:
+            inverse_mass_matrix, mass_matrix_sqrt = mm_final(mm_state)
+            momentum_generator, kinetic_energy = euclidean_manifold_dynamics(
+                mm_state.mass_matrix_sqrt, mm_state.inverse_mass_matrix
+            )
+            hmc_partial_kernel = jax.partial(
+                hmc_kernel,
+                logpdf,
+                leapfrog_integrator,
+                momentum_generator,
+                kinetic_energy,
+                lambda x: path_length,
+            )
+
+    kernel = hmc_partial_kernel(step_size)
+
+    return state, kernel
 
 
 def ehmc_warmup(
