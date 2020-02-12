@@ -52,7 +52,7 @@ def single_chain_accumulator(
     return states
 
 
-def batch_sampler(
+def batch_accumulator(
     rng_key: jax.random.PRNGKey,
     kernel: Callable,
     initial_states: jax.numpy.DeviceArray,
