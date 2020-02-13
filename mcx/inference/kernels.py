@@ -23,19 +23,15 @@ class HMCState(NamedTuple):
 
 @partial(jax.jit, static_argnums=(1, 2, 3, 4, 5))
 def hmc_kernel(
-    rng_key: jax.random.RNGKey,
     logpdf: Callable,
     integrator: Callable,
     momentum_generator: Callable,
     kinetic_energy: Callable,
-    path_length_generator: Callable,
-    step_size: float,
 ):
-    """Hamiltonian Monte Carlo transition kernel.
+    """Hamiltonian Monte Carlo transition kernel factory.
 
-    Provides three functions to propose one step using Hamiltonian dynamics,
-    accept or reject this step using the Metropolis-Hastings algorithm, and
-    finally a kernel function that provides both.
+    Returns a kernel based on the hamiltonian monte carlo algorithm, a map
+    between different states of the phase space.
 
     Arguments
     ---------
@@ -50,53 +46,45 @@ def hmc_kernel(
         A function that returns a new value for the momentum when called.
     kinetic_energy:
         A function that computes the trajectory's kinetic energy.
-    path_length_generator:
-        A function that returns a new value for the path length when called.
-    step_size:
-        The step size to use when integrating the trajectory.
     state:
         The current state of the chain: position, log-probability and gradient
         of the log-probability.
 
     """
 
-    def step(rng_key, state: HMCState) -> HMCState:
+    def kernel(rng_key, state: HMCState) -> HMCState:
         """Moves the chain by one step using the Hamiltonian dynamics.
+
+        Arguments
+        ---------
+        rng_key:
+           The pseudo-random number generator key used to generate random numbers.
+        state:
+            The current state of the chain: position, log-probability and gradient
+            of the log-probability.
+
+        Returns
+        -------
+        The next state of the chain.
         """
-        key_momentum, key_path = jax.random.split(rng_key)
-        position, log_prob, log_prob_grad, _ = state
+        key_momentum, key_integrator, key_uniform = jax.random.split(rng_key, 3)
+        position, log_prob, log_prob_grad, energy = state
 
         momentum = momentum_generator(key_momentum)
         position, momentum, log_prob, log_prob_grad = integrator(
-            position,
-            momentum,
-            log_prob_grad,
-            log_prob,
-            path_length_generator(key_path),
-            step_size=step_size,
+            key_integrator, position, momentum, log_prob_grad, log_prob,
         )
-        energy = log_prob + kinetic_energy(momentum)
+        new_energy = log_prob + kinetic_energy(momentum)
+        new_state = HMCState(position, log_prob, log_prob_grad, energy)
 
-        return HMCState(position, log_prob, log_prob_grad, energy)
-
-    def accept(
-        rng_key: jax.random.PRNGKey, state: HMCState, previous_state: HMCState
-    ) -> HMCState:
-
-        log_uniform = np.log(jax.random.uniform(rng_key))
-        do_accept = log_uniform < state.energy - previous_state.energy
+        log_uniform = np.log(jax.random.uniform(key_uniform))
+        do_accept = log_uniform < energy - new_energy
         if do_accept:
-            return state
+            return new_state
 
-        return previous_state
+        return state
 
-    def kernel(rng_key, state: HMCState):
-        step_key, accept_key = jax.random.split(rng_key)
-        proposal_state = step(step_key, state)
-        final_state = accept(accept_key, proposal_state, state)
-        return final_state
-
-    return kernel, step, accept
+    return kernel
 
 
 class RWMState(NamedTuple):
