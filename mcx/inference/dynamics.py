@@ -11,11 +11,11 @@ from jax import random
 from jax.numpy import DeviceArray as Array
 
 
-__all__ = ["euclidean_manifold_dynamics"]
+__all__ = ["gaussian_euclidean_metric"]
 
 
-def euclidean_manifold_dynamics(
-    mass_matrix_sqrt, inverse_mass_matrix
+def gaussian_euclidean_metric(
+    mass_matrix_sqrt: Array, inverse_mass_matrix: Array
 ) -> Tuple[Callable, Callable]:
     """Emulate dynamics on an Euclidean Manifold for vanilla Hamiltonian
     Monte Carlo.
@@ -42,9 +42,9 @@ def euclidean_manifold_dynamics(
 
     def kinetic_energy(momentum: Array) -> float:
         if inverse_mass_matrix.ndim == 1:
-            v = np.matmul(inverse_mass_matrix, momentum)
+            v = np.multiply(inverse_mass_matrix, momentum)
         elif inverse_mass_matrix.ndim == 2:
-            v = np.dot(inverse_mass_matrix, momentum)
+            v = np.matmul(inverse_mass_matrix, momentum)
 
         return 0.5 * np.dot(v, momentum)
 
