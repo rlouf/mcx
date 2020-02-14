@@ -5,7 +5,7 @@
     arrays. Raveling and unraveling logic must happen outside.
 """
 from functools import partial
-from typing import Callable, NamedTuple, Tuple
+from typing import Callable, NamedTuple, Optional, Tuple
 
 import jax
 import jax.numpy as np
@@ -24,7 +24,7 @@ class HMCState(NamedTuple):
     position: Array
     log_prob: float
     log_prob_grad: float
-    energy: float
+    energy: Optional[float]
 
 
 class HMCInfo(NamedTuple):
@@ -35,6 +35,11 @@ class HMCInfo(NamedTuple):
     acceptance_probability: float
     is_accepted: bool
     is_divergent: bool
+
+
+def hmc_init(position: Array, logpdf: Callable) -> HMCState:
+    log_prob, log_prob_grad = logpdf(position)
+    return HMCState(position, log_prob, log_prob_grad, None)
 
 
 def hmc_kernel(
