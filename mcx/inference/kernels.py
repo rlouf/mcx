@@ -145,50 +145,59 @@ def hmc_kernel(
 
 
 class RWMState(NamedTuple):
+    """Describes the state of the Random Walk Metropolis chain.
+    """
+
     position: Array
     log_prob: float
 
 
-class RMWInfo(NamedTuple):
-    is_accepted: bool
+class RWMInfo(NamedTuple):
+    """Additional information on the current Random Walk Metropolis step.
+    """
+
     proposed_state: RWMState
+    acceptance_probability: float
+    is_accepted: bool
 
 
 @partial(jax.jit, static_argnums=(1, 2))
-def rwm_kernel(
-    rng_key: jax.random.PRNGKey, logpdf: Callable, proposal: Callable, state: RWMState
-) -> RWMState:
+def rwm_kernel(logpdf: Callable, proposal_fn: Callable) -> Callable:
     """Random Walk Metropolis transition kernel.
 
     Moves the chain by one step using the Random Walk Metropolis algorithm.
 
     Arguments
     ---------
-    rng_key: jax.random.PRNGKey
-        Key for the pseudo random number generator.
     logpdf: function
         Returns the log-probability of the model given a position.
-    proposal: function
+    proposal_fn: function
         Returns a move proposal.
-    state: RWMState
-        The current state of the markov chain.
 
     Returns
     -------
-    RMWState
-        The new state of the markov chain.
+    A kernel that moves the chain by one step.
     """
-    key_move, key_uniform = jax.random.split(rng_key)
 
-    position, log_prob = state
+    def kernel(
+        rng_key: jax.random.PRNGKey, state: RWMState
+    ) -> Tuple[RWMState, RWMInfo]:
+        key_move, key_accept = jax.random.split(rng_key)
 
-    move_proposal = proposal(key_move)
-    proposal = position + move_proposal
-    proposal_log_prob = logpdf(proposal)
+        position, log_prob = state
 
-    log_uniform = np.log(jax.random.uniform(key_uniform))
-    do_accept = log_uniform < proposal_log_prob - log_prob
+        move_proposal = proposal_fn(key_move)
+        new_position = position + move_proposal
+        new_log_prob = logpdf(new_position)
+        new_state = RWMState(new_position, new_log_prob)
 
-    position = np.where(do_accept, proposal, position)
-    log_prob = np.where(do_accept, proposal_log_prob, log_prob)
-    return RWMState(position, log_prob)
+        delta = new_log_prob - log_prob
+        delta = np.where(np.isnan(delta), -np.inf, delta)
+        p_accept = np.clip(np.exp(delta), a_max=1)
+
+        do_accept = jax.random.bernoulli(key_accept, p_accept)
+        accept_state = (new_state, RWMInfo(new_state, p_accept, True))
+        reject_state = (state, RWMInfo(new_state, p_accept, False))
+        return np.where(do_accept, accept_state, reject_state)
+
+    return kernel
