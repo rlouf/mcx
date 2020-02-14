@@ -12,5 +12,5 @@ setuptools.setup(
     licence="Apache Licence Version 2.0",
     packages=["mcx"],
     python_requires=">=3.5",
-    install_requires=["astor", "jax", "jaxlib", "networkx", "numpy"],
+    install_requires=["astor", "jax", "jaxlib", "networkx", "numpy", "tqdm"],
 )
