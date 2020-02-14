@@ -41,7 +41,7 @@ class RandVar(object):
             op=ast.Add(),
             value=ast.Call(
                 func=ast.Attribute(
-                    value=self.distribution, attr="logpdf", ctx=ast.Load(),
+                    value=self.distribution, attr="logpdf_sum", ctx=ast.Load(),
                 ),
                 args=[ast.Name(id=self.name, ctx=ast.Load())],
                 keywords=[],
