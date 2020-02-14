@@ -161,7 +161,6 @@ class RWMInfo(NamedTuple):
     is_accepted: bool
 
 
-@partial(jax.jit, static_argnums=(1, 2))
 def rwm_kernel(logpdf: Callable, proposal_fn: Callable) -> Callable:
     """Random Walk Metropolis transition kernel.
 
@@ -179,6 +178,7 @@ def rwm_kernel(logpdf: Callable, proposal_fn: Callable) -> Callable:
     A kernel that moves the chain by one step.
     """
 
+    @jax.jit
     def kernel(
         rng_key: jax.random.PRNGKey, state: RWMState
     ) -> Tuple[RWMState, RWMInfo]:
