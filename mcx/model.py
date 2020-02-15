@@ -132,8 +132,8 @@ class model(Distribution):
         self.rng_key = jax.random.PRNGKey(53)
         functools.update_wrapper(self, fn)
 
-    def __call__(self) -> "model":
-        return self
+    def __call__(self, *args) -> "model":
+        return self.forward(*args)
 
     def __print__(self):
         # random variables
@@ -173,30 +173,59 @@ class model(Distribution):
         At the difference of the regular sampler, the forward sampler only returns the
         "generated" variables, i.e. the returned variables in the model definition.
         """
-        forward_sampler, _, src = core.compile_to_forward_sampler(
+        forward_sampler, _, name, src = core.compile_to_forward_sampler(
             self.graph, self.namespace
         )
-        _, self.rng_key = self.rng_key.split()
-        return forward_sampler(self.rng_key, *args, sample_shape)
+        _, self.rng_key = jax.random.split(self.rng_key)
+        return numpy.asarray(
+            forward_sampler(self.rng_key, *args, sample_shape)
+        ).squeeze()
 
     def sample(self, *args, sample_shape=(1000,)) -> numpy.ndarray:
-        sampler, _, _ = core.compile_to_sampler(self.graph, self.namespace)
-        _, self.rng_key = self.rng_key.split()
-        return sampler(self.rng_key, *args, sample_shape)
+        sampler, arg_names, _, _ = core.compile_to_sampler(self.graph, self.namespace)
+        _, self.rng_key = jax.random.split(self.rng_key)
+        samples = sampler(self.rng_key, *args, sample_shape)
+        return samples
 
     @property
-    def sample_fn(self) -> str:
-        _, _, fn = core.compile_to_sampler(self.graph, self.namespace)
+    def sampler_src(self) -> str:
+        _, _, _, fn = core.compile_to_sampler(self.graph, self.namespace)
         return fn
 
     def logpdf(self, *args) -> float:
-        logpdf, _, _ = core.compile_to_logpdf(self.graph, self.namespace)
+        logpdf, _, _, _ = core.compile_to_logpdf(self.graph, self.namespace)
         return logpdf(*args)
 
     @property
-    def logpdf_fn(self) -> str:
-        _, _, fn = core.compile_to_logpdf(self.graph, self.namespace)
+    def logpdf_src(self) -> str:
+        _, _, _, fn = core.compile_to_logpdf(self.graph, self.namespace)
         return fn
+
+    @property
+    def nodes(self):
+        return self.graph.nodes
+
+
+# Convenience functions
+
+
+def forward_sample(model: model, num_samples=1000, **kwargs):
+    """This should use the "sample" method"""
+    args = list(kwargs.values())
+    sample_shape = (num_samples,)
+    sampler, arg_names, _, _ = core.compile_to_sampler(model.graph, model.namespace)
+    _, model.rng_key = jax.random.split(model.rng_key)
+    samples = sampler(model.rng_key, *args, sample_shape)
+    trace = {}
+    for arg, arg_samples in zip(arg_names, samples):
+        trace[arg] = numpy.asarray(arg_samples).T.squeeze()
+    return trace
+
+
+def partial(model: model, **kwargs):
+    """Return a partially applied model.
+    """
+    pass
 
 
 def seed(model: model, rng_key: jax.random.PRNGKey) -> model:
