@@ -4,7 +4,6 @@
     This file is a "flat zone": positions and logprobs are 1 dimensional
     arrays. Raveling and unraveling logic must happen outside.
 """
-from functools import partial
 from typing import Callable, NamedTuple, Optional, Tuple
 
 import jax
