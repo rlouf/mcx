@@ -23,14 +23,6 @@ class GraphicalModel(nx.DiGraph):
     def __init__(self):
         super(GraphicalModel, self).__init__()
 
-    # @property
-    # def nodes(self):
-    # """We overload networkx's `Graph.nodes` to make it easier to retrieve
-    # the nodes' parameters.  """
-    # nodes = NodeView(self)
-    # self.__dict__['nodes'] = nodes
-    # return nodes
-
     def do(self, **kwargs) -> "GraphicalModel":
         """Apply the do-operator to the graph and return a copy.
 

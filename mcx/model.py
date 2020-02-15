@@ -135,22 +135,9 @@ class model(Distribution):
     def __call__(self, *args) -> "model":
         return self.forward(*args)
 
-    def __print__(self):
-        # random variables
-        # deterministic variables
-        # model source definition
-        raise NotImplementedError
-
     def __getitem__(self, var):
         nodes = self.graph.nodes(data=True)
         return nodes[var]["content"]
-
-    def __setitem__(self, var, str_value):
-        """Dynamically change the graph.
-
-        >> model["x"] = 'Normal(0, 1)'
-        """
-        pass
 
     def do(self, **kwargs) -> "model":
         """Apply the do operator to the graph and return a copy.
