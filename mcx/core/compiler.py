@@ -1,6 +1,6 @@
 import ast
 from types import FunctionType
-from typing import Dict, List, NamedTuple, Union, Tuple
+from typing import Dict, List, NamedTuple, Union
 
 import astor
 import jax
@@ -20,7 +20,7 @@ class Artifact(NamedTuple):
 
 def compile_to_logpdf(
     graph: GraphicalModel, namespace: Dict, jit: bool = False, grad: bool = False
-) -> Tuple[FunctionType, List[str], str]:
+) -> Artifact:
     """Compile a graphical model into a log-probability density function.
 
     Arguments
@@ -106,7 +106,7 @@ def compile_to_logpdf(
     )
 
 
-def compile_to_sampler(graph, namespace, jit=False):
+def compile_to_sampler(graph, namespace, jit=False) -> Artifact:
     """Compile the model in a function that generates prior samples from the
     model's random variables.
 
@@ -179,12 +179,12 @@ def compile_to_sampler(graph, namespace, jit=False):
     fn = namespace[fn_name]
     fn = jax.jit(fn, static_argnums=(0, len(args) - 1))
 
-    args = [arg.id for arg in returned_vars]
+    returned_names = [arg.id for arg in returned_vars]
 
-    return Artifact(fn, args, fn_name, astor.code_gen.to_source(sampler_ast))
+    return Artifact(fn, returned_names, fn_name, astor.code_gen.to_source(sampler_ast))
 
 
-def compile_to_forward_sampler(graph, namespace, jit=False):
+def compile_to_forward_sampler(graph, namespace, jit=False) -> Artifact:
     """Compile the model in a function that generates prior samples from the
     model's generated variables.
 
@@ -257,8 +257,11 @@ def compile_to_forward_sampler(graph, namespace, jit=False):
     sampler = compile(sampler_ast, filename="<ast>", mode="exec")
     exec(sampler, namespace)
 
-    args = [arg.id for arg in returned_vars]
+    returned_names = [arg.id for arg in returned_vars]
 
     return Artifact(
-        namespace[fn_name], args, fn_name, astor.code_gen.to_source(sampler_ast)
+        namespace[fn_name],
+        returned_names,
+        fn_name,
+        astor.code_gen.to_source(sampler_ast),
     )
