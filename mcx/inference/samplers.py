@@ -81,9 +81,9 @@ def batch_stepper(
         n_iterations = n_steps // 100
         states = initial_states
         for _ in trange(n_iterations):
-            states = jax.vmap(single_chain_stepper, in_axes=(0, None, 0, None), out_axes=0)(
-                rng_keys, kernel, states, 100
-            )
+            states = jax.vmap(
+                single_chain_stepper, in_axes=(0, None, 0, None), out_axes=0
+            )(rng_keys, kernel, states, 100)
 
         remaining = n_steps - n_iterations * 100
         states = jax.vmap(single_chain_stepper, in_axes=(0, None, 0, None), out_axes=0)(
