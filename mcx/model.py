@@ -192,6 +192,10 @@ class model(Distribution):
     def nodes(self):
         return self.graph.nodes
 
+    @property
+    def arguments(self):
+        return self.graph.arguments
+
 
 # Convenience functions
 

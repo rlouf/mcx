@@ -86,6 +86,11 @@ class GraphicalModel(nx.DiGraph):
 
         return parents + children + children_parents
 
+    @property
+    def arguments(self):
+        args = [n for n in self.nodes if isinstance(self.nodes[n]["content"], Argument)]
+        return args
+
     def add_argument(self, name):
         self.add_node(name, content=Argument(name))
 
