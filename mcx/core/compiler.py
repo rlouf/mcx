@@ -1,13 +1,21 @@
 import ast
 from types import FunctionType
-from typing import Dict, List, Tuple, Union
+from typing import Dict, List, NamedTuple, Union, Tuple
 
 import astor
+import jax
 import networkx as nx
 
 import mcx
 from mcx.core.graph import GraphicalModel
 from mcx.core.nodes import Argument, RandVar
+
+
+class Artifact(NamedTuple):
+    compiled_fn: FunctionType
+    args: List[str]
+    fn_name: str
+    fn_source: str
 
 
 def compile_to_logpdf(
@@ -65,7 +73,7 @@ def compile_to_logpdf(
     for node in ordered_nodes:
         body.append(node.to_logpdf())
 
-    returned = ast.Return(value=ast.Name(id="logpdf_sum", ctx=ast.Load()))
+    returned = ast.Return(value=ast.Name(id="logpdf", ctx=ast.Load()))
     body.append(returned)
 
     logpdf_ast = ast.Module(
@@ -93,7 +101,9 @@ def compile_to_logpdf(
 
     args = [arg.arg for arg in args]
 
-    return namespace[fn_name], args, astor.code_gen.to_source(logpdf_ast)
+    return Artifact(
+        namespace[fn_name], args, fn_name, astor.code_gen.to_source(logpdf_ast)
+    )
 
 
 def compile_to_sampler(graph, namespace, jit=False):
@@ -134,16 +144,13 @@ def compile_to_sampler(graph, namespace, jit=False):
     for node in ordered_nodes:
         body.append(node.to_sampler(graph))
 
-    returned = ast.Return(
-        value=ast.Tuple(
-            elts=[
-                ast.Name(id=node.name, ctx=ast.Load())
-                for node in ordered_nodes
-                if not isinstance(node, mcx.core.graph.Var)
-            ],
-            ctx=ast.Load(),
-        )
-    )
+    returned_vars = [
+        ast.Name(id=node.name, ctx=ast.Load())
+        for node in ordered_nodes
+        if not isinstance(node, mcx.core.graph.Var)
+    ]
+
+    returned = ast.Return(value=ast.Tuple(elts=returned_vars, ctx=ast.Load(),))
     body.append(returned)
 
     sampler_ast = ast.Module(
@@ -169,10 +176,12 @@ def compile_to_sampler(graph, namespace, jit=False):
 
     sampler = compile(sampler_ast, filename="<ast>", mode="exec")
     exec(sampler, namespace)
+    fn = namespace[fn_name]
+    fn = jax.jit(fn, static_argnums=(0, len(args) - 1))
 
-    args = [arg.arg for arg in args]
+    args = [arg.id for arg in returned_vars]
 
-    return namespace[fn_name], args, astor.code_gen.to_source(sampler_ast)
+    return Artifact(fn, args, fn_name, astor.code_gen.to_source(sampler_ast))
 
 
 def compile_to_forward_sampler(graph, namespace, jit=False):
@@ -248,6 +257,8 @@ def compile_to_forward_sampler(graph, namespace, jit=False):
     sampler = compile(sampler_ast, filename="<ast>", mode="exec")
     exec(sampler, namespace)
 
-    args = [arg.arg for arg in args]
+    args = [arg.id for arg in returned_vars]
 
-    return namespace[fn_name], args, astor.code_gen.to_source(sampler_ast)
+    return Artifact(
+        namespace[fn_name], args, fn_name, astor.code_gen.to_source(sampler_ast)
+    )
