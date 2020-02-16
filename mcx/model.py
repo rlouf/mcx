@@ -8,7 +8,7 @@ from mcx import core
 from mcx.distributions import Distribution
 
 
-__all__ = ["model", "seed"]
+__all__ = ["model", "sample_forward", "seed"]
 
 
 class model(Distribution):
@@ -200,7 +200,7 @@ class model(Distribution):
 # Convenience functions
 
 
-def forward_sample(model: model, num_samples=1000, **kwargs):
+def sample_forward(model: model, num_samples=1000, **kwargs):
     """This should use the "sample" method"""
     args = list(kwargs.values())
     sample_shape = (num_samples,)
