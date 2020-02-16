@@ -1,4 +1,4 @@
 from mcx.model import model
-from mcx.model import forward_sample, seed
+from mcx.model import sample_forward, seed
 
-__all__ = ["forward_sample", "model", "seed"]
+__all__ = ["sample_forward", "model", "seed"]

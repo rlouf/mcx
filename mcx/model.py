@@ -164,9 +164,7 @@ class model(Distribution):
             self.graph, self.namespace
         )
         _, self.rng_key = jax.random.split(self.rng_key)
-        return numpy.asarray(
-            forward_sampler(self.rng_key, *args, sample_shape)
-        ).squeeze()
+        return forward_sampler(self.rng_key, *args, sample_shape)
 
     def sample(self, *args, sample_shape=(1000,)) -> numpy.ndarray:
         sampler, arg_names, _, _ = core.compile_to_sampler(self.graph, self.namespace)
@@ -196,19 +194,25 @@ class model(Distribution):
     def arguments(self):
         return self.graph.arguments
 
+    @property
+    def returned_variables(self):
+        return self.graph.returned_variables
+
+    @property
+    def variables(self):
+        return self.graph.variables
+
 
 # Convenience functions
 
 
 def sample_forward(model: model, num_samples=1000, **kwargs):
-    """This should use the "sample" method"""
     args = list(kwargs.values())
     sample_shape = (num_samples,)
-    sampler, arg_names, _, _ = core.compile_to_sampler(model.graph, model.namespace)
-    _, model.rng_key = jax.random.split(model.rng_key)
-    samples = sampler(model.rng_key, *args, sample_shape)
+    samples = model.sample(*args, sample_shape=sample_shape)
+
     trace = {}
-    for arg, arg_samples in zip(arg_names, samples):
+    for arg, arg_samples in zip(model.variables, samples):
         trace[arg] = numpy.asarray(arg_samples).T.squeeze()
     return trace
 
