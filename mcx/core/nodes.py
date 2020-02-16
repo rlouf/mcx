@@ -8,8 +8,9 @@ from mcx.distributions import Distribution
 
 
 class Argument(object):
-    def __init__(self, name: str):
+    def __init__(self, name: str, default: Optional[ast.expr] = None):
         self.name = name
+        self.default_values = default
         self.is_returned = False
 
     def to_logpdf(self):

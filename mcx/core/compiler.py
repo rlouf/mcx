@@ -49,14 +49,21 @@ def compile_to_logpdf(
     """
     fn_name = graph.name + "_logpdf"
     args = [
-        node[1]["content"].to_logpdf()
-        for node in graph.nodes(data=True)
-        if isinstance(node[1]["content"], Argument)
-    ] + [
         ast.arg(arg=node[1]["content"].name, annotation=None)
         for node in graph.nodes(data=True)
         if isinstance(node[1]["content"], RandVar)
+    ] + [
+        node[1]["content"].to_logpdf()
+        for node in graph.nodes(data=True)
+        if isinstance(node[1]["content"], Argument)
     ]
+
+    arg_defaults = [
+        node[1]["content"].default_values
+        for node in graph.nodes(data=True)
+        if isinstance(node[1]["content"], Argument)
+    ]
+    defaults = [d for d in arg_defaults if d is not None]
 
     body: List[Union[ast.Assign, ast.Constant, ast.Num, ast.Return]] = []
     body.append(
@@ -86,7 +93,7 @@ def compile_to_logpdf(
                     kwarg=None,
                     posonlyargs=[],
                     kwonlyargs=[],
-                    defaults=[],
+                    defaults=defaults,
                     kw_defaults=[],
                 ),
                 body=body,
@@ -98,12 +105,12 @@ def compile_to_logpdf(
     logpdf_ast = ast.fix_missing_locations(logpdf_ast)
     logpdf = compile(logpdf_ast, filename="<ast>", mode="exec")
     exec(logpdf, namespace)
+    fn = namespace[fn_name]
+    fn = jax.jit(fn)
 
-    args = [arg.arg for arg in args]
+    arguments = [arg.arg for arg in args]
 
-    return Artifact(
-        namespace[fn_name], args, fn_name, astor.code_gen.to_source(logpdf_ast)
-    )
+    return Artifact(fn, arguments, fn_name, astor.code_gen.to_source(logpdf_ast))
 
 
 def compile_to_sampler(graph, namespace, jit=False) -> Artifact:
@@ -125,15 +132,20 @@ def compile_to_sampler(graph, namespace, jit=False) -> Artifact:
     fn_name = graph.name + "_sampler"
     args = (
         [ast.arg(arg="rng_key", annotation=None)]
+        + [ast.arg(arg="sample_shape", annotation=None)]
         + [
             node[1]["content"].to_sampler()
             for node in graph.nodes(data=True)
             if isinstance(node[1]["content"], Argument)
         ]
-        + [ast.arg(arg="sample_shape", annotation=None)]
     )
 
-    defaults = [ast.Tuple(elts=[], ctx=ast.Load())]
+    arg_defaults = [
+        node[1]["content"].default_values
+        for node in graph.nodes(data=True)
+        if isinstance(node[1]["content"], Argument)
+    ]
+    defaults = [d for d in arg_defaults if d is not None]
 
     body = []
     ordered_nodes = [
@@ -177,7 +189,7 @@ def compile_to_sampler(graph, namespace, jit=False) -> Artifact:
     sampler = compile(sampler_ast, filename="<ast>", mode="exec")
     exec(sampler, namespace)
     fn = namespace[fn_name]
-    fn = jax.jit(fn, static_argnums=(0, len(args) - 1))
+    fn = jax.jit(fn, static_argnums=(0, 1))
 
     returned_names = [arg.id for arg in returned_vars]
 
@@ -203,15 +215,20 @@ def compile_to_forward_sampler(graph, namespace, jit=False) -> Artifact:
     fn_name = graph.name + "_forward_sampler"
     args = (
         [ast.arg(arg="rng_key", annotation=None)]
+        + [ast.arg(arg="sample_shape", annotation=None)]
         + [
             node[1]["content"].to_sampler()
             for node in graph.nodes(data=True)
             if isinstance(node[1]["content"], Argument)
         ]
-        + [ast.arg(arg="sample_shape", annotation=None)]
     )
 
-    defaults = [ast.Tuple(elts=[], ctx=ast.Load())]
+    arg_defaults = [
+        node[1]["content"].default_values
+        for node in graph.nodes(data=True)
+        if isinstance(node[1]["content"], Argument)
+    ]
+    defaults = [d for d in arg_defaults if d is not None]
 
     body = []
     ordered_nodes = [
@@ -232,7 +249,6 @@ def compile_to_forward_sampler(graph, namespace, jit=False) -> Artifact:
     else:
         returned = ast.Return(value=ast.Tuple(elts=returned_vars, ctx=ast.Load(),))
     body.append(returned)
-
     sampler_ast = ast.Module(
         body=[
             ast.FunctionDef(

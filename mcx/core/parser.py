@@ -1,7 +1,7 @@
 import ast
 import inspect
 from types import FunctionType
-from typing import Any, Dict, List, Union
+from typing import Any, Dict, List, Optional, Union
 
 import astor
 
@@ -96,8 +96,19 @@ class Parser(ast.NodeVisitor):
         """Record the model's name and its arguments.
         """
         self.model.graph["name"] = node.name
+
+        argument_names: List[str] = []
         for arg in node.args.args:
-            self.model.add_argument(arg.arg)
+            argument_names.append(arg.arg)
+
+        num_arguments = len(argument_names)
+        default_values: List[Optional[ast.expr]] = [None] * num_arguments
+        for i, default in enumerate(node.args.defaults):
+            default_values[i] = default
+        default_values.reverse()
+
+        for name, value in zip(argument_names, default_values):
+            self.model.add_argument(name, value)
 
     def visit_Deterministic(self, node: ast.Assign) -> None:
         """Visit and add deterministic variables to the graphical model.

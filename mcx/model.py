@@ -1,17 +1,17 @@
 import functools
 from types import FunctionType
+from typing import Dict
 
 import jax
 import numpy
 
 from mcx import core
-from mcx.distributions import Distribution
 
 
 __all__ = ["model", "sample_forward", "seed"]
 
 
-class model(Distribution):
+class model(object):
     """Representation of a model.
 
     Since it represents a probability graphical model, the `model` instance is
@@ -132,58 +132,63 @@ class model(Distribution):
         self.rng_key = jax.random.PRNGKey(53)
         functools.update_wrapper(self, fn)
 
-    def __call__(self, *args) -> "model":
-        return self.forward(*args)
+    def __call__(self, *args) -> numpy.ndarray:
+        """Call the model as a regular function.
+
+        Unlike the forward sampler that returns samples from all variables in
+        the model, this function only returns the return values in the model
+        definition. Since this is a stochastic function, a different value
+        is returned at each call.
+        """
+        forward_sampler, _, _, _ = core.compile_to_forward_sampler(
+            self.graph, self.namespace
+        )
+        _, self.rng_key = jax.random.split(self.rng_key)
+        samples = forward_sampler(self.rng_key, (1,), *args)
+        return numpy.asarray(samples).squeeze()
 
     def __getitem__(self, var):
         nodes = self.graph.nodes(data=True)
         return nodes[var]["content"]
 
     def do(self, **kwargs) -> "model":
-        """Apply the do operator to the graph and return a copy.
+        """Apply the do operator to the graph and return a copy of the model.
 
         The do-operator :math:`do(X=x)` sets the value of the variable X to x and
-        removes all edges between X and its parents. Applying the do-operator
-        may be useful to analyze the behavior of the model pre-inference.
+        removes all edges between X and its parents [1]_. Applying the do-operator
+        may be useful to analyze the behavior of the model before inference.
 
-        References:
-            Pearl, Judea. Causality. Cambridge university press, 2009.
+        References
+        ----------
+        .. [1]: Pearl, Judea. Causality. Cambridge university press, 2009.
         """
         conditionned_graph = self.graph.do(**kwargs)
         new_model = model(self.model_fn)
         new_model.graph = conditionned_graph
         return new_model
 
-    def forward(self, *args, sample_shape=(1,)) -> numpy.ndarray:
-        """Forward sampling of the model.
-
-        At the difference of the regular sampler, the forward sampler only returns the
-        "generated" variables, i.e. the returned variables in the model definition.
+    def sample(self, *args, sample_shape=(1000,)) -> jax.numpy.DeviceArray:
+        """Compute forward samples.
         """
-        forward_sampler, _, name, src = core.compile_to_forward_sampler(
-            self.graph, self.namespace
-        )
+        sampler, arg_names, _, src = core.compile_to_sampler(self.graph, self.namespace)
         _, self.rng_key = jax.random.split(self.rng_key)
-        return forward_sampler(self.rng_key, *args, sample_shape)
-
-    def sample(self, *args, sample_shape=(1000,)) -> numpy.ndarray:
-        sampler, arg_names, _, _ = core.compile_to_sampler(self.graph, self.namespace)
-        _, self.rng_key = jax.random.split(self.rng_key)
-        samples = sampler(self.rng_key, *args, sample_shape)
+        samples = sampler(self.rng_key, sample_shape, *args)
         return samples
 
-    @property
-    def sampler_src(self) -> str:
-        _, _, _, fn = core.compile_to_sampler(self.graph, self.namespace)
-        return fn
-
     def logpdf(self, *args) -> float:
+        """Compute the value of the logpdf.
+        """
         logpdf, _, _, _ = core.compile_to_logpdf(self.graph, self.namespace)
         return logpdf(*args)
 
     @property
     def logpdf_src(self) -> str:
         _, _, _, fn = core.compile_to_logpdf(self.graph, self.namespace)
+        return fn
+
+    @property
+    def sampler_src(self) -> str:
+        _, _, _, fn = core.compile_to_sampler(self.graph, self.namespace)
         return fn
 
     @property
@@ -206,7 +211,12 @@ class model(Distribution):
 # Convenience functions
 
 
-def sample_forward(model: model, num_samples=1000, **kwargs):
+def sample_forward(model: model, num_samples=1000, **kwargs) -> Dict:
+    """Returns forward samples from the model.
+
+    The samples are returned in a dictionary, with the names of
+    the variables as keys.
+    """
     args = list(kwargs.values())
     sample_shape = (num_samples,)
     samples = model.sample(*args, sample_shape=sample_shape)
@@ -215,12 +225,6 @@ def sample_forward(model: model, num_samples=1000, **kwargs):
     for arg, arg_samples in zip(model.variables, samples):
         trace[arg] = numpy.asarray(arg_samples).T.squeeze()
     return trace
-
-
-def partial(model: model, **kwargs):
-    """Return a partially applied model.
-    """
-    pass
 
 
 def seed(model: model, rng_key: jax.random.PRNGKey) -> model:

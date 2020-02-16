@@ -102,13 +102,12 @@ class GraphicalModel(nx.DiGraph):
             n
             for n in self.nodes
             if isinstance(self.nodes[n]["content"], RandVar)
-            or isinstance(self.nodes[n]["content"], Var)
             or isinstance(self.nodes[n]["content"], Transformation)
         ]
         return args
 
-    def add_argument(self, name):
-        self.add_node(name, content=Argument(name))
+    def add_argument(self, name, value=None):
+        self.add_node(name, content=Argument(name, value))
 
     def add_variable(self, name, value, is_returned=False):
         self.add_node(name, content=Var(name, value, is_returned))
