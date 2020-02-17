@@ -1,5 +1,5 @@
 import ast
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 
 def read_object_name(node: ast.AST, name: Optional[List[str]] = None) -> str:
@@ -50,3 +50,29 @@ def read_object_name(node: ast.AST, name: Optional[List[str]] = None) -> str:
                 node
             )
         )
+
+
+def relabel_arguments(value_node: ast.AST, mapping: Dict):
+    """ Walk down the Abstract Syntax Tree of the right-hand-side of the
+    assignment to relabel the arguments.
+
+    Returns
+    -------
+    A list of variable names, default to an empty list.
+    """
+    for node in ast.walk(value_node):
+        if isinstance(node, ast.BinOp):
+            if isinstance(node.left, ast.Name):
+                var_name = node.left.id
+                if var_name in mapping:
+                    node.left.id = mapping[var_name]
+            if isinstance(node.right, ast.Name):
+                var_name = node.right.id
+                if var_name in mapping:
+                    node.right.id = mapping[var_name]
+        elif isinstance(node, ast.Call):
+            for arg in node.args:
+                if isinstance(arg, ast.Name):
+                    var_name = arg.id
+                    if var_name in mapping:
+                        arg.id = mapping[var_name]

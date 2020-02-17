@@ -1,3 +1,7 @@
+"""Static checks regarding validity of distribution, etc
+should happen here since it will be the inteface when we
+modify the graph at runtime.
+"""
 import ast
 from typing import List, Optional, Union
 
@@ -10,7 +14,7 @@ from mcx.distributions import Distribution
 class Argument(object):
     def __init__(self, name: str, default: Optional[ast.expr] = None):
         self.name = name
-        self.default_values = default
+        self.default_value = default
         self.is_returned = False
 
     def to_logpdf(self):

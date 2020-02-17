@@ -48,22 +48,29 @@ def compile_to_logpdf(
         by the user.
     """
     fn_name = graph.name + "_logpdf"
-    args = [
-        ast.arg(arg=node[1]["content"].name, annotation=None)
-        for node in graph.nodes(data=True)
-        if isinstance(node[1]["content"], RandVar)
-    ] + [
-        node[1]["content"].to_logpdf()
+    kwargs = [
+        node[1]["content"]
         for node in graph.nodes(data=True)
         if isinstance(node[1]["content"], Argument)
+        and node[1]["content"].default_value is not None
     ]
 
-    arg_defaults = [
-        node[1]["content"].default_values
-        for node in graph.nodes(data=True)
-        if isinstance(node[1]["content"], Argument)
-    ]
-    defaults = [d for d in arg_defaults if d is not None]
+    args = (
+        [
+            ast.arg(arg=node[1]["content"].name, annotation=None)
+            for node in graph.nodes(data=True)
+            if isinstance(node[1]["content"], RandVar)
+        ]
+        + [
+            node[1]["content"].to_logpdf()
+            for node in graph.nodes(data=True)
+            if isinstance(node[1]["content"], Argument)
+            and node[1]["content"].default_value is None
+        ]
+        + [k.to_logpdf() for k in kwargs]
+    )
+
+    defaults = [k.default_value for k in kwargs]
 
     body: List[Union[ast.Assign, ast.Constant, ast.Num, ast.Return]] = []
     body.append(
@@ -130,6 +137,14 @@ def compile_to_sampler(graph, namespace, jit=False) -> Artifact:
             `model_sampler(rng_key, *args, sample_shape=())`
     """
     fn_name = graph.name + "_sampler"
+
+    kwargs = [
+        node[1]["content"]
+        for node in graph.nodes(data=True)
+        if isinstance(node[1]["content"], Argument)
+        and node[1]["content"].default_value is not None
+    ]
+
     args = (
         [ast.arg(arg="rng_key", annotation=None)]
         + [ast.arg(arg="sample_shape", annotation=None)]
@@ -137,15 +152,12 @@ def compile_to_sampler(graph, namespace, jit=False) -> Artifact:
             node[1]["content"].to_sampler()
             for node in graph.nodes(data=True)
             if isinstance(node[1]["content"], Argument)
+            and node[1]["content"].default_value is None
         ]
+        + [k.to_sampler() for k in kwargs]
     )
 
-    arg_defaults = [
-        node[1]["content"].default_values
-        for node in graph.nodes(data=True)
-        if isinstance(node[1]["content"], Argument)
-    ]
-    defaults = [d for d in arg_defaults if d is not None]
+    defaults = [k.default_value for k in kwargs]
 
     body = []
     ordered_nodes = [
@@ -213,6 +225,14 @@ def compile_to_forward_sampler(graph, namespace, jit=False) -> Artifact:
             `model_sampler(rng_key, *args, sample_shape=())`
     """
     fn_name = graph.name + "_forward_sampler"
+
+    kwargs = [
+        node[1]["content"]
+        for node in graph.nodes(data=True)
+        if isinstance(node[1]["content"], Argument)
+        and node[1]["content"].default_value is not None
+    ]
+
     args = (
         [ast.arg(arg="rng_key", annotation=None)]
         + [ast.arg(arg="sample_shape", annotation=None)]
@@ -220,15 +240,12 @@ def compile_to_forward_sampler(graph, namespace, jit=False) -> Artifact:
             node[1]["content"].to_sampler()
             for node in graph.nodes(data=True)
             if isinstance(node[1]["content"], Argument)
+            and node[1]["content"].default_value is None
         ]
+        + [k.to_sampler() for k in kwargs]
     )
 
-    arg_defaults = [
-        node[1]["content"].default_values
-        for node in graph.nodes(data=True)
-        if isinstance(node[1]["content"], Argument)
-    ]
-    defaults = [d for d in arg_defaults if d is not None]
+    defaults = [k.default_value for k in kwargs]
 
     body = []
     ordered_nodes = [

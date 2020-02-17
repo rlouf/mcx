@@ -5,6 +5,7 @@ import astor
 import networkx as nx
 
 from mcx.core.nodes import Argument, RandVar, Transformation, Var
+from mcx.core.utils import relabel_arguments
 
 
 class GraphicalModel(nx.DiGraph):
@@ -21,7 +22,7 @@ class GraphicalModel(nx.DiGraph):
     """
 
     def __init__(self):
-        super(GraphicalModel, self).__init__()
+        super().__init__()
 
     def do(self, **kwargs) -> "GraphicalModel":
         """Apply the do-operator to the graph and return a copy.
@@ -140,3 +141,65 @@ class GraphicalModel(nx.DiGraph):
 
     def mark_as_returned(self, name):
         self.nodes[name]["content"].is_returned = True
+
+    def merge_models(self, var_name, model_graph, args):
+        """Merge a model used in a random variable assignment.
+        """
+        # The returned node now become a standard node
+        name_returned = model_graph.returned_variables[0]
+        model_graph.nodes[name_returned]["content"].is_returned = False
+
+        # We first rename the nodes by appending the name of the
+        # model to the variables names. This prevents overlap
+        # when the same variable name has been used in multiple
+        # model definitions.
+        # The returned variable of the model being merged is rename
+        # to the variable being assigned in the current model.
+        mapping = {
+            name: name + "_{}".format(model_graph.name) for name in model_graph.nodes
+        }
+        mapping.update({name_returned: var_name})
+        model_graph = nx.relabel_nodes(model_graph, mapping)
+
+        # update the nodes' internal names
+        for name, node in model_graph.nodes(data=True):
+            node["content"].name = name
+
+        # Update the name of the arguments in the graph being merged.
+        for _, content in model_graph.nodes(data=True):
+            node = content["content"]
+            if isinstance(node, Transformation) or isinstance(node, RandVar):
+                node.args = [
+                    mapping[arg] if isinstance(arg, str) else arg for arg in node.args
+                ]
+                if isinstance(node, Transformation):
+                    relabel_arguments(node.expression, mapping)
+                else:
+                    distribution_args = []
+                    for arg in node.distribution.args:
+                        if isinstance(arg, ast.Name):
+                            arg = ast.Name(id=mapping[arg.id], ctx=ast.Load())
+                        distribution_args.append(arg)
+                    node.distribution.args = distribution_args
+
+        # Update the arguments with their value if provided
+        for i, arg in enumerate(model_graph.arguments):
+            if len(args) - 1 >= i:
+                model_graph.remove_node(arg)
+                if isinstance(args[i], int):
+                    value = ast.Constant(value=args[i])
+                elif isinstance(args[i], str):
+                    value = ast.Name(id=args[i], ctx=ast.Load())
+                model_graph.add_variable(arg, value)
+            else:
+                if model_graph.nodes[arg]["content"].default_value is None:
+                    raise TypeError(
+                        "{} missing one require positional argument: '{}'".format(
+                            model_graph.name, arg
+                        )
+                    )
+
+        # Beware that the merged graph takes the name of the first
+        # argument's. It is important to keep it this way to keep
+        # the name hierarchy.
+        return nx.compose(model_graph, self)

@@ -1,11 +1,13 @@
 import ast
 import inspect
 from types import FunctionType
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Union
 
 import astor
 
+import mcx
 from mcx.core.graph import GraphicalModel
+from mcx.core.utils import read_object_name
 
 
 def parse_definition(model: FunctionType, namespace: Dict):
@@ -24,7 +26,7 @@ def parse_definition(model: FunctionType, namespace: Dict):
     """
     src = inspect.getsource(model)
     tree = ast.parse(src)
-    return Parser().visit(tree)
+    return Parser(namespace).visit(tree)
 
 
 class Parser(ast.NodeVisitor):
@@ -32,8 +34,9 @@ class Parser(ast.NodeVisitor):
     graphical model.
     """
 
-    def __init__(self):
+    def __init__(self, namespace):
         self.model = GraphicalModel()
+        self.namespace = namespace
 
     def generic_visit(self, node):
         node_type = type(node).__name__
@@ -102,10 +105,10 @@ class Parser(ast.NodeVisitor):
             argument_names.append(arg.arg)
 
         num_arguments = len(argument_names)
-        default_values: List[Optional[ast.expr]] = [None] * num_arguments
-        for i, default in enumerate(node.args.defaults):
-            default_values[i] = default
-        default_values.reverse()
+        default_values: List[Union[ast.expr, None]] = []
+        for default in node.args.defaults:
+            default_values.append(default)
+        default_values = (num_arguments - len(default_values)) * [None] + default_values  # type: ignore
 
         for name, value in zip(argument_names, default_values):
             self.model.add_argument(name, value)
@@ -196,7 +199,17 @@ class Parser(ast.NodeVisitor):
         name = node.left.id
         distribution = node.right
         args = self.visit_Call(node.right)
-        self.model.add_randvar(name, distribution, args)
+
+        # To allows model composition, whenever a `mcx` model appears at the
+        # right-hand-side of a `@` operator we merge its graph with the current
+        # model's graph
+        dist_path = read_object_name(distribution.func)
+        dist_obj = eval(dist_path, self.namespace)
+        if isinstance(dist_obj, mcx.model):
+            print(args)
+            self.model = self.model.merge_models(name, dist_obj.graph, args)
+        else:
+            self.model.add_randvar(name, distribution, args)
 
     def visit_Call(self, node: ast.Call) -> List[Union[str, int, float, complex]]:
         return self.visit_Arguments(node.args)
