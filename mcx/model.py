@@ -25,139 +25,188 @@ class model(Distribution):
     only difference with standard python code is the use of the "@" operator
     for random variable assignments.
 
-    The models are then parsed into an internal representation that can be
-    conditioned on data, compiled into a logpdf or a forward sampler. The
+    The models are then parsed into an internal graph representation that can
+    be conditioned on data, compiled into a logpdf or a forward sampler. The
     result is pure functions that can be further JIT-compiled with JAX,
     differentiated and dispatched on GPUs and TPUs.
 
-    Arguments:
-        model: A function that contains `mcx` model definition.
-        rng_key: A PRNG key used to draw forward samples one at a time.
+    The graph can be inspected and modified at runtime.
 
-    Examples:
+    Arguments
+    ---------
+    model: A function that contains `mcx` model definition.
 
-        Let us work with the following linear model to illustrate:
+    Examples
+    --------
 
-        >>> @mcx.model
-        ... def linear_model(X):
-        ...     weights @ Normal(0, 1)
-        ...     sigma @ HalfNormal(0, 1)
-        ...     y @ Normal(np.dot(X, weights), sigma)
-        ...     return y
-        ...
-        ... mymodel = linear_model
+    Let us define a linear model in 1 dimension. In `mcx`, models are expressed
+    in their generative form, that is a function that transforms some
+    (optional) input---data, parameters---and returns the result:
 
+    >>> import jax.numpy as np
+    >>> import mcx
+    >>> import mcx.distributions as dist
+    >>>
+    >>> def linear_model(X):
+    ...     weights @ dist.Normal(0, 1)
+    ...     sigma @ dist.Exponential(1)
+    ...     z = np.dot(X, weights)
+    ...     y @ Normal(z, sigma)
+    ...     return y
 
-        To perform forward sampling with a full input dataset, use the `sample`
-        method. The `sample_shape` denotes the shape of the sample tensor to
-        get *for each input data point*.
+    The symbol `@` is used here does not stand for the matrix multiplication but for
+    the assignment of a random variable. The model can then be instantiated by calling:
 
-        >>> x = np.array([[1, 1], [2, 2], [3, 3]])
-        ... samples = model.sample(X, sample_shape=(100, 10))
-        ... print(samples.shape)
-        (3, 100, 10)
+    >>> model = mcx.model(linear_model)
 
-        To explore the model, we can also use the "do" operator to fix the value of
-        a random variable. This returns a copy of the model where all connections
-        with the parent nodes have been removed:
+    Generative models are stochastic functions, you can call them like you would any function:
 
-        >>> conditioned = mymodel.do(sigma=0.2)
-        ... conditioned.sample(rng_key, X, sample_shape=(1000,)  # single data point
-        {'weights': 1.8, 'sigma': 0.2, 'y': 4.1}
+    >>> model(1)
+    -2.31
 
-        Unlike calling the model directly, this function is JIT-compiled and
-        can be run on GPU. It should be quite fast to run, which should allow
-        for quick iteration on the initial phase of the modeling process.
+    If you call it again, it will give you a different result:
 
-        You can also sample from the model's posterior by instantiating the `MCMC` class
-        with the model:
+    >>> model(1)
+    1.57
 
-        >>> sampler = MCMC(model)
-        ... trace = sampler.run(X, y)
+    We say that these results are drawn from the prior predictive distribution for x=1.
+    More formally, :math:`P(y|weights, sigma, x=1)`. If you add the decorator `@mcx.model`
+    on top of the function:
 
-        Since `mcmx` only lightly alters python's AST, most of what you
-        would do inside a function in Python is also valid in model
-        definitions. For instance, complex transformations can be defined in
-        functions that are called within the model. **It is required, however,
-        that functions operate on and return only scalars or numpy arrays.***
+    >>> @mcx.model
+    ... def linear_model(X):
+    ...     weights @ dist.Normal(0, 1)
+    ...     sigma @ dist.Exponential(1)
+    ...     z = np.dot(X, weights)
+    ...     y @ Normal(z, sigma)
+    ...     return y
 
-        >>> from utils import mult
-        ...
-        ... @mcx.model
-        ... def linear_model(X):
-        ...     weights @ Normal(0, 1)
-        ...     sigma @ HalfNormal(0, 1)
-        ...     y @ Normal(mult(X, weights), sigma)
-        ...     return y
+    You can directly call the function:
 
-        will work as the first example above.
+    >>> linear_model(1)
+    1.57
 
-        In the same vein, following PyMC4's philosophy [2]_, we would like to
-        define complex distribution with the `mcmx` syntax:
+    While this recompiles the graph at each call, the performance hit is not
+    noticeable in practice.
 
-        >>> @mcx.model
-        ... def Prior():
-        ...     return Normal(0, 1)
-        ...
-        ... @mcx.model
-        ... def Horseshoe(tau0 , n):
-        ...     tau @ HalfCauchy(0 , tau0)
-        ...     delta @ HalfCauchy(0 , 1 , plate=n)
-        ...     beta @ Normal (0, tau * delta )
-        ...     return beta
-        ...
-        ... def my_model(X):
-        ...     x @ Prior()
-        ...     w @ Horseshoe(x, 0)
-        ...     z = np.log(w)
-        ...     y @ Normal(z, 1)
+    Calling the function directly is useful for quick sanity check and debugging, but
+    we often need a more complete view of the prior predictive distribution, or the
+    forward sampling distribution of each parameter in the model:
 
-        Note the use of the decorator `@mcx.distribution`, which allows to make
-        the distinction between generative models that interact with data, and
-        derived distributions. Calling `model(Horseshoe)` reifies the
-        distribution into a generative model from which we can generate forward
-        samples and posterior samples.
+    >>> mcx.sample_forward(linear_model, x=1, num_samples=1000)
+    {'weight': array([1, ....]), 'sigma': array([2.1, ...]), 'y': array([1.56, ...])}
 
-    References:
-        .. [1] van de Meent, Jan-Willem, Brooks Paige, Hongseok Yang, and Frank
-               Wood. "An introduction to probabilistic programming." arXiv preprint
-               arXiv:1809.10756 (2018).
-        .. [2] Kochurov, Max, Colin Carroll, Thomas Wiecki, and Junpeng Lao.
-               "PyMC4: Exploiting Coroutines for Implementing a Probabilistic Programming
-               Framework." (2019).
+    This also works for an array input; standard broadcasting rules apply:
+
+    >>> mcx.sample_forward(linear_model, x=np.array([1, 2, 3]), num_samples=1000)
+
+    Unlike calling the model directly, this function JIT-compiles the forward
+    sampler; if your machine has a GPU, it will automatically run on it. This
+    should allow for quick iteration on the initial phase of the modeling
+    process.
+
+    To explore the model, we can also use the "do" operator to fix the value of
+    a random variable. This returns a copy of the model where all connections
+    with the parent nodes have been removed:
+
+    >>> conditioned = linear_model.do(sigma=1000)
+    ... conditioned(1)
+    435.7
+
+    'mcx' translates your model definition into a graph. This graph can be explored
+    and modified at runtime. You can explore nodes:
+
+    >>> print(linear_model["weight"])
+    [should have distibution, plus info about distirbution]
+
+    And modify them:
+
+    >>> linear_model["weight"] = "dist.Normal(0, 4)"
+
+    Behind the scenes, `mcx` inspects the definition's source code and
+    translates it to a graph. Since `mcx` sticks closely to python's syntax (in
+    fact, only adds one construct), most of what you would do inside a function
+    in Python is also valid in model definitions. For instance, complex
+    transformations can be defined in functions that are called within the
+    model:
+
+    >>> from utils import mult
+    ...
+    ... @mcx.model
+    ... def linear_model(X):
+    ...     weights @ Normal(0, 1)
+    ...     sigma @ HalfNormal(0, 1)
+    ...     z = mult(X, weights)
+    ...     y @ Normal(z, sigma)
+    ...     return y
+
+    Models also implicitly define a multivariate distribution. Following
+    PyMC4's philosophy [2]_, we can use other models as distributions when
+    defining a random variable. More precisely, what is meant by `x @ linear_model(1)`
+    is "x is distributed according to :math:`P_{linear_model}(y|weights, sigma, x=1)`:
+
+    >>> from my_module import hyperprior
+    ...
+    ... @mcx.model
+    ... def prior(a):
+    ...     s @ hyperprior()
+    ...     p @ dist.Normal(a,a)
+    ...     return p
+    ...
+    ... @mcx.model
+    ... def linear_model(X):
+    ...     weights @ prior(1)
+    ...     sigma @ HalfNormal(0, 1)
+    ...     z = mult(X, weights)
+    ...     y @ Normal(z, sigma)
+    ...     return y
+
+    References
+    ----------
+    .. [1] van de Meent, Jan-Willem, Brooks Paige, Hongseok Yang, and Frank
+           Wood. "An introduction to probabilistic programming." arXiv preprint
+           arXiv:1809.10756 (2018).
+    .. [2] Kochurov, Max, Colin Carroll, Thomas Wiecki, and Junpeng Lao.
+           "PyMC4: Exploiting Coroutines for Implementing a Probabilistic Programming
+           Framework." (2019).
     """
 
     def __init__(self, fn: FunctionType) -> None:
         self.model_fn = fn
         self.namespace = fn.__globals__
         self.graph = core.parse_definition(fn, self.namespace)
-        self.rng_key = jax.random.PRNGKey(53)
+        self.rng_key = jax.random.PRNGKey(53)  # random.org
         functools.update_wrapper(self, fn)
 
     def __call__(self, *args) -> numpy.ndarray:
-        """Call the model as a regular function.
-
-        Unlike the forward sampler that returns samples from all variables in
-        the model, this function only returns the return values in the model
-        definition. Since this is a stochastic function, a different value
-        is returned at each call.
+        """Return a sample from the prior predictive distribution. A different
+        value is returned at each all.
         """
+        _, self.rng_key = jax.random.split(self.rng_key)
+
         forward_sampler, _, _, _ = core.compile_to_forward_sampler(
             self.graph, self.namespace
         )
-        _, self.rng_key = jax.random.split(self.rng_key)
         samples = forward_sampler(self.rng_key, (1,), *args)
         return numpy.asarray(samples).squeeze()
 
-    def __getitem__(self, var):
+    def __getitem__(self, name: str):
+        """Access the graph by variable name.
+        """
         nodes = self.graph.nodes(data=True)
-        return nodes[var]["content"]
+        return nodes[name]["content"]
 
-    def __setitem__(self, node, expression_str: str):
-        """Change the node's expression.
-        This only works for distributions.
+    def __setitem__(self, name: str, expression_str: str) -> None:
+        """Change the distribution of one of the model's variables.
 
-        This logic should be moved to /core
+        The distribution and its arguments must be expressed within
+        a string:
+
+        >>> model['x'] = "dist.Normal(0, 1)"
+
+        Note
+        ----
+        The parsing logic should be moved to the core.
         """
         expression_ast = ast.parse(expression_str).body[0]
         if isinstance(expression_ast, ast.Expr):
@@ -165,7 +214,7 @@ class model(Distribution):
             if isinstance(expression, ast.Call):
                 expression_arguments = expression.args
 
-        self.graph.remove_node(node)
+        self.graph.remove_node(name)
         distribution = expression
         arguments: List[Union[str, float, int, complex]] = []
         for arg in expression_arguments:
@@ -175,7 +224,7 @@ class model(Distribution):
                 arguments.append(arg.value)
             elif isinstance(arg, ast.Num):
                 arguments.append(arg.n)
-        self.graph.add_randvar(node, distribution, arguments)
+        self.graph.add_randvar(name, distribution, arguments)
 
     def do(self, **kwargs) -> "model":
         """Apply the do operator to the graph and return a copy of the model.
@@ -194,43 +243,54 @@ class model(Distribution):
         return new_model
 
     def sample(self, *args, sample_shape=(1000,)) -> jax.numpy.DeviceArray:
-        """Compute forward samples.
+        """Return forward samples from the distribution.
         """
-        sampler, arg_names, _, src = core.compile_to_sampler(self.graph, self.namespace)
+        sampler, _, _, _ = core.compile_to_sampler(self.graph, self.namespace)
         _, self.rng_key = jax.random.split(self.rng_key)
         samples = sampler(self.rng_key, sample_shape, *args)
         return samples
 
     def logpdf(self, *args) -> float:
-        """Compute the value of the logpdf.
+        """Compute the value of the distribution's logpdf.
         """
         logpdf, _, _, _ = core.compile_to_logpdf(self.graph, self.namespace)
         return logpdf(*args)
 
     @property
     def logpdf_src(self) -> str:
-        _, _, _, fn = core.compile_to_logpdf(self.graph, self.namespace)
-        return fn
+        """Return the source code of the log-probability density funtion
+        generated by the compiler.
+        """
+        artifact = core.compile_to_logpdf(self.graph, self.namespace)
+        return artifact.fn_source
 
     @property
     def sampler_src(self) -> str:
-        _, _, _, fn = core.compile_to_sampler(self.graph, self.namespace)
-        return fn
+        """Return the source code of the forward sampling funtion
+        generated by the compiler.
+        """
+        artifact = core.compile_to_sampler(self.graph, self.namespace)
+        return artifact.fn_source
 
     @property
     def nodes(self):
+        """Return the names of the nodes in the graph."""
         return self.graph.nodes
 
     @property
     def arguments(self):
+        """Return the names of the graph's arguments."""
         return self.graph.arguments
 
     @property
     def returned_variables(self):
+        """Return the names of the graph's return variables."""
         return self.graph.returned_variables
 
     @property
     def variables(self):
+        """Return the names of the random variables and transformed variables.
+        """
         return self.graph.variables
 
 
