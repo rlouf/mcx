@@ -1,6 +1,7 @@
+import ast
 import functools
 from types import FunctionType
-from typing import Dict
+from typing import Dict, List, Union
 
 import jax
 import numpy
@@ -151,6 +152,30 @@ class model(Distribution):
     def __getitem__(self, var):
         nodes = self.graph.nodes(data=True)
         return nodes[var]["content"]
+
+    def __setitem__(self, node, expression_str: str):
+        """Change the node's expression.
+        This only works for distributions.
+
+        This logic should be moved to /core
+        """
+        expression_ast = ast.parse(expression_str).body[0]
+        if isinstance(expression_ast, ast.Expr):
+            expression = expression_ast.value
+            if isinstance(expression, ast.Call):
+                expression_arguments = expression.args
+
+        self.graph.remove_node(node)
+        distribution = expression
+        arguments: List[Union[str, float, int, complex]] = []
+        for arg in expression_arguments:
+            if isinstance(arg, ast.Name):
+                arguments.append(arg.id)
+            elif isinstance(arg, ast.Constant):
+                arguments.append(arg.value)
+            elif isinstance(arg, ast.Num):
+                arguments.append(arg.n)
+        self.graph.add_randvar(node, distribution, arguments)
 
     def do(self, **kwargs) -> "model":
         """Apply the do operator to the graph and return a copy of the model.
