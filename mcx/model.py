@@ -6,12 +6,13 @@ import jax
 import numpy
 
 from mcx import core
+from mcx.distributions import Distribution
 
 
 __all__ = ["model", "sample_forward", "seed"]
 
 
-class model(object):
+class model(Distribution):
     """Representation of a model.
 
     Since it represents a probability graphical model, the `model` instance is
