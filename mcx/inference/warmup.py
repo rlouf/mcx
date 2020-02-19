@@ -3,6 +3,7 @@
 .. note:
     This is a "flat zone": all positions are 1D array.
 """
+from functools import partial
 from typing import Callable, Tuple
 
 import jax
@@ -12,9 +13,11 @@ from mcx.inference.adaptive import (
     dual_averaging,
     find_reasonable_step_size,
     mass_matrix_adaptation,
+    MassMatrixAdaptationState,
+    longest_batch_before_turn,
 )
-from mcx.inference.dynamics import euclidean_manifold_dynamics
-from mcx.inference.integrators import leapfrog_integrator
+from mcx.inference.dynamics import gaussian_euclidean_metric
+from mcx.inference.integrators import leapfrog
 from mcx.inference.kernels import HMCState, hmc_kernel
 
 
@@ -26,7 +29,7 @@ def hmc_warmup(
     path_length: float,
     num_steps: int,
     diagonal_mass_matrix=True,
-) -> Tuple[HMCState, Callable]:
+) -> Tuple[HMCState, float, MassMatrixAdaptationState]:
     """ Warmup scheme for sampling procedures based on euclidean manifold HMC.
 
     Separation between sampling and warmup ensures better modularity; a modification
@@ -45,7 +48,7 @@ def hmc_warmup(
     mm_state = mm_init(n_dims)
 
     # Initialize the HMC transition kernel
-    momentum_generator, kinetic_energy = euclidean_manifold_dynamics(
+    momentum_generator, kinetic_energy = gaussian_euclidean_metric(
         mm_state.mass_matrix_sqrt, mm_state.inverse_mass_matrix
     )
     hmc_partial_kernel = jax.partial(
@@ -85,7 +88,7 @@ def hmc_warmup(
             step_size = np.exp(da_state.log_step_size_avg)
         else:
             inverse_mass_matrix, mass_matrix_sqrt = mm_final(mm_state)
-            momentum_generator, kinetic_energy = euclidean_manifold_dynamics(
+            momentum_generator, kinetic_energy = gaussian_euclidean_metric(
                 mm_state.mass_matrix_sqrt, mm_state.inverse_mass_matrix
             )
             hmc_partial_kernel = jax.partial(
@@ -99,18 +102,88 @@ def hmc_warmup(
 
     kernel = hmc_partial_kernel(step_size)
 
-    return state, kernel
+    return state, step_size, mm_state
 
 
+@partial(jax.jit, static_argnums=(0, 1, 2, 3, 4, 5, 6, 7))
 def ehmc_warmup(
-    num_hmc_warmup_steps, num_longest_batch=2000, is_mass_matrix_diagonal=True
+    rng_key: jax.random.PRNGKey,
+    logpdf: Callable,
+    initial_state: HMCState,
+    inital_step_size: float,
+    path_length: float,
+    num_hmc_warmup_steps: int,
+    num_longest_batch: int,
+    diagonal_mass_matrix=True,
 ):
     """Warmup scheme for empirical Hamiltonian Monte Carlo.
 
-    Same as HMC + computes the longest batch distribution
-    after the step size and mass matrix adaptation.
+    We first run the standard HMC warmup to adapt the step size and mass
+    matrix. Once this first step is performed, we build a list of longest
+    batches (path lengths) from which we will draw path lengths for the
+    integration step during inference.
+
+    For that purpose, we build a custom integrator that implements algorithm
+    2. in [1]_.
+
+    References
+    ----------
+    .. [1]: Wu, Changye, Julien Stoehr, and Christian P. Robert. "Faster
+            Hamiltonian Monte Carlo by learning leapfrog scale." arXiv preprint
+            arXiv:1810.04449 (2018).
     """
-    pass
+    hmc_key, ehmc_key = jax.random.split(rng_key)
+
+    hmc_warmup_state, step_size, mm_state = hmc_warmup(
+        hmc_key,
+        logpdf,
+        initial_state,
+        inital_step_size,
+        path_length,
+        num_hmc_warmup_steps,
+        diagonal_mass_matrix,
+    )
+
+    # Build the warmup kernel
+
+    momentum_generator, kinetic_energy = gaussian_euclidean_metric(
+        mm_state.mass_matrix_sqrt, mm_state.inverse_mass_matrix
+    )
+    leapfrog_step = leapfrog(logpdf)
+    longest_batch_step = longest_batch_before_turn(leapfrog_step)
+
+    def longest_batch_integrator(rng_key, integrator_state):
+        position, momentum, log_prob, log_prob_grad, batch_length = longest_batch_step(
+            position, momentum, step_size, path_length
+        )
+        if batch_length < path_length:
+            position, momentum, log_prob, log_prob_grad = leapfrog_step(
+                position,
+                momentum,
+                log_prob,
+                log_prob_grad,
+                step_size,
+                path_length - batch_length,
+            )
+        return momentum, position, log_prob, log_prob_grad, batch_length
+
+    ehmc_warmup_kernel = hmc_kernel(
+        longest_batch_integrator, momentum_generator, kinetic_energy
+    )
+
+    # Run the kernel and return an array of longest batch lengths
+
+    def warmup_update(state, key):
+        hmc_state, _ = state
+        new_state, new_info = ehmc_warmup_kernel(key, hmc_state)
+        _, _, _, _, batch_length = new_info.integrator_step
+        return (new_state, new_info), batch_length
+
+    keys = jax.random.split(ehmc_key, num_longest_batch)
+    state, batch_lengths = jax.lax.scan(warmup_update, (hmc_warmup_state, None), keys,)
+    hmc_warmup_state, _ = state
+
+    return hmc_warmup_state, batch_lengths, step_size, mm_state
 
 
 def warmup_schedule(num_steps, initial_buffer=75, first_window=25, final_buffer=50):
