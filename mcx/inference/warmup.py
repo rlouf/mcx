@@ -17,7 +17,6 @@ from mcx.inference.adaptive import (
     longest_batch_before_turn,
 )
 from mcx.inference.dynamics import gaussian_euclidean_metric
-from mcx.inference.integrators import leapfrog
 from mcx.inference.kernels import HMCState, hmc_kernel
 
 
@@ -110,18 +109,18 @@ def ehmc_warmup(
     rng_key: jax.random.PRNGKey,
     logpdf: Callable,
     initial_state: HMCState,
-    inital_step_size: float,
+    momentum_generator: Callable,
+    kinetic_energy: Callable,
+    integrator_step: Callable,
+    step_size: float,
     path_length: float,
-    num_hmc_warmup_steps: int,
     num_longest_batch: int,
-    diagonal_mass_matrix=True,
 ):
     """Warmup scheme for empirical Hamiltonian Monte Carlo.
 
-    We first run the standard HMC warmup to adapt the step size and mass
-    matrix. Once this first step is performed, we build a list of longest
-    batches (path lengths) from which we will draw path lengths for the
-    integration step during inference.
+    We build a list of longest batches (path lengths) from which we will draw
+    path lengths for the integration step during inference. This warmup is
+    typically run after the hmc warmup.
 
     For that purpose, we build a custom integrator that implements algorithm
     2. in [1]_.
@@ -132,32 +131,27 @@ def ehmc_warmup(
             Hamiltonian Monte Carlo by learning leapfrog scale." arXiv preprint
             arXiv:1810.04449 (2018).
     """
-    hmc_key, ehmc_key = jax.random.split(rng_key)
-
-    hmc_warmup_state, step_size, mm_state = hmc_warmup(
-        hmc_key,
-        logpdf,
-        initial_state,
-        inital_step_size,
-        path_length,
-        num_hmc_warmup_steps,
-        diagonal_mass_matrix,
-    )
 
     # Build the warmup kernel
 
-    momentum_generator, kinetic_energy = gaussian_euclidean_metric(
-        mm_state.mass_matrix_sqrt, mm_state.inverse_mass_matrix
-    )
-    leapfrog_step = leapfrog(logpdf)
-    longest_batch_step = longest_batch_before_turn(leapfrog_step)
+    step = integrator_step(logpdf)
+    longest_batch_step = longest_batch_before_turn(step)
 
-    def longest_batch_integrator(rng_key, integrator_state):
+    def longest_batch_integrator(rng_key: jax.random.PRNGKey, integrator_state):
+        """The integrator state that is iterated over is the standard
+        IntegratorState plus the longest batch length. Here we bump in a
+        limitation of python < 3.7: it is not possible to subclass the
+        IntegratorState named tuple to add a field. We need to find a solution
+        as we may often need to subclass the base named tuple.
+        """
         position, momentum, log_prob, log_prob_grad, batch_length = longest_batch_step(
-            position, momentum, step_size, path_length
+            integrator_state.position,
+            integrator_state.momentum,
+            integrator_state.step_size,
+            integrator_state.path_length,
         )
         if batch_length < path_length:
-            position, momentum, log_prob, log_prob_grad = leapfrog_step(
+            position, momentum, log_prob, log_prob_grad = step(
                 position,
                 momentum,
                 log_prob,
@@ -175,15 +169,15 @@ def ehmc_warmup(
 
     def warmup_update(state, key):
         hmc_state, _ = state
-        new_state, new_info = ehmc_warmup_kernel(key, hmc_state)
-        _, _, _, _, batch_length = new_info.integrator_step
-        return (new_state, new_info), batch_length
+        new_hmc_state, new_hmc_info = ehmc_warmup_kernel(key, hmc_state)
+        _, _, _, _, batch_length = new_hmc_info.integrator_step
+        return (new_hmc_state, new_hmc_info), batch_length
 
-    keys = jax.random.split(ehmc_key, num_longest_batch)
-    state, batch_lengths = jax.lax.scan(warmup_update, (hmc_warmup_state, None), keys,)
+    keys = jax.random.split(rng_key, num_longest_batch)
+    state, batch_lengths = jax.lax.scan(warmup_update, (initial_state, None), keys,)
     hmc_warmup_state, _ = state
 
-    return hmc_warmup_state, batch_lengths, step_size, mm_state
+    return hmc_warmup_state, batch_lengths
 
 
 def warmup_schedule(num_steps, initial_buffer=75, first_window=25, final_buffer=50):

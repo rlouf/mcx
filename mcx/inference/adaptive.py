@@ -16,6 +16,7 @@ parameters used in Hamiltonian Monte Carlo.
 .. [1]: "HMC Algorithm Parameters", Stan Manual
         https://mc-stan.org/docs/2_20/reference-manual/hmc-algorithm-parameters.html
 """
+from functools import partial
 from typing import Callable, NamedTuple, Tuple
 
 import jax
@@ -311,6 +312,37 @@ def welford_algorithm(is_diagonal_matrix: bool) -> Tuple[Callable, Callable, Cal
         return covariance, count, mean
 
     return init, update, covariance
+
+
+def longest_batch_before_turn(integrator_step: Callable):
+    @partial(jax.jit, static_argnums=(2, 3))
+    def run(initial_position, initial_momentum, step_size, path_length):
+        def cond(state):
+            iteration, position, momentum = state
+            return is_u_turn or iteration == path_length
+
+        def update(state):
+            iteration, position, momentum = state
+            iteration += 1
+            position, momentum = integrator_step(position, momentum, step_size, 1)
+            return (iteration, position, momentum)
+
+        result = jax.lax.while_loop(
+            cond, update, (0, initial_position, initial_momentum)
+        )
+
+        return result[0]
+
+
+@partial(jax.jit, static_argnums=(0, 2))
+def is_u_turn(initial_position, position, inverse_mass_matrix, momentum):
+    """Detect when the trajectory starts turning back towards the point
+    where it started.
+    """
+    v = np.multiply(inverse_mass_matrix, momentum)
+    position_vec = position - initial_position
+    projection = np.multiply(position_vec, v)
+    return np.where(projection < 0, True, False)
 
 
 # Sourced from numpyro.distributions.utils.py
