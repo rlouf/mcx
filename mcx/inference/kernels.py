@@ -10,6 +10,8 @@ import jax
 import jax.numpy as np
 import jax.numpy.DeviceArray as Array
 
+from mcx.inference.integrators import IntegratorState
+
 __all__ = ["hmc_kernel", "rwm_kernel"]
 
 
@@ -34,6 +36,7 @@ class HMCInfo(NamedTuple):
     acceptance_probability: float
     is_accepted: bool
     is_divergent: bool
+    integrator_state: IntegratorState
 
 
 def hmc_init(position: Array, logpdf: Callable) -> HMCState:
@@ -122,8 +125,14 @@ def hmc_kernel(
 
         position, log_prob, log_prob_grad, energy = state
         momentum = momentum_generator(key_momentum)
-        position, momentum, log_prob, log_prob_grad = integrator(
+        integrator_state = integrator(
             key_integrator, position, momentum, log_prob_grad, log_prob,
+        )
+        position, momentum, log_prob, log_prob_grad = (
+            integrator_state.position,
+            integrator_state.momentum,
+            integrator_state.log_prob,
+            integrator_state.log_prob_grad,
         )
 
         flipped_momentum = -1.0 * momentum  # to make the transition reversible
@@ -136,8 +145,14 @@ def hmc_kernel(
         p_accept = np.clip(np.exp(delta_energy), a_max=1)
 
         do_accept = jax.random.bernoulli(key_accept, p_accept)
-        accept_state = (new_state, HMCInfo(new_state, p_accept, True, is_divergent))
-        reject_state = (state, HMCInfo(new_state, p_accept, False, is_divergent))
+        accept_state = (
+            new_state,
+            HMCInfo(new_state, p_accept, True, is_divergent, integrator_state),
+        )
+        reject_state = (
+            state,
+            HMCInfo(new_state, p_accept, False, is_divergent, integrator_state),
+        )
         return np.where(do_accept, accept_state, reject_state)
 
     return kernel
