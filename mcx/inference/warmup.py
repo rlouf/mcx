@@ -10,98 +10,123 @@ import jax
 from jax import numpy as np
 
 from mcx.inference.adaptive import (
+    DualAveragingState,
+    MassMatrixAdaptationState,
     dual_averaging,
     find_reasonable_step_size,
     mass_matrix_adaptation,
-    MassMatrixAdaptationState,
     longest_batch_before_turn,
 )
 from mcx.inference.dynamics import gaussian_euclidean_metric
 from mcx.inference.kernels import HMCState, hmc_kernel
+from mcx.inference.integrators import hmc_integrator
 
 
-def hmc_warmup(
+def stan_hmc_warmup(
     rng_key: jax.random.PRNGKey,
     logpdf: Callable,
     initial_state: HMCState,
+    euclidean_metric: Callable,
+    integrator_step: Callable,
     inital_step_size: float,
     path_length: float,
     num_steps: int,
-    diagonal_mass_matrix=True,
-) -> Tuple[HMCState, float, MassMatrixAdaptationState]:
+    is_mass_matrix_diagonal=True,
+) -> Tuple[HMCState, DualAveragingState, MassMatrixAdaptationState]:
     """ Warmup scheme for sampling procedures based on euclidean manifold HMC.
+    The schedule and algorithms used match Stan's [1]_ as closely as possible.
 
-    Separation between sampling and warmup ensures better modularity; a modification
-    in the warmup procedure should not affect the sampling implementation.
+    Unlike several other libraries, we separate the warmup and sampling phases
+    explicitly. This ensure a better modularity; a change in the warmup does
+    not affect the sampling. It also allows users to run their own warmup
+    should they want to.
+
+    Stan's warmup consists in the three following phases:
+
+    1. A fast adaptation window where only the step size is adapted using
+    Nesterov's dual averaging scheme to match a target acceptance rate.
+    2. A succession of slow adapation windows (where the size of a window
+    is double that of the previous window) where both the mass matrix and the step size
+    are adapted. The mass matrix is recomputed at the end of each window; the step
+    size is re-initialized to a "reasonable" value.
+    3. A last fast adaptation window where only the step size is adapted.
+
+    Arguments
+    ---------
 
     Returns
     -------
     Tuple
-        The current state of the chain and the warmed-up kernel.
+        The current state of the chain, of the dual averaging scheme and mass matrix
+        adaptation scheme.
     """
 
     n_dims = np.shape(initial_state.position)[-1]  # `position` is a 1D array
 
     # Initialize the mass matrix adaptation
-    mm_init, mm_update, mm_final = mass_matrix_adaptation(diagonal_mass_matrix)
+    mm_init, mm_update, mm_final = mass_matrix_adaptation(is_mass_matrix_diagonal)
     mm_state = mm_init(n_dims)
 
     # Initialize the HMC transition kernel
-    momentum_generator, kinetic_energy = gaussian_euclidean_metric(
+    momentum_generator, kinetic_energy = euclidean_metric(
         mm_state.mass_matrix_sqrt, mm_state.inverse_mass_matrix
     )
-    hmc_partial_kernel = jax.partial(
-        hmc_kernel,
-        logpdf,
-        leapfrog_integrator,
+
+    # Find a first reasonable step size and initialize dual averaging
+    step_size = find_reasonable_step_size(
+        rng_key,
         momentum_generator,
         kinetic_energy,
-        lambda x: path_length,
-    )
-
-    # Initialize the dual averaging
-    step_size = find_reasonable_step_size(
-        rng_key, hmc_partial_kernel, initial_state, inital_step_size,
+        integrator_step,
+        initial_state,
+        inital_step_size,
     )
     da_init, da_update = dual_averaging()
     da_state = da_init(step_size)
+
+    # initial kernel
+    integrator = hmc_integrator(integrator_step, path_length, step_size)
+    kernel = hmc_kernel(momentum_generator, kinetic_energy, integrator)
 
     # Get warmup schedule
     schedule = warmup_schedule(num_steps)
 
     state = initial_state
     for i, window in enumerate(schedule):
+        is_middle_window = (0 < i) & (i < (len(schedule) - 1))
 
         for step in range(window):
-            accept = lambda x, y, z: x
-            proposal_state = hmc_partial_kernel(rng_key, step_size)
-            state = accept(rng_key, proposal_state, state)
-            if i != 0 and i != len(schedule) - 1:
+            _, rng_key = jax.random.split(rng_key)
+            state, info = kernel(rng_key, state)
+
+            da_state = da_update(info.acceptance_probability, da_state)
+            step_size = np.exp(da_state.log_step_size)
+            integrator = hmc_integrator(integrator_step, path_length, step_size)
+
+            if is_middle_window:
                 mm_state = mm_update(mm_state, state.position)
 
-        if i == 0:
-            da_state = da_update(state.p_accept, da_state)
-            step_size = np.exp(da_state.log_step_size)
-        elif i == len(schedule) - 1:
-            da_state = da_update(state.p_accept, da_state)
-            step_size = np.exp(da_state.log_step_size_avg)
-        else:
+            kernel = hmc_kernel(momentum_generator, kinetic_energy, integrator)
+
+        if is_middle_window:
             inverse_mass_matrix, mass_matrix_sqrt = mm_final(mm_state)
             momentum_generator, kinetic_energy = gaussian_euclidean_metric(
-                mm_state.mass_matrix_sqrt, mm_state.inverse_mass_matrix
+                mass_matrix_sqrt, inverse_mass_matrix
             )
-            hmc_partial_kernel = jax.partial(
-                hmc_kernel,
-                logpdf,
-                leapfrog_integrator,
+            mm_state = mm_init(n_dims)
+            step_size = find_reasonable_step_size(
+                rng_key,
                 momentum_generator,
                 kinetic_energy,
-                lambda x: path_length,
+                integrator_step,
+                initial_state,
+                inital_step_size,
             )
+            da_state = da_init(step_size)
+            integrator = hmc_integrator(integrator_step, path_length, step_size)
+            kernel = hmc_kernel(momentum_generator, kinetic_energy, integrator)
 
-    kernel = hmc_partial_kernel(step_size)
-
-    return state, step_size, mm_state
+    return state, da_state, mm_state
 
 
 @partial(jax.jit, static_argnums=(0, 1, 2, 3, 4, 5, 6, 7))
