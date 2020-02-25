@@ -24,7 +24,8 @@ from jax import numpy as np
 from jax import scipy
 from jax.numpy import DeviceArray as Array
 
-from mcx.inference.kernels import HMCState
+from mcx.inference.kernels import hmc_kernel, HMCState
+from mcx.inference.integrators import hmc_integrator
 
 
 __all__ = ["dual_averaging", "find_reasonable_step_size", "mass_matrix_adaptation"]
@@ -41,7 +42,7 @@ class DualAveragingState(NamedTuple):
 class WelfordAlgorithmState(NamedTuple):
     mean: float  # the current sample mean
     m2: float  # the current value of the sum of difference of squares
-    count: int  # the sample size
+    sample_size: int  # the sample size
 
 
 class MassMatrixAdaptationState(NamedTuple):
@@ -151,45 +152,68 @@ def dual_averaging(
 
 def find_reasonable_step_size(
     rng_key: jax.random.PRNGKey,
-    hmc_kernel_partial: Callable,
-    hmc_state: HMCState,
-    inital_step_size: float,
+    momentum_generator: Callable,
+    kinetic_energy: Callable,
+    integrator_step: Callable,
+    reference_hmc_state: HMCState,
+    inital_step_size: float = 1.0,
     target_accept: float = 0.65,
 ) -> float:
     """Find a reasonable initial step size during warmup.
+
+    While the dual averaging scheme is guaranteed to converge to a reasonable
+    value for the step size starting from any value, choosing a good first
+    value can speed up the convergence. This heuristics doubles and halves the
+    step size until the acceptance probability of the HMC proposal crossed the
+    .5 value.
+
+    Returns
+    -------
+    float
+        A reasonable first value of the step size.
 
     Reference
     ---------
     .. [1]: NUTS paper.
     """
-
-    log_target = np.log(target_accept)
     fp_limit = np.finfo(np.dtype(inital_step_size))
+
+    def new_hmc_kernel(step_size):
+        """Return a HMC kernel that operates with the provided step size."""
+        integrator = hmc_integrator(integrator_step, step_size)
+        kernel = hmc_kernel(integrator, momentum_generator, kinetic_energy)
+        return kernel
 
     def update(search_state):
         rng_key, direction, _, step_size = search_state
         _, rng_key = jax.random.split(rng_key)
 
         step_size = (2 ** direction) * step_size
-        step, _, _ = hmc_kernel_partial(step_size)
-        new_state = step(rng_key, hmc_state)
+        kernel = new_hmc_kernel(step_size)
+        _, hmc_info = kernel(rng_key, reference_hmc_state)
 
-        do_accept = log_target < hmc_state.energy - new_state.energy
-        new_direction = np.where(do_accept, 1, -1)
+        new_direction = np.where(hmc_info.is_accepted, 1, -1)
         return (rng_key, new_direction, direction, step_size)
 
-    def stopping_criterion(state):
-        _, direction, previous_direction, step_size = state
+    def do_continue(search_state):
+        """We cross the .5 threshold when the current direction is opposite to
+        the previous direction"""
+        _, direction, previous_direction, step_size = search_state
 
-        cond1 = (step_size > fp_limit.min) | (direction >= 0)
-        cond2 = (step_size < fp_limit.max) | (direction <= 0)
-        not_extreme = cond1 & cond2
-        return not_extreme & (
-            (previous_direction == 0) | (direction == previous_direction)
+        too_large = (step_size > fp_limit.max) & direction >= 0
+        too_small = (step_size < fp_limit.min) & direction <= 0
+        is_step_size_extreme = too_large | too_small
+        if is_step_size_extreme:
+            return True
+
+        has_acceptance_rate_crossed_one_half = (previous_direction != 0) & (
+            direction != previous_direction
         )
+        if has_acceptance_rate_crossed_one_half:
+            return False
 
     _, _, _, step_size = jax.while_loop(
-        stopping_criterion, update, (rng_key, 0, 0, inital_step_size)
+        do_continue, update, (rng_key, 0, 0, inital_step_size)
     )
     return step_size
 
