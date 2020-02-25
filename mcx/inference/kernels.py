@@ -8,7 +8,7 @@ from typing import Callable, NamedTuple, Optional, Tuple
 
 import jax
 import jax.numpy as np
-import jax.numpy.DeviceArray as Array
+from jax.numpy import DeviceArray as Array
 
 from mcx.inference.integrators import IntegratorState
 

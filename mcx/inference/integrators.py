@@ -8,7 +8,7 @@ from typing import Callable, NamedTuple
 
 import jax
 import jax.numpy as np
-import jax.numpy.DeviceArray as Array
+from jax.numpy import DeviceArray as Array
 
 
 __all__ = ["hmc_integrator"]
