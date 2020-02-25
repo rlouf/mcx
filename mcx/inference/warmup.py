@@ -17,7 +17,7 @@ from mcx.inference.adaptive import (
     mass_matrix_adaptation,
     longest_batch_before_turn,
 )
-from mcx.inference.dynamics import gaussian_euclidean_metric
+from mcx.inference.metrics import gaussian_euclidean_metric
 from mcx.inference.kernels import HMCState, hmc_kernel
 from mcx.inference.integrators import hmc_integrator
 
@@ -205,7 +205,9 @@ def ehmc_warmup(
     return hmc_warmup_state, batch_lengths
 
 
-def warmup_schedule(num_steps, initial_buffer=75, first_window=25, final_buffer=50):
+def warmup_schedule(
+    num_steps, initial_buffer_size=75, first_window_size=25, final_buffer_size=50
+):
     """Returns an adaptation warmup schedule.
 
     The schedule below is intended to be as close as possible to Stan's _[1].
@@ -244,27 +246,27 @@ def warmup_schedule(num_steps, initial_buffer=75, first_window=25, final_buffer=
         schedule.append((0, num_steps - 1))
         return schedule
 
-    if initial_buffer + first_window + final_buffer > num_steps:
-        initial_buffer = int(0.15 * num_steps)
-        final_buffer = int(0.1 * num_steps)
-        first_window = num_steps - initial_buffer - final_buffer
+    if initial_buffer_size + first_window_size + final_buffer_size > num_steps:
+        initial_buffer_size = int(0.15 * num_steps)
+        final_buffer_size = int(0.1 * num_steps)
+        first_window_size = num_steps - initial_buffer_size - final_buffer_size
 
     # First stage: adaptation of fast parameters
-    schedule.append((0, initial_buffer - 1))
+    schedule.append((0, initial_buffer_size - 1))
 
     # Second stage: adaptation of slow parameters
-    final_buffer_start = num_steps - final_buffer
+    final_buffer_start = num_steps - final_buffer_size
 
-    next_size = first_window
-    next_start = initial_buffer
-    while next_start < final_buffer_start:
-        start, size = next_size, next_start
-        if 3 * size <= final_buffer_start - start:
-            next_size = 2 * size
+    next_window_size = first_window_size
+    next_window_start = initial_buffer_size
+    while next_window_start < final_buffer_start:
+        current_start, current_size = next_window_start, next_window_size
+        if 3 * current_size <= final_buffer_start - current_start:
+            next_window_size = 2 * current_size
         else:
-            size = final_buffer_start - start
-        next_start = start + size
-        schedule.append((start, next_start - 1))
+            current_size = final_buffer_start - current_start
+        next_window_start = current_start + current_size
+        schedule.append((current_start, next_window_start - 1))
 
     # Last stage: adaptation of fast parameters
     schedule.append((final_buffer_start, num_steps - 1))
