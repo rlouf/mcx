@@ -4,28 +4,26 @@
     This file is a "flat zone": positions and logprobs are 1 dimensional
     arrays. Raveling and unraveling logic must happen outside.
 """
-from typing import Callable, NamedTuple, Optional, Tuple
+from typing import Callable, NamedTuple, Tuple
 
 import jax
 import jax.numpy as np
 from jax.numpy import DeviceArray as Array
 
 from mcx.inference.integrators import IntegratorState
+from mcx.inference.metrics import MomentumGenerator, KineticEnergy
 
-__all__ = ["hmc_kernel", "rwm_kernel"]
+
+__all__ = ["HMCState", "HMCInfo", "hmc_init", "hmc_kernel", "rwm_kernel"]
 
 
 class HMCState(NamedTuple):
     """Describes the state of the HMC kernel.
-
-    It only contains the minimum information necessary to move the
-    chain forward.
     """
 
     position: Array
     log_prob: float
     log_prob_grad: float
-    energy: Optional[float]
 
 
 class HMCInfo(NamedTuple):
@@ -40,24 +38,24 @@ class HMCInfo(NamedTuple):
 
 
 def hmc_init(position: Array, logpdf: Callable) -> HMCState:
-    log_prob, log_prob_grad = logpdf(position)
-    return HMCState(position, log_prob, log_prob_grad, None)
+    log_prob, log_prob_grad = jax.value_and_grad(logpdf)(position)
+    return HMCState(position, log_prob, log_prob_grad)
 
 
 def hmc_kernel(
-    integrator: Callable,
-    momentum_generator: Callable,
-    kinetic_energy: Callable,
+    integrator: Callable[[jax.random.PRNGKey, IntegratorState], IntegratorState],
+    momentum_generator: MomentumGenerator,
+    kinetic_energy: KineticEnergy,
     divergence_threshold: float = 1000.0,
 ) -> Callable:
     """Creates a Hamiltonian Monte Carlo transition kernel.
 
-    Hamiltonian Monte Carlo is known to yield effective Markov transitions and
-    has been a major empirical success, leading to an extensive use in
-    probabilistic programming languages and libraries [Duane1987, Neal1994,
-    Betancourt2018]_.
+    Hamiltonian Monte Carlo (HMC) is known to yield effective Markov
+    transitions and has been a major empirical success, leading to an extensive
+    use in probabilistic programming languages and libraries [Duane1987,
+    Neal1994, Betancourt2018]_.
 
-    It works by augmenting the state space in which the chain evolves with an
+    HMC works by augmenting the state space in which the chain evolves with an
     auxiliary momentum :math:`p`. At each step of the chain we draw a momentum
     value from the `momentum_generator` function. We then use Hamilton's
     equations [HamiltonEq]_ to push the state forward; we then compute the new
@@ -75,9 +73,6 @@ def hmc_kernel(
 
     Arguments
     ---------
-    logpdf:
-        The logpdf of the model whose posterior we want to sample. Returns the
-        log probability and gradient when evaluated at a position.
     integrator:
         The function used to integrate the equations of motion.
     momentum_generator:
@@ -106,7 +101,9 @@ def hmc_kernel(
     """
 
     @jax.jit
-    def kernel(rng_key, state: HMCState) -> Tuple[HMCState, HMCInfo]:
+    def kernel(
+        rng_key: jax.random.PRNGKey, state: HMCState
+    ) -> Tuple[HMCState, HMCInfo]:
         """Moves the chain by one step using the Hamiltonian dynamics.
 
         Arguments
@@ -123,27 +120,29 @@ def hmc_kernel(
         """
         key_momentum, key_integrator, key_accept = jax.random.split(rng_key, 3)
 
-        position, log_prob, log_prob_grad, energy = state
+        position, log_prob, log_prob_grad = state
         momentum = momentum_generator(key_momentum)
         integrator_state = integrator(
-            key_integrator, position, momentum, log_prob_grad, log_prob,
+            key_integrator,
+            IntegratorState(position, momentum, log_prob, log_prob_grad),
         )
-        position, momentum, log_prob, log_prob_grad = (
+        new_position, new_momentum, new_log_prob, new_log_prob_grad = (
             integrator_state.position,
             integrator_state.momentum,
             integrator_state.log_prob,
             integrator_state.log_prob_grad,
         )
+        new_state = HMCState(new_position, new_log_prob, new_log_prob_grad)
 
-        flipped_momentum = -1.0 * momentum  # to make the transition reversible
-        new_energy = log_prob + kinetic_energy(flipped_momentum)
-        new_state = HMCState(position, log_prob, log_prob_grad, energy)
+        flipped_momentum = -1.0 * new_momentum  # to make the transition reversible
+        energy = log_prob + kinetic_energy(momentum)
+        new_energy = new_log_prob + kinetic_energy(flipped_momentum)
 
         delta_energy = energy - new_energy
         delta_energy = np.where(np.isnan(delta_energy), -np.inf, delta_energy)
         is_divergent = np.abs(delta_energy) > divergence_threshold
-        p_accept = np.clip(np.exp(delta_energy), a_max=1)
 
+        p_accept = np.clip(np.exp(delta_energy), a_max=1)
         do_accept = jax.random.bernoulli(key_accept, p_accept)
         accept_state = (
             new_state,
@@ -153,7 +152,13 @@ def hmc_kernel(
             state,
             HMCInfo(new_state, p_accept, False, is_divergent, integrator_state),
         )
-        return np.where(do_accept, accept_state, reject_state)
+        return jax.lax.cond(
+            do_accept,
+            accept_state,
+            lambda state: state,
+            reject_state,
+            lambda state: state,
+        )
 
     return kernel
 
