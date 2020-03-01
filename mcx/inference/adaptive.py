@@ -150,13 +150,14 @@ def dual_averaging(
     return init, update
 
 
+@partial(jax.jit, static_argnums=(0, 1, 2, 3, 4))
 def find_reasonable_step_size(
     rng_key: jax.random.PRNGKey,
     momentum_generator: Callable,
     kinetic_energy: Callable,
     integrator_step: Callable,
     reference_hmc_state: HMCState,
-    inital_step_size: float = 1.0,
+    initial_step_size: float = 1.0,
     target_accept: float = 0.65,
 ) -> float:
     """Find a reasonable initial step size during warmup.
@@ -176,44 +177,40 @@ def find_reasonable_step_size(
     ---------
     .. [1]: NUTS paper.
     """
-    fp_limit = np.finfo(np.dtype(inital_step_size))
+    fp_limit = np.finfo(jax.lax.dtype(initial_step_size))
 
-    def new_hmc_kernel(step_size):
+    def _new_hmc_kernel(step_size):
         """Return a HMC kernel that operates with the provided step size."""
-        integrator = hmc_integrator(integrator_step, step_size)
+        integrator = hmc_integrator(integrator_step, step_size, 1.0)
         kernel = hmc_kernel(integrator, momentum_generator, kinetic_energy)
         return kernel
 
-    def update(search_state):
+    def _update(search_state):
         rng_key, direction, _, step_size = search_state
         _, rng_key = jax.random.split(rng_key)
 
-        step_size = (2 ** direction) * step_size
-        kernel = new_hmc_kernel(step_size)
+        step_size = (2.0 ** direction) * step_size
+        kernel = _new_hmc_kernel(step_size)
         _, hmc_info = kernel(rng_key, reference_hmc_state)
 
-        new_direction = np.where(hmc_info.is_accepted, 1, -1)
+        new_direction = np.where(target_accept < hmc_info.acceptance_probability, 1, -1)
         return (rng_key, new_direction, direction, step_size)
 
-    def do_continue(search_state):
+    def _do_continue(search_state):
         """We cross the .5 threshold when the current direction is opposite to
         the previous direction"""
         _, direction, previous_direction, step_size = search_state
 
-        too_large = (step_size > fp_limit.max) & direction >= 0
-        too_small = (step_size < fp_limit.min) & direction <= 0
-        is_step_size_extreme = too_large | too_small
-        if is_step_size_extreme:
-            return True
-
-        has_acceptance_rate_crossed_one_half = (previous_direction != 0) & (
-            direction != previous_direction
+        not_too_large = (step_size < fp_limit.max) | (direction <= 0)
+        not_too_small = (step_size > fp_limit.tiny) | (direction >= 0)
+        is_step_size_not_extreme = not_too_large & not_too_small
+        has_acceptance_rate_crossed_one_half = (previous_direction == 0) | (
+            direction == previous_direction
         )
-        if has_acceptance_rate_crossed_one_half:
-            return False
+        return is_step_size_not_extreme & has_acceptance_rate_crossed_one_half
 
-    _, _, _, step_size = jax.while_loop(
-        do_continue, update, (rng_key, 0, 0, inital_step_size)
+    _, _, _, step_size = jax.lax.while_loop(
+        _do_continue, _update, (rng_key, 0, 0, initial_step_size)
     )
     return step_size
 
