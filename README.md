@@ -30,6 +30,8 @@ MCX's philosophy
 3. Inference should be performant. Sequential inference should be a first class
    citizen.
 
+See the [documentation](https://rlouf.github.io/mcx) for more information.
+
 ## Currently implemented
 
 * Parsing simple model definitions and compilation to `logpdf` or prior sampler;
