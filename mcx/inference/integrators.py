@@ -35,8 +35,8 @@ def hmc_integrator(
     Given a path length and a step size, the HMC integrator will run the appropriate
     number of iteration steps (typically with the velocity Verlet algorithm).
 
-    When `path_length` = `step_size` the integrator reduces to the underlying
-    integrator step.
+    When `path_length` = `step_size` the integrator reduces to the integrator
+    step.
     """
 
     num_steps = np.clip(path_length / step_size, a_min=1).astype(int)
@@ -83,9 +83,7 @@ def empirical_hmc_integrator(
 
 
 def velocity_verlet(logpdf: Callable, kinetic_energy_fn: Callable) -> IntegratorStep:
-    """The velocity Verlet integrator.
-
-    Second order symplectic integrator.
+    """The velocity Verlet integrator [1]_.
 
     References
     ----------

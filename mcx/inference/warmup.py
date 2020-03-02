@@ -86,7 +86,7 @@ def stan_hmc_warmup(
 
     # initial kernel
     integrator = hmc_integrator(integrator_step, path_length, step_size)
-    kernel = hmc_kernel(momentum_generator, kinetic_energy, integrator)
+    kernel = hmc_kernel(integrator, momentum_generator, kinetic_energy)
 
     # Get warmup schedule
     schedule = warmup_schedule(num_steps)
@@ -106,7 +106,7 @@ def stan_hmc_warmup(
             if is_middle_window:
                 mm_state = mm_update(mm_state, state.position)
 
-            kernel = hmc_kernel(momentum_generator, kinetic_energy, integrator)
+            kernel = hmc_kernel(integrator, momentum_generator, kinetic_energy)
 
         if is_middle_window:
             inverse_mass_matrix, mass_matrix_sqrt = mm_final(mm_state)
@@ -124,7 +124,7 @@ def stan_hmc_warmup(
             )
             da_state = da_init(step_size)
             integrator = hmc_integrator(integrator_step, path_length, step_size)
-            kernel = hmc_kernel(momentum_generator, kinetic_energy, integrator)
+            kernel = hmc_kernel(integrator, momentum_generator, kinetic_energy)
 
     return state, da_state, mm_state
 
