@@ -3,7 +3,7 @@
 </h2>
    
 <h3 align="center">
-  Probabilistic Programming in Python based on source code transformation
+ XLA-rated Bayesian inference
 </h3>
 
 <p align="center">
