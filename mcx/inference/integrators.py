@@ -96,11 +96,11 @@ def velocity_verlet(logpdf: Callable, kinetic_energy_fn: Callable) -> Integrator
     def one_step(state: IntegratorState, step_size: float) -> IntegratorState:
         position, momentum, _, log_prob_grad = state
 
-        momentum = momentum + 0.5 * step_size * log_prob_grad  # half step
+        momentum = momentum - 0.5 * step_size * log_prob_grad  # half step
         kinetic_grad = jax.grad(kinetic_energy_fn)(momentum)
         position = position + step_size * kinetic_grad  # whole step
         log_prob, log_prob_grad = jax.value_and_grad(logpdf)(position)
-        momentum = momentum + 0.5 * step_size * log_prob_grad  # half step
+        momentum = momentum - 0.5 * step_size * log_prob_grad  # half step
 
         return IntegratorState(position, momentum, log_prob, log_prob_grad)
 
