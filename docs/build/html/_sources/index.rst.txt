@@ -18,10 +18,10 @@ algorithms, but its inference engine is highly customizable.
 
   @mcx.model
   def linear_regression(x, lmbda=1.):
-      scale = dist.Exponential(lmbda)
-      coefs = dist.Normal(np.zeros(np.shape(x)[-1]))
+      scale ~ dist.Exponential(lmbda)
+      coefs ~ dist.Normal(np.zeros(np.shape(x)[-1]))
       y = np.dot(x, coefs)
-      predictions = dist.Normal(y, scale)
+      predictions ~ dist.Normal(y, scale)
       return predictions
 
   # Forward (or prior-predictive) samples
