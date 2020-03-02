@@ -32,7 +32,7 @@ def gaussian_euclidean_metric(
             Information. Springer, Berlin, Heidelberg, 2013.
     """
 
-    if np.dim(inverse_mass_matrix) != np.dim(mass_matrix_sqrt):
+    if np.ndim(inverse_mass_matrix) != np.ndim(mass_matrix_sqrt):
         raise ValueError(
             "The inverse mass matrix and mass matrix have a different "
             "number of dimensions: {} vs {} respectively.".format(

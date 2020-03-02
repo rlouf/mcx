@@ -42,7 +42,7 @@ def hmc_integrator(
     num_steps = np.clip(path_length / step_size, a_min=1).astype(int)
 
     @jax.jit
-    def integrate(state: IntegratorState) -> IntegratorState:
+    def integrate(_, state: IntegratorState) -> IntegratorState:
         new_state = jax.lax.fori_loop(
             0, num_steps, lambda i, state: integrator_step(state, step_size), state
         )
