@@ -181,7 +181,7 @@ def find_reasonable_step_size(
 
     def _new_hmc_kernel(step_size):
         """Return a HMC kernel that operates with the provided step size."""
-        integrator = hmc_integrator(integrator_step, step_size, 1.0)
+        integrator = hmc_integrator(integrator_step, step_size, step_size)
         kernel = hmc_kernel(integrator, momentum_generator, kinetic_energy)
         return kernel
 
@@ -197,17 +197,17 @@ def find_reasonable_step_size(
         return (rng_key, new_direction, direction, step_size)
 
     def _do_continue(search_state):
-        """We cross the .5 threshold when the current direction is opposite to
+        """We cross the `target_accept` threshold when the current direction is opposite to
         the previous direction"""
         _, direction, previous_direction, step_size = search_state
 
         not_too_large = (step_size < fp_limit.max) | (direction <= 0)
         not_too_small = (step_size > fp_limit.tiny) | (direction >= 0)
         is_step_size_not_extreme = not_too_large & not_too_small
-        has_acceptance_rate_crossed_one_half = (previous_direction == 0) | (
+        has_acceptance_rate_not_crossed_threshold = (previous_direction == 0) | (
             direction == previous_direction
         )
-        return is_step_size_not_extreme & has_acceptance_rate_crossed_one_half
+        return is_step_size_not_extreme & has_acceptance_rate_not_crossed_threshold
 
     _, _, _, step_size = jax.lax.while_loop(
         _do_continue, _update, (rng_key, 0, 0, initial_step_size)
