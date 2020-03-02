@@ -64,6 +64,7 @@ html_theme_options = {
     'github_count': False,
     'note_bg': '#FFF59C',
     'pre_bg': '#3B4252',
+    'page_width': 1140,
 }
 
 # Add any paths that contain custom static files (such as style sheets) here,
