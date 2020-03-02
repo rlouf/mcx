@@ -119,8 +119,8 @@ def stan_hmc_warmup(
                 momentum_generator,
                 kinetic_energy,
                 integrator_step,
-                initial_state,
-                inital_step_size,
+                state,
+                step_size,
             )
             da_state = da_init(step_size)
             integrator = hmc_integrator(integrator_step, path_length, step_size)
