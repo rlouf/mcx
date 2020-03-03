@@ -82,8 +82,17 @@ def empirical_hmc_integrator(
     return integrate
 
 
-def velocity_verlet(logpdf: Callable, kinetic_energy_fn: Callable) -> IntegratorStep:
+def velocity_verlet(potential_fn: Callable, kinetic_energy_fn: Callable) -> IntegratorStep:
     """The velocity Verlet integrator [1]_.
+
+    Note
+    ----
+
+    Micro-benchmarks on the harmonic oscillator show that pre-computing the
+    gradient of the log-probability density function and the kinetic energy
+    yields a 10% performance improvement.
+
+    (TODO) reproduce on a more complex potential.
 
     References
     ----------
@@ -92,14 +101,17 @@ def velocity_verlet(logpdf: Callable, kinetic_energy_fn: Callable) -> Integrator
             (2018): 113-206.
     """
 
+    potential_grad_fn = jax.jit(jax.grad(potential_fn))
+    kinetic_energy_grad_fn = jax.jit(jax.grad(kinetic_energy_fn))
+
     @partial(jax.jit, static_argnums=(1,))
     def one_step(state: IntegratorState, step_size: float) -> IntegratorState:
         position, momentum, _, log_prob_grad = state
 
         momentum = momentum - 0.5 * step_size * log_prob_grad  # half step
-        kinetic_grad = jax.grad(kinetic_energy_fn)(momentum)
+        kinetic_grad = kinetic_energy_grad_fn(momentum)
         position = position + step_size * kinetic_grad  # whole step
-        log_prob, log_prob_grad = jax.value_and_grad(logpdf)(position)
+        log_prob, log_prob_grad = potential_fn(position), potential_grad_fn(position)
         momentum = momentum - 0.5 * step_size * log_prob_grad  # half step
 
         return IntegratorState(position, momentum, log_prob, log_prob_grad)
