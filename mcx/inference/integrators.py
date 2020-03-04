@@ -18,9 +18,10 @@ from jax.numpy import DeviceArray as Array
 __all__ = [
     "hmc_integrator",
     "empirical_hmc_integrator",
+    "velocity_verlet",
     "mclachlan_integrator",
     "suzuki_yoshida_integrator",
-    "velocity_verlet",
+    "four_stages_integrator",
 ]
 
 
@@ -88,6 +89,11 @@ def empirical_hmc_integrator(
         return new_state
 
     return integrate
+
+
+#
+# Integrator steps
+#
 
 
 def velocity_verlet(
@@ -226,6 +232,70 @@ def suzuki_yoshida_integrator(
 
         log_prob_grad = potential_grad_fn(position)
         momentum = momentum - b2 * step_size * log_prob_grad
+
+        kinetic_grad = kinetic_energy_grad_fn(momentum)
+        position = position + a2 * step_size * kinetic_grad
+
+        log_prob_grad = potential_grad_fn(position)
+        momentum = momentum - b2 * step_size * log_prob_grad
+
+        kinetic_grad = kinetic_energy_grad_fn(momentum)
+        position = position + a1 * step_size * kinetic_grad
+
+        log_prob_grad = potential_grad_fn(position)
+        momentum = momentum - b1 * step_size * log_prob_grad
+
+        log_prob = potential_fn(position)
+
+        return IntegratorState(position, momentum, log_prob, log_prob_grad)
+
+    return one_step
+
+
+def four_stages_integrator(
+    potential_fn: Callable, kinetic_energy_fn: Callable
+) -> IntegratorStep:
+    """Four stages palindromic symplectic integrator derived in [1]_
+
+    The integrator is of the form (b1, a1, b2, a3, b2, a2, b2, a1, b1). The choice of
+    the parameters determine both the bound on the integration error and the
+    stability of the method with respect to the value of `step_size`. The
+    values used here are the ones derived in [1]_ which guarantees a stability
+    interval length approximately equal to 5.35.
+
+    References
+    ----------
+    .. [1]: Blanes, Sergio, Fernando Casas, and J. M. Sanz-Serna. "Numerical
+            integrators for the Hybrid Monte Carlo method." SIAM Journal on Scientific
+            Computing 36.4 (2014): A1556-A1580.
+    """
+
+    b1 = 0.071353913450279725904
+    b2 = 0.268548791161230105820
+    a1 = 0.1916678
+    a2 = 0.5 - a1
+    b3 = 1 - 2 * b1 - 2 * b2
+
+    potential_grad_fn = jax.jit(jax.grad(potential_fn))
+    kinetic_energy_grad_fn = jax.jit(jax.grad(kinetic_energy_fn))
+
+    @partial(jax.jit, static_argnums=(1,))
+    def one_step(state: IntegratorState, step_size: float) -> IntegratorState:
+        position, momentum, _, log_prob_grad = state
+
+        momentum = momentum - b1 * step_size * log_prob_grad
+
+        kinetic_grad = kinetic_energy_grad_fn(momentum)
+        position = position + a1 * step_size * kinetic_grad
+
+        log_prob_grad = potential_grad_fn(position)
+        momentum = momentum - b2 * step_size * log_prob_grad
+
+        kinetic_grad = kinetic_energy_grad_fn(momentum)
+        position = position + a2 * step_size * kinetic_grad
+
+        log_prob_grad = potential_grad_fn(position)
+        momentum = momentum - b3 * step_size * log_prob_grad
 
         kinetic_grad = kinetic_energy_grad_fn(momentum)
         position = position + a2 * step_size * kinetic_grad
