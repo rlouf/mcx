@@ -7,6 +7,7 @@ from .binomial import Binomial
 from .categorical import Categorical
 from .discrete_uniform import DiscreteUniform
 from .distribution import Distribution
+from .exponential import Exponential
 from .lognormal import LogNormal
 from .normal import Normal
 from .poisson import Poisson
@@ -19,6 +20,7 @@ __all__ = [
     "Binomial",
     "Categorical",
     "DiscreteUniform",
+    "Exponential",
     "LogNormal",
     "Normal",
     "Poisson",
