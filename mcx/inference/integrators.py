@@ -1,6 +1,8 @@
 """Integrators of hamiltonian trajectories on euclidean and riemannian
 manifolds.
 
+IntegratorStep does not need to compute and return the logprob!
+
 .. note:
     This file is a "flat zone": position and momentum are one-dimensional arrays.
     Any raveling/unraveling logic must be placed at a higher level.
@@ -13,7 +15,12 @@ from jax import numpy as np
 from jax.numpy import DeviceArray as Array
 
 
-__all__ = ["hmc_integrator", "empirical_hmc_integrator", "velocity_verlet"]
+__all__ = [
+    "hmc_integrator",
+    "empirical_hmc_integrator",
+    "mclachlan_integrator",
+    "velocity_verlet",
+]
 
 
 class IntegratorState(NamedTuple):
@@ -82,8 +89,12 @@ def empirical_hmc_integrator(
     return integrate
 
 
-def velocity_verlet(potential_fn: Callable, kinetic_energy_fn: Callable) -> IntegratorStep:
-    """The velocity Verlet integrator [1]_.
+def velocity_verlet(
+    potential_fn: Callable, kinetic_energy_fn: Callable
+) -> IntegratorStep:
+    """The velocity Verlet integrator, a one-stage second order symplectic integrator [1]_.
+
+    The velocity verlet is a palindromic integrator of the form (b1, a1, b1).
 
     Note
     ----
@@ -101,6 +112,9 @@ def velocity_verlet(potential_fn: Callable, kinetic_energy_fn: Callable) -> Inte
             (2018): 113-206.
     """
 
+    b1 = 0.5
+    a1 = 1.0
+
     potential_grad_fn = jax.jit(jax.grad(potential_fn))
     kinetic_energy_grad_fn = jax.jit(jax.grad(kinetic_energy_fn))
 
@@ -108,11 +122,66 @@ def velocity_verlet(potential_fn: Callable, kinetic_energy_fn: Callable) -> Inte
     def one_step(state: IntegratorState, step_size: float) -> IntegratorState:
         position, momentum, _, log_prob_grad = state
 
-        momentum = momentum - 0.5 * step_size * log_prob_grad  # half step
+        momentum = momentum - b1 * step_size * log_prob_grad
         kinetic_grad = kinetic_energy_grad_fn(momentum)
-        position = position + step_size * kinetic_grad  # whole step
-        log_prob, log_prob_grad = potential_fn(position), potential_grad_fn(position)
-        momentum = momentum - 0.5 * step_size * log_prob_grad  # half step
+        position = position + a1 * step_size * kinetic_grad
+        log_prob_grad = potential_grad_fn(position)
+        momentum = momentum - b1 * step_size * log_prob_grad
+
+        log_prob = potential_fn(position)
+
+        return IntegratorState(position, momentum, log_prob, log_prob_grad)
+
+    return one_step
+
+
+def mclachlan_integrator(
+    potential_fn: Callable, kinetic_energy_fn: Callable
+) -> IntegratorStep:
+    """Two-stage palindromic symplectic integrator derived in [1]_
+
+    The integrator is of the form (b1, a1, b2, a1, b1). The choice of the parameters
+    determine both the bound on the integration error and the stability of the
+    method with respect to the value of `step_size`. The values used here are
+    the ones derived in [2]_; note that [1]_ is more focused on stability
+    and derives different values.
+
+    References
+    ----------
+    .. [1]: Blanes, Sergio, Fernando Casas, and J. M. Sanz-Serna. "Numerical
+            integrators for the Hybrid Monte Carlo method." SIAM Journal on Scientific
+            Computing 36.4 (2014): A1556-A1580.
+    .. [2]: McLachlan, Robert I. "On the numerical integration of ordinary
+            differential equations by symmetric composition methods." SIAM Journal on
+            Scientific Computing 16.1 (1995): 151-168.
+    """
+
+    b1 = 0.1932
+    a1 = 0.5
+    b2 = 1 - 2 * b1
+
+    potential_grad_fn = jax.jit(jax.grad(potential_fn))
+    kinetic_energy_grad_fn = jax.jit(jax.grad(kinetic_energy_fn))
+
+    @partial(jax.jit, static_argnums=(1,))
+    def one_step(state: IntegratorState, step_size: float) -> IntegratorState:
+        position, momentum, _, log_prob_grad = state
+
+        momentum = momentum - b1 * step_size * log_prob_grad
+
+        kinetic_grad = kinetic_energy_grad_fn(momentum)
+        position = position + a1 * step_size * kinetic_grad
+
+        log_prob_grad = potential_grad_fn(position)
+        momentum = momentum - b2 * step_size * log_prob_grad
+
+        kinetic_grad = kinetic_energy_grad_fn(momentum)
+        position = position + a1 * step_size * kinetic_grad
+
+        log_prob_grad = potential_grad_fn(position)
+        momentum = momentum - b1 * step_size * log_prob_grad
+
+        log_prob = potential_fn(position)
 
         return IntegratorState(position, momentum, log_prob, log_prob_grad)
 

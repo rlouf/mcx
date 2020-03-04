@@ -2,7 +2,11 @@ import jax
 from jax import numpy as np
 import pytest
 
-from mcx.inference.integrators import IntegratorState, velocity_verlet
+from mcx.inference.integrators import (
+    IntegratorState,
+    mclachlan_integrator,
+    velocity_verlet,
+)
 
 
 def HarmonicOscillator(inverse_mass_matrix, k=5, m=1.0):
@@ -54,10 +58,11 @@ integration_examples = [
 
 
 @pytest.mark.parametrize("example", integration_examples)
-def test_velocity_verlet(example):
+@pytest.mark.parametrize("integrator", [velocity_verlet, mclachlan_integrator])
+def test_velocity_verlet(example, integrator):
     model = example["model"]
     potential, kinetic_energy = model(example["inverse_mass_matrix"])
-    step = velocity_verlet(potential, kinetic_energy)
+    step = integrator(potential, kinetic_energy)
     step_size = example["step_size"]
 
     q = example["q"]
