@@ -102,6 +102,8 @@ def velocity_verlet(
     """The velocity Verlet integrator, a one-stage second order symplectic integrator [1]_.
 
     The velocity verlet is a palindromic integrator of the form (b1, a1, b1).
+    The velocity verlet has a normalized (by the number of force evaluations
+    per time step) stability interval of 2.
 
     Note
     ----
@@ -143,7 +145,7 @@ def velocity_verlet(
 
 
 def mclachlan_integrator(
-    potential_fn: Callable, kinetic_energy_fn: Callable
+    potential_fn: Callable, kinetic_energy_fn: Callable, b1=0.1932, a1=0.5
 ) -> IntegratorStep:
     """Two-stage palindromic symplectic integrator derived in [1]_
 
@@ -163,8 +165,6 @@ def mclachlan_integrator(
             Scientific Computing 16.1 (1995): 151-168.
     """
 
-    b1 = 0.1932
-    a1 = 0.5
     b2 = 1 - 2 * b1
 
     potential_grad_fn = jax.jit(jax.grad(potential_fn))
@@ -196,7 +196,10 @@ def mclachlan_integrator(
 
 
 def suzuki_yoshida_integrator(
-    potential_fn: Callable, kinetic_energy_fn: Callable
+    potential_fn: Callable,
+    kinetic_energy_fn: Callable,
+    b1=0.11888010966548,
+    a1=0.29619504261126,
 ) -> IntegratorStep:
     """Three stages palindromic symplectic integrator derived in [1]_
 
@@ -213,8 +216,6 @@ def suzuki_yoshida_integrator(
             Computing 36.4 (2014): A1556-A1580.
     """
 
-    b1 = 0.11888010966548
-    a1 = 0.29619504261126
     b2 = 0.5 - b1
     a2 = 1 - 2 * a1
 
@@ -253,7 +254,11 @@ def suzuki_yoshida_integrator(
 
 
 def four_stages_integrator(
-    potential_fn: Callable, kinetic_energy_fn: Callable
+    potential_fn: Callable,
+    kinetic_energy_fn: Callable,
+    b1=0.071353913450279725904,
+    b2=0.268548791161230105820,
+    a1=0.1916678,
 ) -> IntegratorStep:
     """Four stages palindromic symplectic integrator derived in [1]_
 
@@ -270,9 +275,6 @@ def four_stages_integrator(
             Computing 36.4 (2014): A1556-A1580.
     """
 
-    b1 = 0.071353913450279725904
-    b2 = 0.268548791161230105820
-    a1 = 0.1916678
     a2 = 0.5 - a1
     b3 = 1 - 2 * b1 - 2 * b2
 

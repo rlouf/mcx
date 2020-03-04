@@ -7,6 +7,7 @@ from mcx.inference.integrators import (
     mclachlan_integrator,
     suzuki_yoshida_integrator,
     velocity_verlet,
+    four_stages_integrator,
 )
 
 
@@ -59,7 +60,15 @@ integration_examples = [
 
 
 @pytest.mark.parametrize("example", integration_examples)
-@pytest.mark.parametrize("integrator", [suzuki_yoshida_integrator, velocity_verlet, mclachlan_integrator])
+@pytest.mark.parametrize(
+    "integrator",
+    [
+        suzuki_yoshida_integrator,
+        velocity_verlet,
+        four_stages_integrator,
+        mclachlan_integrator,
+    ],
+)
 def test_velocity_verlet(example, integrator):
     model = example["model"]
     potential, kinetic_energy = model(example["inverse_mass_matrix"])
