@@ -16,12 +16,12 @@ from jax.numpy import DeviceArray as Array
 
 
 __all__ = [
-    "hmc_integrator",
     "empirical_hmc_integrator",
-    "velocity_verlet",
-    "mclachlan_integrator",
-    "suzuki_yoshida_integrator",
+    "hmc_integrator",
     "four_stages_integrator",
+    "mclachlan_integrator",
+    "velocity_verlet",
+    "yoshida_integrator",
 ]
 
 
@@ -145,7 +145,7 @@ def velocity_verlet(
 
 
 def mclachlan_integrator(
-    potential_fn: Callable, kinetic_energy_fn: Callable, b1=0.1932, a1=0.5
+    potential_fn: Callable, kinetic_energy_fn: Callable
 ) -> IntegratorStep:
     """Two-stage palindromic symplectic integrator derived in [1]_
 
@@ -165,6 +165,8 @@ def mclachlan_integrator(
             Scientific Computing 16.1 (1995): 151-168.
     """
 
+    b1 = 0.1932
+    a1 = 0.5
     b2 = 1 - 2 * b1
 
     potential_grad_fn = jax.jit(jax.grad(potential_fn))
@@ -195,11 +197,8 @@ def mclachlan_integrator(
     return one_step
 
 
-def suzuki_yoshida_integrator(
-    potential_fn: Callable,
-    kinetic_energy_fn: Callable,
-    b1=0.11888010966548,
-    a1=0.29619504261126,
+def yoshida_integrator(
+    potential_fn: Callable, kinetic_energy_fn: Callable,
 ) -> IntegratorStep:
     """Three stages palindromic symplectic integrator derived in [1]_
 
@@ -216,6 +215,8 @@ def suzuki_yoshida_integrator(
             Computing 36.4 (2014): A1556-A1580.
     """
 
+    b1 = 0.11888010966548
+    a1 = 0.29619504261126
     b2 = 0.5 - b1
     a2 = 1 - 2 * a1
 
@@ -254,11 +255,7 @@ def suzuki_yoshida_integrator(
 
 
 def four_stages_integrator(
-    potential_fn: Callable,
-    kinetic_energy_fn: Callable,
-    b1=0.071353913450279725904,
-    b2=0.268548791161230105820,
-    a1=0.1916678,
+    potential_fn: Callable, kinetic_energy_fn: Callable,
 ) -> IntegratorStep:
     """Four stages palindromic symplectic integrator derived in [1]_
 
@@ -275,6 +272,9 @@ def four_stages_integrator(
             Computing 36.4 (2014): A1556-A1580.
     """
 
+    b1 = 0.071353913450279725904
+    b2 = 0.268548791161230105820
+    a1 = 0.1916678
     a2 = 0.5 - a1
     b3 = 1 - 2 * b1 - 2 * b2
 
