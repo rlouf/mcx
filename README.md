@@ -39,6 +39,7 @@ See the [documentation](https://rlouf.github.io/mcx) for more information.
 * Bernoulli, Beta, Binomial, Categorical, Discrete Uniform, Log-Normal, Normal,
   Poisson, Uniform distributions;
 * Sampling with the Random Walk Metropolis algorithm.
+* 4 symplectic integrators (velocity Verlet, McLachlan, Yoshida, Four stages)
 
 ## Roadmap
 
