@@ -46,6 +46,7 @@ def hmc_kernel(
     integrator: Callable[[jax.random.PRNGKey, IntegratorState], IntegratorState],
     momentum_generator: MomentumGenerator,
     kinetic_energy: KineticEnergy,
+    logpdf: Callable,
     divergence_threshold: float = 1000.0,
 ) -> Callable:
     """Creates a Hamiltonian Monte Carlo transition kernel.
@@ -122,21 +123,17 @@ def hmc_kernel(
 
         position, log_prob, log_prob_grad = state
         momentum = momentum_generator(key_momentum)
+        energy = log_prob + kinetic_energy(momentum)
+
         integrator_state = integrator(
-            key_integrator,
-            IntegratorState(position, momentum, log_prob, log_prob_grad),
+            key_integrator, IntegratorState(position, momentum, log_prob_grad),
         )
-        new_position, new_momentum, new_log_prob, new_log_prob_grad = (
-            integrator_state.position,
-            integrator_state.momentum,
-            integrator_state.log_prob,
-            integrator_state.log_prob_grad,
-        )
-        new_state = HMCState(new_position, new_log_prob, new_log_prob_grad)
+        new_position, new_momentum, new_log_prob_grad = integrator_state
 
         flipped_momentum = -1.0 * new_momentum  # to make the transition reversible
-        energy = log_prob + kinetic_energy(momentum)
+        new_log_prob = logpdf(new_position)
         new_energy = new_log_prob + kinetic_energy(flipped_momentum)
+        new_state = HMCState(new_position, new_log_prob, new_log_prob_grad)
 
         delta_energy = energy - new_energy
         delta_energy = np.where(np.isnan(delta_energy), -np.inf, delta_energy)

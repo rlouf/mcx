@@ -155,6 +155,7 @@ def find_reasonable_step_size(
     rng_key: jax.random.PRNGKey,
     momentum_generator: Callable,
     kinetic_energy: Callable,
+    potential_fn: Callable,
     integrator_step: Callable,
     reference_hmc_state: HMCState,
     initial_step_size: float = 1.0,
@@ -182,7 +183,7 @@ def find_reasonable_step_size(
     def _new_hmc_kernel(step_size):
         """Return a HMC kernel that operates with the provided step size."""
         integrator = hmc_integrator(integrator_step, step_size, step_size)
-        kernel = hmc_kernel(integrator, momentum_generator, kinetic_energy)
+        kernel = hmc_kernel(integrator, momentum_generator, kinetic_energy, potential_fn)
         return kernel
 
     def _update(search_state):

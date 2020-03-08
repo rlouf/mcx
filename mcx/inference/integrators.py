@@ -12,6 +12,7 @@ from typing import Callable, NamedTuple
 
 import jax
 from jax import numpy as np
+from jax.tree_util import tree_multimap
 from jax.numpy import DeviceArray as Array
 
 
@@ -28,7 +29,6 @@ __all__ = [
 class IntegratorState(NamedTuple):
     position: Array
     momentum: Array
-    log_prob: float
     log_prob_grad: float
 
 
@@ -129,17 +129,27 @@ def velocity_verlet(
 
     @partial(jax.jit, static_argnums=(1,))
     def one_step(state: IntegratorState, step_size: float) -> IntegratorState:
-        position, momentum, _, log_prob_grad = state
+        position, momentum, log_prob_grad = state
 
-        momentum = momentum - b1 * step_size * log_prob_grad
+        momentum = tree_multimap(
+            lambda momentum, log_prob_grad: momentum - b1 * step_size * log_prob_grad,
+            momentum,
+            log_prob_grad,
+        )
         kinetic_grad = kinetic_energy_grad_fn(momentum)
-        position = position + a1 * step_size * kinetic_grad
+        position = tree_multimap(
+            lambda position, kinetic_grad: position + a1 * step_size * kinetic_grad,
+            position,
+            kinetic_grad,
+        )
         log_prob_grad = potential_grad_fn(position)
-        momentum = momentum - b1 * step_size * log_prob_grad
+        momentum = tree_multimap(
+            lambda momentum, log_prob_grad: momentum - b1 * step_size * log_prob_grad,
+            momentum,
+            log_prob_grad,
+        )
 
-        log_prob = potential_fn(position)
-
-        return IntegratorState(position, momentum, log_prob, log_prob_grad)
+        return IntegratorState(position, momentum, log_prob_grad)
 
     return one_step
 
@@ -174,25 +184,39 @@ def mclachlan_integrator(
 
     @partial(jax.jit, static_argnums=(1,))
     def one_step(state: IntegratorState, step_size: float) -> IntegratorState:
-        position, momentum, _, log_prob_grad = state
+        position, momentum, log_prob_grad = state
 
-        momentum = momentum - b1 * step_size * log_prob_grad
-
+        momentum = tree_multimap(
+            lambda momentum, log_prob_grad: momentum - b1 * step_size * log_prob_grad,
+            momentum,
+            log_prob_grad,
+        )
         kinetic_grad = kinetic_energy_grad_fn(momentum)
-        position = position + a1 * step_size * kinetic_grad
-
+        position = tree_multimap(
+            lambda position, kinetic_grad: position + a1 * step_size * kinetic_grad,
+            position,
+            kinetic_grad,
+        )
         log_prob_grad = potential_grad_fn(position)
-        momentum = momentum - b2 * step_size * log_prob_grad
-
+        momentum = tree_multimap(
+            lambda momentum, log_prob_grad: momentum - b2 * step_size * log_prob_grad,
+            momentum,
+            log_prob_grad,
+        )
         kinetic_grad = kinetic_energy_grad_fn(momentum)
-        position = position + a1 * step_size * kinetic_grad
-
+        position = tree_multimap(
+            lambda position, kinetic_grad: position + a1 * step_size * kinetic_grad,
+            position,
+            kinetic_grad,
+        )
         log_prob_grad = potential_grad_fn(position)
-        momentum = momentum - b1 * step_size * log_prob_grad
+        momentum = tree_multimap(
+            lambda momentum, log_prob_grad: momentum - b1 * step_size * log_prob_grad,
+            momentum,
+            log_prob_grad,
+        )
 
-        log_prob = potential_fn(position)
-
-        return IntegratorState(position, momentum, log_prob, log_prob_grad)
+        return IntegratorState(position, momentum, log_prob_grad)
 
     return one_step
 
@@ -225,31 +249,51 @@ def yoshida_integrator(
 
     @partial(jax.jit, static_argnums=(1,))
     def one_step(state: IntegratorState, step_size: float) -> IntegratorState:
-        position, momentum, _, log_prob_grad = state
+        position, momentum, log_prob_grad = state
 
-        momentum = momentum - b1 * step_size * log_prob_grad
-
+        momentum = tree_multimap(
+            lambda momentum, log_prob_grad: momentum - b1 * step_size * log_prob_grad,
+            momentum,
+            log_prob_grad,
+        )
         kinetic_grad = kinetic_energy_grad_fn(momentum)
-        position = position + a1 * step_size * kinetic_grad
-
+        position = tree_multimap(
+            lambda position, kinetic_grad: position + a1 * step_size * kinetic_grad,
+            position,
+            kinetic_grad,
+        )
         log_prob_grad = potential_grad_fn(position)
-        momentum = momentum - b2 * step_size * log_prob_grad
-
+        momentum = tree_multimap(
+            lambda momentum, log_prob_grad: momentum - b2 * step_size * log_prob_grad,
+            momentum,
+            log_prob_grad,
+        )
         kinetic_grad = kinetic_energy_grad_fn(momentum)
-        position = position + a2 * step_size * kinetic_grad
-
+        position = tree_multimap(
+            lambda position, kinetic_grad: position + a2 * step_size * kinetic_grad,
+            position,
+            kinetic_grad,
+        )
         log_prob_grad = potential_grad_fn(position)
-        momentum = momentum - b2 * step_size * log_prob_grad
-
+        momentum = tree_multimap(
+            lambda momentum, log_prob_grad: momentum - b2 * step_size * log_prob_grad,
+            momentum,
+            log_prob_grad,
+        )
         kinetic_grad = kinetic_energy_grad_fn(momentum)
-        position = position + a1 * step_size * kinetic_grad
-
+        position = tree_multimap(
+            lambda position, kinetic_grad: position + a1 * step_size * kinetic_grad,
+            position,
+            kinetic_grad,
+        )
         log_prob_grad = potential_grad_fn(position)
-        momentum = momentum - b1 * step_size * log_prob_grad
+        momentum = tree_multimap(
+            lambda momentum, log_prob_grad: momentum - b1 * step_size * log_prob_grad,
+            momentum,
+            log_prob_grad,
+        )
 
-        log_prob = potential_fn(position)
-
-        return IntegratorState(position, momentum, log_prob, log_prob_grad)
+        return IntegratorState(position, momentum, log_prob_grad)
 
     return one_step
 
@@ -283,36 +327,62 @@ def four_stages_integrator(
 
     @partial(jax.jit, static_argnums=(1,))
     def one_step(state: IntegratorState, step_size: float) -> IntegratorState:
-        position, momentum, _, log_prob_grad = state
+        position, momentum, log_prob_grad = state
 
-        momentum = momentum - b1 * step_size * log_prob_grad
-
+        momentum = tree_multimap(
+            lambda momentum, log_prob_grad: momentum - b1 * step_size * log_prob_grad,
+            momentum,
+            log_prob_grad,
+        )
         kinetic_grad = kinetic_energy_grad_fn(momentum)
-        position = position + a1 * step_size * kinetic_grad
-
+        position = tree_multimap(
+            lambda position, kinetic_grad: position + a1 * step_size * kinetic_grad,
+            position,
+            kinetic_grad,
+        )
         log_prob_grad = potential_grad_fn(position)
-        momentum = momentum - b2 * step_size * log_prob_grad
-
+        momentum = tree_multimap(
+            lambda momentum, log_prob_grad: momentum - b2 * step_size * log_prob_grad,
+            momentum,
+            log_prob_grad,
+        )
         kinetic_grad = kinetic_energy_grad_fn(momentum)
-        position = position + a2 * step_size * kinetic_grad
-
+        position = tree_multimap(
+            lambda position, kinetic_grad: position + a2 * step_size * kinetic_grad,
+            position,
+            kinetic_grad,
+        )
         log_prob_grad = potential_grad_fn(position)
-        momentum = momentum - b3 * step_size * log_prob_grad
-
+        momentum = tree_multimap(
+            lambda momentum, log_prob_grad: momentum - b3 * step_size * log_prob_grad,
+            momentum,
+            log_prob_grad,
+        )
         kinetic_grad = kinetic_energy_grad_fn(momentum)
-        position = position + a2 * step_size * kinetic_grad
-
+        position = tree_multimap(
+            lambda position, kinetic_grad: position + a2 * step_size * kinetic_grad,
+            position,
+            kinetic_grad,
+        )
         log_prob_grad = potential_grad_fn(position)
-        momentum = momentum - b2 * step_size * log_prob_grad
-
+        momentum = tree_multimap(
+            lambda momentum, log_prob_grad: momentum - b2 * step_size * log_prob_grad,
+            momentum,
+            log_prob_grad,
+        )
         kinetic_grad = kinetic_energy_grad_fn(momentum)
-        position = position + a1 * step_size * kinetic_grad
-
+        position = tree_multimap(
+            lambda position, kinetic_grad: position + a1 * step_size * kinetic_grad,
+            position,
+            kinetic_grad,
+        )
         log_prob_grad = potential_grad_fn(position)
-        momentum = momentum - b1 * step_size * log_prob_grad
+        momentum = tree_multimap(
+            lambda momentum, log_prob_grad: momentum - b1 * step_size * log_prob_grad,
+            momentum,
+            log_prob_grad,
+        )
 
-        log_prob = potential_fn(position)
-
-        return IntegratorState(position, momentum, log_prob, log_prob_grad)
+        return IntegratorState(position, momentum, log_prob_grad)
 
     return one_step
