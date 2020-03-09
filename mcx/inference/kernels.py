@@ -10,7 +10,7 @@ import jax
 import jax.numpy as np
 from jax.numpy import DeviceArray as Array
 
-from mcx.inference.integrators import IntegratorState
+from mcx.inference.integrators import Proposer, Proposal
 from mcx.inference.metrics import MomentumGenerator, KineticEnergy
 
 
@@ -34,7 +34,7 @@ class HMCInfo(NamedTuple):
     acceptance_probability: float
     is_accepted: bool
     is_divergent: bool
-    integrator_state: IntegratorState
+    proposal: Proposal
 
 
 def hmc_init(position: Array, logpdf: Callable) -> HMCState:
@@ -43,7 +43,7 @@ def hmc_init(position: Array, logpdf: Callable) -> HMCState:
 
 
 def hmc_kernel(
-    integrator: Callable[[jax.random.PRNGKey, IntegratorState], IntegratorState],
+    proposal_generator: Proposer,
     momentum_generator: MomentumGenerator,
     kinetic_energy: KineticEnergy,
     logpdf: Callable,
@@ -125,10 +125,10 @@ def hmc_kernel(
         momentum = momentum_generator(key_momentum)
         energy = log_prob + kinetic_energy(momentum)
 
-        integrator_state = integrator(
-            key_integrator, IntegratorState(position, momentum, log_prob_grad),
+        proposal = proposal_generator(
+            key_integrator, Proposal(position, momentum, log_prob_grad)
         )
-        new_position, new_momentum, new_log_prob_grad = integrator_state
+        new_position, new_momentum, new_log_prob_grad = proposal
 
         flipped_momentum = -1.0 * new_momentum  # to make the transition reversible
         new_log_prob = logpdf(new_position)
@@ -143,11 +143,11 @@ def hmc_kernel(
         do_accept = jax.random.bernoulli(key_accept, p_accept)
         accept_state = (
             new_state,
-            HMCInfo(new_state, p_accept, True, is_divergent, integrator_state),
+            HMCInfo(new_state, p_accept, True, is_divergent, proposal),
         )
         reject_state = (
             state,
-            HMCInfo(new_state, p_accept, False, is_divergent, integrator_state),
+            HMCInfo(new_state, p_accept, False, is_divergent, proposal),
         )
         return jax.lax.cond(
             do_accept,

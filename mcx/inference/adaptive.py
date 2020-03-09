@@ -25,7 +25,7 @@ from jax import scipy
 from jax.numpy import DeviceArray as Array
 
 from mcx.inference.kernels import hmc_kernel, HMCState
-from mcx.inference.integrators import hmc_integrator
+from mcx.inference.integrators import hmc_proposal
 
 
 __all__ = ["dual_averaging", "find_reasonable_step_size", "mass_matrix_adaptation"]
@@ -182,7 +182,7 @@ def find_reasonable_step_size(
 
     def _new_hmc_kernel(step_size):
         """Return a HMC kernel that operates with the provided step size."""
-        integrator = hmc_integrator(integrator_step, step_size, step_size)
+        integrator = hmc_proposal(integrator_step, step_size, step_size)
         kernel = hmc_kernel(integrator, momentum_generator, kinetic_energy, potential_fn)
         return kernel
 

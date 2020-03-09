@@ -19,7 +19,7 @@ from mcx.inference.adaptive import (
 )
 from mcx.inference.metrics import gaussian_euclidean_metric
 from mcx.inference.kernels import HMCState, hmc_kernel
-from mcx.inference.integrators import hmc_integrator
+from mcx.inference.integrators import hmc_proposal
 
 
 def stan_hmc_warmup(
@@ -85,7 +85,7 @@ def stan_hmc_warmup(
     da_state = da_init(step_size)
 
     # initial kernel
-    integrator = hmc_integrator(integrator_step, path_length, step_size)
+    integrator = hmc_proposal(integrator_step, path_length, step_size)
     kernel = hmc_kernel(integrator, momentum_generator, kinetic_energy)
 
     # Get warmup schedule
@@ -101,7 +101,7 @@ def stan_hmc_warmup(
 
             da_state = da_update(info.acceptance_probability, da_state)
             step_size = np.exp(da_state.log_step_size)
-            integrator = hmc_integrator(integrator_step, path_length, step_size)
+            integrator = hmc_proposal(integrator_step, path_length, step_size)
 
             if is_middle_window:
                 mm_state = mm_update(mm_state, state.position)
@@ -123,7 +123,7 @@ def stan_hmc_warmup(
                 step_size,
             )
             da_state = da_init(step_size)
-            integrator = hmc_integrator(integrator_step, path_length, step_size)
+            integrator = hmc_proposal(integrator_step, path_length, step_size)
             kernel = hmc_kernel(integrator, momentum_generator, kinetic_energy)
 
     return state, da_state, mm_state

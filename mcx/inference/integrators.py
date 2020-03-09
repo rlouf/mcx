@@ -17,8 +17,8 @@ from jax.numpy import DeviceArray as Array
 
 
 __all__ = [
-    "empirical_hmc_integrator",
-    "hmc_integrator",
+    "empirical_hmc_proposal",
+    "hmc_proposal",
     "four_stages_integrator",
     "mclachlan_integrator",
     "velocity_verlet",
@@ -32,38 +32,46 @@ class IntegratorState(NamedTuple):
     log_prob_grad: float
 
 
-Integrator = Callable[[jax.random.PRNGKey, IntegratorState], IntegratorState]
-IntegratorStep = Callable[[IntegratorState, float], IntegratorState]
+Proposal = IntegratorState
 
 
-def hmc_integrator(
-    integrator_step: IntegratorStep, step_size: float, path_length: float = 1.0
-) -> Integrator:
-    """Vanilla HMC integrator.
+Proposer = Callable[[jax.random.PRNGKey, Proposal], Proposal]
+Integrator = Callable[[IntegratorState, float], IntegratorState]
 
-    Given a path length and a step size, the HMC integrator will run the appropriate
-    number of iteration steps (typically with the velocity Verlet algorithm).
 
-    When `path_length` = `step_size` the integrator reduces to the integrator
+#
+# Proposals
+#
+
+
+def hmc_proposal(
+    integrator: Integrator, step_size: float, path_length: float = 1.0
+) -> Proposer:
+    """Vanilla HMC proposal.
+
+    Given a path length and a step size, the HMC proposer will run the appropriate
+    number of integration steps (typically with the velocity Verlet algorithm).
+
+    When `path_length` = `step_size` the proposer reduces to the integrator
     step.
     """
 
     num_steps = np.clip(path_length / step_size, a_min=1).astype(int)
 
     @jax.jit
-    def integrate(_, state: IntegratorState) -> IntegratorState:
+    def propose(_, state: Proposal) -> Proposal:
         new_state = jax.lax.fori_loop(
-            0, num_steps, lambda i, state: integrator_step(state, step_size), state
+            0, num_steps, lambda i, state: integrator(state, step_size), state
         )
         return new_state
 
-    return integrate
+    return propose
 
 
-def empirical_hmc_integrator(
-    integrator_step: IntegratorStep, path_length_generator: Callable, step_size: float
-) -> Integrator:
-    """Integrator for the empirical HMC algorithm.
+def empirical_hmc_proposal(
+    integrator: Integrator, path_length_generator: Callable, step_size: float
+) -> Proposer:
+    """Proposal for the empirical HMC algorithm.
 
     The empirical HMC algorithm [1]_ uses an adaptive scheme for the path
     length: during warmup, a distribution of eligible path lengths is computed;
@@ -78,27 +86,23 @@ def empirical_hmc_integrator(
     """
 
     @jax.jit
-    def integrate(
-        rng_key: jax.random.PRNGKey, state: IntegratorState
-    ) -> IntegratorState:
+    def propose(rng_key: jax.random.PRNGKey, state: Proposal) -> Proposal:
         path_length = path_length_generator(rng_key)
         num_steps = np.clip(path_length / step_size, a_min=1).astype(int)
         new_state = jax.lax.fori_loop(
-            0, num_steps, lambda i, state: integrator_step(state, step_size), state
+            0, num_steps, lambda i, state: integrator(state, step_size), state
         )
         return new_state
 
-    return integrate
+    return propose
 
 
 #
-# Integrator steps
+# Integrators
 #
 
 
-def velocity_verlet(
-    potential_fn: Callable, kinetic_energy_fn: Callable
-) -> IntegratorStep:
+def velocity_verlet(potential_fn: Callable, kinetic_energy_fn: Callable) -> Integrator:
     """The velocity Verlet integrator, a one-stage second order symplectic integrator [1]_.
 
     The velocity verlet is a palindromic integrator of the form (b1, a1, b1).
@@ -156,7 +160,7 @@ def velocity_verlet(
 
 def mclachlan_integrator(
     potential_fn: Callable, kinetic_energy_fn: Callable
-) -> IntegratorStep:
+) -> Integrator:
     """Two-stage palindromic symplectic integrator derived in [1]_
 
     The integrator is of the form (b1, a1, b2, a1, b1). The choice of the parameters
@@ -223,7 +227,7 @@ def mclachlan_integrator(
 
 def yoshida_integrator(
     potential_fn: Callable, kinetic_energy_fn: Callable,
-) -> IntegratorStep:
+) -> Integrator:
     """Three stages palindromic symplectic integrator derived in [1]_
 
     The integrator is of the form (b1, a1, b2, a2, b2, a1, b1). The choice of
@@ -300,7 +304,7 @@ def yoshida_integrator(
 
 def four_stages_integrator(
     potential_fn: Callable, kinetic_energy_fn: Callable,
-) -> IntegratorStep:
+) -> Integrator:
     """Four stages palindromic symplectic integrator derived in [1]_
 
     The integrator is of the form (b1, a1, b2, a3, b2, a2, b2, a1, b1). The choice of
