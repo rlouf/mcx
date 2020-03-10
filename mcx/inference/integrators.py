@@ -59,9 +59,9 @@ def hmc_proposal(
     num_steps = np.clip(path_length / step_size, a_min=1).astype(int)
 
     @jax.jit
-    def propose(_, state: Proposal) -> Proposal:
+    def propose(_, init_state: Proposal) -> Proposal:
         new_state = jax.lax.fori_loop(
-            0, num_steps, lambda i, state: integrator(state, step_size), state
+            0, num_steps, lambda i, state: integrator(state, step_size), init_state
         )
         return new_state
 
@@ -146,7 +146,7 @@ def velocity_verlet(potential_fn: Callable, kinetic_energy_fn: Callable) -> Inte
             position,
             kinetic_grad,
         )
-        log_prob_grad = potential_grad_fn(position)
+        log_prob_grad = potential_grad_fn(*position)
         momentum = tree_multimap(
             lambda momentum, log_prob_grad: momentum - b1 * step_size * log_prob_grad,
             momentum,
