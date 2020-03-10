@@ -18,9 +18,7 @@ class Artifact(NamedTuple):
     fn_source: str
 
 
-def compile_to_logpdf(
-    graph: GraphicalModel, namespace: Dict, jit: bool = False, grad: bool = False
-) -> Artifact:
+def compile_to_logpdf(graph: GraphicalModel, namespace: Dict) -> Artifact:
     """Compile a graphical model into a log-probability density function.
 
     Arguments
@@ -29,17 +27,12 @@ def compile_to_logpdf(
         A probabilistic graphical model.
     namespace:
         The names contained in the model definition's global scope.
-    jit:
-        Whether to JIT-compile the logpdf.
-    grad:
-        Whether to add reverse-mode differentiation.
 
     Returns
     -------
     logpdf:
         A function that returns the log probability of a model at one point the
-        parameter space. Can optionally return the gradient and be
-        JIT-compiled.
+        parameter space.
     var_names:
         The name of the random variables arguments of the logpdf function, in
         the order in which they appear.
@@ -48,29 +41,45 @@ def compile_to_logpdf(
         by the user.
     """
     fn_name = graph.name + "_logpdf"
-    kwargs = [
+
+    # kwargs are copied from the original function
+    kwarg_nodes = [
         node[1]["content"]
         for node in graph.nodes(data=True)
         if isinstance(node[1]["content"], Argument)
         and node[1]["content"].default_value is not None
     ]
 
-    args = (
-        [
-            ast.arg(arg=node[1]["content"].name, annotation=None)
-            for node in graph.nodes(data=True)
-            if isinstance(node[1]["content"], RandVar)
-        ]
-        + [
-            node[1]["content"].to_logpdf()
-            for node in graph.nodes(data=True)
-            if isinstance(node[1]["content"], Argument)
-            and node[1]["content"].default_value is None
-        ]
-        + [k.to_logpdf() for k in kwargs]
+    # The other arguments of the original function and the returned variables
+    # are passed as keyword-only arguments to make partial application (or,
+    # in bayesian terms, conditioning) easier.
+    arguments = [
+        node[1]["content"].to_logpdf()
+        for node in graph.nodes(data=True)
+        if isinstance(node[1]["content"], Argument)
+        and node[1]["content"].default_value is None
+    ]
+    returned = [
+        ast.arg(arg=node[1]["content"].name, annotation=None)
+        for node in graph.nodes(data=True)
+        if isinstance(node[1]["content"], RandVar) and node[1]["content"].is_returned
+    ]
+    kwargs = [k.to_logpdf() for k in kwarg_nodes]
+
+    kwonlyargs = arguments + returned + kwargs
+    defaults = (
+        [None] * len(arguments)
+        + [None] * len(returned)
+        + [k.default_value for k in kwarg_nodes]
     )
 
-    defaults = [k.default_value for k in kwargs]
+    # args are the random variables whose distribution we want to sample.
+    args = [
+        ast.arg(arg=node[1]["content"].name, annotation=None)
+        for node in graph.nodes(data=True)
+        if isinstance(node[1]["content"], RandVar)
+        and not node[1]["content"].is_returned
+    ]
 
     body: List[Union[ast.Assign, ast.Constant, ast.Num, ast.Return]] = []
     body.append(
@@ -99,9 +108,9 @@ def compile_to_logpdf(
                     vararg=None,
                     kwarg=None,
                     posonlyargs=[],
-                    kwonlyargs=[],
-                    defaults=defaults,
-                    kw_defaults=[],
+                    kwonlyargs=kwonlyargs,
+                    defaults=[],
+                    kw_defaults=defaults,
                 ),
                 body=body,
                 decorator_list=[],
@@ -113,14 +122,13 @@ def compile_to_logpdf(
     logpdf = compile(logpdf_ast, filename="<ast>", mode="exec")
     exec(logpdf, namespace)
     fn = namespace[fn_name]
-    fn = jax.jit(fn)
 
     arguments = [arg.arg for arg in args]
 
     return Artifact(fn, arguments, fn_name, astor.code_gen.to_source(logpdf_ast))
 
 
-def compile_to_sampler(graph, namespace, jit=False) -> Artifact:
+def compile_to_sampler(graph, namespace) -> Artifact:
     """Compile the model in a function that generates prior samples from the
     model's random variables.
 
