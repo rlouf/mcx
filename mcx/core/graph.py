@@ -89,21 +89,38 @@ class GraphicalModel(nx.DiGraph):
 
     @property
     def arguments(self):
+        """Returns the list of arguments to the model definition function."""
         args = [n for n in self.nodes if isinstance(self.nodes[n]["content"], Argument)]
         return args
 
     @property
     def returned_variables(self):
+        """Returns the list of the variables returned by the model definition function."""
         args = [n for n in self.nodes if self.nodes[n]["content"].is_returned is True]
         return args
 
     @property
     def variables(self):
+        """Returns the random and deterministic variables.
+        """
         args = [
             n
             for n in self.nodes
             if isinstance(self.nodes[n]["content"], RandVar)
             or isinstance(self.nodes[n]["content"], Transformation)
+        ]
+        return args
+
+    @property
+    def posterior_variables(self):
+        """Returns the list of the random variables whose posterior
+        distribution we want to sample.
+        """
+        args = [
+            n
+            for n in self.nodes
+            if isinstance(self.nodes[n]["content"], RandVar)
+            and not self.nodes[n]["content"].is_returned
         ]
         return args
 

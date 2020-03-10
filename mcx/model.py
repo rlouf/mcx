@@ -250,11 +250,11 @@ class model(Distribution):
         samples = sampler(self.rng_key, sample_shape, *args)
         return samples
 
-    def logpdf(self, *args) -> float:
+    def logpdf(self, *args, **kwargs) -> float:
         """Compute the value of the distribution's logpdf.
         """
         logpdf, _, _, _ = core.compile_to_logpdf(self.graph, self.namespace)
-        return logpdf(*args)
+        return logpdf(*args, **kwargs)
 
     @property
     def logpdf_src(self) -> str:
@@ -292,6 +292,12 @@ class model(Distribution):
         """Return the names of the random variables and transformed variables.
         """
         return self.graph.variables
+
+    @property
+    def posterior_variables(self):
+        """Return the names of the random variables whose posterior we sample.
+        """
+        return self.graph.posterior_variables
 
 
 # Convenience functions
