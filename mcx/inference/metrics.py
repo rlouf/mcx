@@ -53,11 +53,13 @@ def gaussian_euclidean_metric(
 
     if ndim == 1:  # diagonal mass matrix
 
+        @jax.jit
         def momentum_generator(rng_key: jax.random.PRNGKey) -> Array:
             std = jax.random.normal(rng_key, shape)
             p = np.multiply(std, mass_matrix_sqrt)
             return to_position_shape(p)
 
+        @jax.jit
         def kinetic_energy(momentum: Array) -> float:
             flat_momentum, _ = ravel_pytree(momentum)
             velocity = np.multiply(inverse_mass_matrix, flat_momentum)
@@ -67,11 +69,13 @@ def gaussian_euclidean_metric(
 
     elif ndim == 2:
 
+        @jax.jit
         def momentum_generator(rng_key: jax.random.PRNGKey) -> Array:
             std = jax.random.normal(rng_key, shape)
             p = np.dot(std, mass_matrix_sqrt)
             return to_position_shape(p)
 
+        @jax.jit
         def kinetic_energy(momentum: Array) -> float:
             flat_momentum, _ = ravel_pytree(momentum)
             velocity = np.matmul(inverse_mass_matrix, flat_momentum)
