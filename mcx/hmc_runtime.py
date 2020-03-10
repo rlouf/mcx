@@ -64,11 +64,13 @@ class HMC(Runtime):
 
     def initialize(self, logpdf, num_warmup, num_chains, **kwargs):
         samples = mcx.sample_forward(self.model, num_samples=num_chains, **kwargs)
-        position = np.stack([samples[k][:num_chains] for k in self.model.posterior_variables]).T
+        position = np.stack(
+            [samples[k][:num_chains] for k in self.model.posterior_variables]
+        ).T
         logprob = np.array([logpdf(*p) for p in position])
         logprob_grad = np.array([jax.grad(logpdf)(*p) for p in position])
         initial_state = HMCState(position, logprob, logprob_grad)
-        _, unravel_fn = jax.flatten_util.ravel_pytree(np.array([1., 2.]))
+        _, unravel_fn = jax.flatten_util.ravel_pytree(np.array([1.0, 2.0]))
         self.unravel_fn = unravel_fn
         return initial_state
 
@@ -76,11 +78,13 @@ class HMC(Runtime):
         """Returns the HMC runtime's transition kernel.
         """
         momentum_generator, kinetic_energy = gaussian_euclidean_metric(
-            inverse_mass_matrix, mass_matrix_sqrt, self.unravel_fn
+            inverse_mass_matrix, mass_matrix_sqrt, self.unravel_fn,
         )
         integrator_step = velocity_verlet(logpdf, kinetic_energy)
         proposal = hmc_proposal(integrator_step, self.step_size, self.path_length)
-        transition_kernel = hmc_kernel(proposal, momentum_generator, kinetic_energy, logpdf)
+        transition_kernel = hmc_kernel(
+            proposal, momentum_generator, kinetic_energy, logpdf
+        )
 
         def kernel(rng_key, state):
             new_state, new_info = transition_kernel(rng_key, state)
@@ -104,6 +108,7 @@ def sample(runtime: Runtime, num_samples=1000, num_warmup=1000, num_chains=4, **
     # Check that all necessary variables were passed (it will yell anyway)
     logpdf = runtime.logpdf_fn
     logpdf = jax.partial(logpdf, **kwargs)
+    logpdf = jax.jit(logpdf)
 
     initial_state = runtime.state
     if runtime.state is None:
@@ -128,3 +133,33 @@ def sample(runtime: Runtime, num_samples=1000, num_warmup=1000, num_chains=4, **
     trace = runtime.to_trace(states)
 
     return trace
+
+
+def generate(runtime: Runtime, num_warmup=1000, num_chains=4, **kwargs):
+    """Returns a generator of samples.
+    """
+
+    # Check that all necessary variables were passed (it will yell anyway)
+    logpdf = runtime.logpdf_fn
+    logpdf = jax.partial(logpdf, **kwargs)
+    logpdf = jax.jit(logpdf)
+
+    initial_state = runtime.state
+    if runtime.state is None:
+        initial_state = runtime.initialize(logpdf, num_warmup, num_chains, **kwargs)
+
+    # Create and compile the inference kernel
+    kernel = runtime.inference_kernel(
+        logpdf, np.array([1.0, 1.0]), np.array([1.0, 1.0]),
+    )
+    kernel = jax.jit(kernel)
+
+    states = initial_state
+    rng_key = runtime.rng_key
+    while True:
+        _, rng_key = jax.random.split(rng_key)
+
+        keys = jax.random.split(rng_key, num_chains)
+        new_states = jax.vmap(kernel)(keys, states)
+
+        yield new_states
