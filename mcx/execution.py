@@ -31,7 +31,7 @@ def sample(runtime: Runtime, num_samples=1000, num_warmup=1000, num_chains=4, **
         return new_states, new_states
 
     # scanning over vectorization is likely to be completely inefficient!
-    # we may circumvent this by running a "test" chain in parallel in a 
+    # we may circumvent this by running a "test" chain in parallel in a
     # fori loop to return divergences?
     rng_keys = jax.random.split(runtime.rng_key, num_samples)
     states = jax.lax.scan(chain_update, initial_state, rng_keys)
@@ -39,6 +39,7 @@ def sample(runtime: Runtime, num_samples=1000, num_warmup=1000, num_chains=4, **
     trace = runtime.to_trace(states)
 
     return trace
+
 
 def generate(runtime: Runtime, num_warmup=1000, num_chains=4, **kwargs):
     """Returns a generator of samples.
