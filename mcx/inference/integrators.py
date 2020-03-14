@@ -56,7 +56,7 @@ def hmc_proposal(
     step.
     """
 
-    num_steps = np.clip(path_length / step_size, a_min=1).astype(int)
+    num_steps = np.clip(path_length / step_size, a_min=1).astype("int32")
 
     @jax.jit
     def propose(_, init_state: Proposal) -> Proposal:

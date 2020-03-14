@@ -18,5 +18,3 @@ class Runtime(object):
 
     def to_trace(self, states):
         raise NotImplementedError
-
-

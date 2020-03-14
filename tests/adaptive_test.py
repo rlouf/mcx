@@ -36,7 +36,7 @@ def test_find_reasonable_step_size():
         1.0,
         0.95,
     )
-    assert epsilon_1 != 1.
+    assert epsilon_1 != 1.0
 
     # Different target acceptance rate
     epsilon_3 = find_reasonable_step_size(
