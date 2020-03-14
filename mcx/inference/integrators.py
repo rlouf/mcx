@@ -201,7 +201,7 @@ def mclachlan_integrator(
             position,
             kinetic_grad,
         )
-        log_prob_grad = potential_grad_fn(position)
+        log_prob_grad = potential_grad_fn(*position)
         momentum = tree_multimap(
             lambda momentum, log_prob_grad: momentum - b2 * step_size * log_prob_grad,
             momentum,
@@ -213,7 +213,7 @@ def mclachlan_integrator(
             position,
             kinetic_grad,
         )
-        log_prob_grad = potential_grad_fn(position)
+        log_prob_grad = potential_grad_fn(*position)
         momentum = tree_multimap(
             lambda momentum, log_prob_grad: momentum - b1 * step_size * log_prob_grad,
             momentum,
@@ -266,7 +266,7 @@ def yoshida_integrator(
             position,
             kinetic_grad,
         )
-        log_prob_grad = potential_grad_fn(position)
+        log_prob_grad = potential_grad_fn(*position)
         momentum = tree_multimap(
             lambda momentum, log_prob_grad: momentum - b2 * step_size * log_prob_grad,
             momentum,
@@ -278,7 +278,7 @@ def yoshida_integrator(
             position,
             kinetic_grad,
         )
-        log_prob_grad = potential_grad_fn(position)
+        log_prob_grad = potential_grad_fn(*position)
         momentum = tree_multimap(
             lambda momentum, log_prob_grad: momentum - b2 * step_size * log_prob_grad,
             momentum,
@@ -290,7 +290,7 @@ def yoshida_integrator(
             position,
             kinetic_grad,
         )
-        log_prob_grad = potential_grad_fn(position)
+        log_prob_grad = potential_grad_fn(*position)
         momentum = tree_multimap(
             lambda momentum, log_prob_grad: momentum - b1 * step_size * log_prob_grad,
             momentum,
@@ -344,7 +344,7 @@ def four_stages_integrator(
             position,
             kinetic_grad,
         )
-        log_prob_grad = potential_grad_fn(position)
+        log_prob_grad = potential_grad_fn(*position)
         momentum = tree_multimap(
             lambda momentum, log_prob_grad: momentum - b2 * step_size * log_prob_grad,
             momentum,
@@ -356,7 +356,7 @@ def four_stages_integrator(
             position,
             kinetic_grad,
         )
-        log_prob_grad = potential_grad_fn(position)
+        log_prob_grad = potential_grad_fn(*position)
         momentum = tree_multimap(
             lambda momentum, log_prob_grad: momentum - b3 * step_size * log_prob_grad,
             momentum,
@@ -368,7 +368,7 @@ def four_stages_integrator(
             position,
             kinetic_grad,
         )
-        log_prob_grad = potential_grad_fn(position)
+        log_prob_grad = potential_grad_fn(*position)
         momentum = tree_multimap(
             lambda momentum, log_prob_grad: momentum - b2 * step_size * log_prob_grad,
             momentum,
@@ -380,7 +380,7 @@ def four_stages_integrator(
             position,
             kinetic_grad,
         )
-        log_prob_grad = potential_grad_fn(position)
+        log_prob_grad = potential_grad_fn(*position)
         momentum = tree_multimap(
             lambda momentum, log_prob_grad: momentum - b1 * step_size * log_prob_grad,
             momentum,

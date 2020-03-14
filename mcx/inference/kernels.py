@@ -38,7 +38,7 @@ class HMCInfo(NamedTuple):
 
 
 def hmc_init(position: Array, logpdf: Callable) -> HMCState:
-    log_prob, log_prob_grad = jax.value_and_grad(logpdf)(position)
+    log_prob, log_prob_grad = jax.value_and_grad(logpdf)(*position)
     return HMCState(position, log_prob, log_prob_grad)
 
 

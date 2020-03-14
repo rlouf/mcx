@@ -44,39 +44,40 @@ integration_examples = [
         "model": HarmonicOscillator,
         "num_step": 100,
         "step_size": 0.01,
-        "q": 0.0,
-        "p": 1.0,
+        "q": np.array([0.0]),
+        "p": np.array([1.0]),
         "inverse_mass_matrix": np.array([1.0]),
     },
     {
         "model": FreeFall,
         "num_step": 100,
         "step_size": 0.01,
-        "q": 0.0,
-        "p": 1.0,
+        "q": np.array([0.0]),
+        "p": np.array([1.0]),
         "inverse_mass_matrix": np.array([1.0]),
     },
 ]
 
-integrator_steps = [
-    yoshida_integrator,
-    velocity_verlet,
-    four_stages_integrator,
-    mclachlan_integrator,
+integrators = [
+    {"integrator": yoshida_integrator, "precision": 1e-4},
+    {"integrator": velocity_verlet, "precision": 1e-2},
+    {"integrator": four_stages_integrator, "precision": 1e-3},
+    {"integrator": mclachlan_integrator, "precision": 1e-4},
 ]
 
 
 @pytest.mark.parametrize("example", integration_examples)
-@pytest.mark.parametrize("integrator_step", integrator_steps)
-def test_velocity_verlet(example, integrator_step):
+@pytest.mark.parametrize("integrator", integrators)
+def test_velocity_verlet(example, integrator):
     model = example["model"]
     potential, kinetic_energy = model(example["inverse_mass_matrix"])
+    integrator_step = integrator["integrator"]
     step = integrator_step(potential, kinetic_energy)
     step_size = example["step_size"]
 
     q = example["q"]
     p = example["p"]
-    initial_state = IntegratorState(q, p, jax.grad(potential)(q))
+    initial_state = IntegratorState(q, p, jax.grad(potential)(q[0]))
     final_state = jax.lax.fori_loop(
         0, example["num_step"], lambda i, state: step(state, step_size), initial_state
     )
@@ -85,4 +86,4 @@ def test_velocity_verlet(example, integrator_step):
     energy = potential(q) + kinetic_energy(p)
     new_energy = potential(final_state.position) + kinetic_energy(final_state.momentum)
     print(energy, new_energy.item())
-    assert energy == pytest.approx(new_energy.item(), 1e-4)
+    assert energy == pytest.approx(new_energy.item(), integrator["precision"])
