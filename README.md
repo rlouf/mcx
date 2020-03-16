@@ -38,7 +38,8 @@ See the [documentation](https://rlouf.github.io/mcx) for more information.
 * Sampling from the model's prior definition, prior predictive sampling;
 * Bernoulli, Beta, Binomial, Categorical, Discrete Uniform, Log-Normal, Normal,
   Poisson, Uniform distributions;
-* Sampling with the Random Walk Metropolis algorithm.
+* Sampling with the Random Walk Metropolis algorithm;
+* Sampling with Hamiltonian Monte Carlo;
 * 4 symplectic integrators (velocity Verlet, McLachlan, Yoshida, Four stages)
 
 ## Roadmap
