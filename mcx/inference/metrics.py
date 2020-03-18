@@ -79,7 +79,7 @@ def gaussian_euclidean_metric(
         def kinetic_energy(momentum: Array) -> float:
             flat_momentum, _ = ravel_pytree(momentum)
             velocity = np.matmul(inverse_mass_matrix, flat_momentum)
-            return 0.5 * np.dot(velocity, momentum)
+            return 0.5 * np.dot(velocity, flat_momentum)
 
         return momentum_generator, kinetic_energy
 
