@@ -77,7 +77,7 @@ def test_velocity_verlet(example, integrator):
 
     q = example["q"]
     p = example["p"]
-    initial_state = IntegratorState(q, p, jax.grad(potential)(q[0]))
+    initial_state = IntegratorState(q, p, jax.grad(potential)(q))
     final_state = jax.lax.fori_loop(
         0, example["num_step"], lambda i, state: step(state, step_size), initial_state
     )

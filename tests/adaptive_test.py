@@ -1,6 +1,5 @@
 import jax
 from jax import numpy as np
-from jax.flatten_util import ravel_pytree
 
 from mcx.inference.adaptive import find_reasonable_step_size
 from mcx.inference.integrators import velocity_verlet
@@ -19,9 +18,8 @@ def test_find_reasonable_step_size():
     mass_matrix_sqrt = np.array([1.0])
 
     init_state = hmc_init(init_position, potential_fn)
-    _, unravel_fn = ravel_pytree(init_position)
     momentum_generator, kinetic_energy = gaussian_euclidean_metric(
-        mass_matrix_sqrt, inv_mass_matrix, unravel_fn
+        mass_matrix_sqrt, inv_mass_matrix
     )
     integrator_step = velocity_verlet(potential_fn, kinetic_energy)
 

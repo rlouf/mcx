@@ -8,7 +8,6 @@ from typing import Callable, Tuple
 
 import jax
 import jax.numpy as np
-from jax.flatten_util import ravel_pytree
 from jax.numpy import DeviceArray as Array
 
 
@@ -20,7 +19,7 @@ MomentumGenerator = Callable[[jax.random.PRNGKey], Array]
 
 
 def gaussian_euclidean_metric(
-    mass_matrix_sqrt: Array, inverse_mass_matrix: Array, to_position_shape: Callable
+    mass_matrix_sqrt: Array, inverse_mass_matrix: Array
 ) -> Tuple[Callable, Callable]:
     """Emulate dynamics on an Euclidean Manifold [1]_ for vanilla Hamiltonian
     Monte Carlo with a standard gaussian as the conditional density
@@ -57,12 +56,11 @@ def gaussian_euclidean_metric(
         def momentum_generator(rng_key: jax.random.PRNGKey) -> Array:
             std = jax.random.normal(rng_key, shape)
             p = np.multiply(std, mass_matrix_sqrt)
-            return to_position_shape(p)
+            return p
 
         @jax.jit
         def kinetic_energy(momentum: Array) -> float:
-            flat_momentum, _ = ravel_pytree(momentum)
-            velocity = np.multiply(inverse_mass_matrix, flat_momentum)
+            velocity = np.multiply(inverse_mass_matrix, momentum)
             return 0.5 * np.dot(velocity, momentum)
 
         return momentum_generator, kinetic_energy
@@ -73,13 +71,12 @@ def gaussian_euclidean_metric(
         def momentum_generator(rng_key: jax.random.PRNGKey) -> Array:
             std = jax.random.normal(rng_key, shape)
             p = np.dot(std, mass_matrix_sqrt)
-            return to_position_shape(p)
+            return p
 
         @jax.jit
         def kinetic_energy(momentum: Array) -> float:
-            flat_momentum, _ = ravel_pytree(momentum)
-            velocity = np.matmul(inverse_mass_matrix, flat_momentum)
-            return 0.5 * np.dot(velocity, flat_momentum)
+            velocity = np.matmul(inverse_mass_matrix, momentum)
+            return 0.5 * np.dot(velocity, momentum)
 
         return momentum_generator, kinetic_energy
 
