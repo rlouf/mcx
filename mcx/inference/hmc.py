@@ -6,7 +6,7 @@ import mcx
 from mcx.inference.integrators import velocity_verlet, hmc_proposal
 from mcx.inference.kernels import hmc_kernel, HMCState
 from mcx.inference.metrics import gaussian_euclidean_metric
-from mcx.inference.runtimes.runtime import Runtime
+from mcx.inference.runtime import Runtime
 
 
 class HMC(Runtime):
@@ -40,14 +40,14 @@ class HMC(Runtime):
 
     def initialize(self, logpdf, num_warmup, num_chains, **kwargs):
         samples = mcx.sample_forward(self.model, num_samples=num_chains, **kwargs)
+
         position = np.stack(
             [samples[k][:num_chains] for k in self.model.posterior_variables]
         ).T
-        logprob = np.array([logpdf(*p) for p in position])
-        logprob_grad = np.array([jax.grad(logpdf)(*p) for p in position])
+        logprob = np.array([logpdf(p) for p in position])
+        logprob_grad = np.array([jax.grad(logpdf)(p) for p in position])
         initial_state = HMCState(position, logprob, logprob_grad)
-        _, unravel_fn = jax.flatten_util.ravel_pytree(np.array([1.0, 2.0]))
-        self.unravel_fn = unravel_fn
+
         return initial_state
 
     def inference_kernel(self, logpdf, inverse_mass_matrix, mass_matrix_sqrt):
@@ -69,6 +69,12 @@ class HMC(Runtime):
         return kernel
 
     def to_trace(self, states):
+        """To build the trace we need the unraveling function to transform the
+        positions back to the original shape.
+
+        self.unravel_fn
+        """
+
         trace = {}
         for arg, state in zip(self.model.posterior_variables, states):
             samples = state.position

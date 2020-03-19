@@ -10,7 +10,7 @@ class Runtime(object):
     def warmup(self, initial_states, num_iterations):
         raise NotImplementedError
 
-    def initialize(self):
+    def initialize(self, logpdf, num_warmup, num_samples, **kwargs):
         raise NotImplementedError
 
     def inference_kernel(self, logpdf, warmup_state):

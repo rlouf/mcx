@@ -1,7 +1,7 @@
 import jax
 import jax.numpy as np
 
-from mcx.inference.runtimes.runtime import Runtime
+from mcx.inference.runtime import Runtime
 
 
 def sample(runtime: Runtime, num_samples=1000, num_warmup=1000, num_chains=4, **kwargs):
@@ -15,6 +15,7 @@ def sample(runtime: Runtime, num_samples=1000, num_warmup=1000, num_chains=4, **
     initial_state = runtime.state
     if runtime.state is None:
         initial_state = runtime.initialize(logpdf, num_warmup, num_chains, **kwargs)
+
     # Create and compile the inference kernel
     kernel = runtime.inference_kernel(
         logpdf, np.array([1.0, 1.0]), np.array([1.0, 1.0])
