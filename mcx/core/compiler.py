@@ -42,7 +42,10 @@ def compile_to_logpdf(graph: GraphicalModel, namespace: Dict) -> Artifact:
     """
     fn_name = graph.name + "_logpdf"
 
-    # kwargs are copied from the original function
+    #
+    # ARGUMENTS
+    #
+
     kwarg_nodes = [
         node[1]["content"]
         for node in graph.nodes(data=True)
@@ -50,36 +53,31 @@ def compile_to_logpdf(graph: GraphicalModel, namespace: Dict) -> Artifact:
         and node[1]["content"].default_value is not None
     ]
 
-    # The other arguments of the original function and the returned variables
-    # are passed as keyword-only arguments to make partial application (or,
-    # in bayesian terms, conditioning) easier.
-    arguments = [
+    # The (keyword) arguments of the model definition and random variables
+    # are passed as arguments to the logpdf.
+    model_kwargs = [kwarg.to_logpdf() for kwarg in kwarg_nodes]
+    model_arguments = [
         node[1]["content"].to_logpdf()
         for node in graph.nodes(data=True)
         if isinstance(node[1]["content"], Argument)
         and node[1]["content"].default_value is None
     ]
-    returned = [
-        ast.arg(arg=node[1]["content"].name, annotation=None)
-        for node in graph.nodes(data=True)
-        if isinstance(node[1]["content"], RandVar) and node[1]["content"].is_returned
-    ]
-    kwargs = [k.to_logpdf() for k in kwarg_nodes]
-
-    kwonlyargs = arguments + returned + kwargs
-    defaults = (
-        [None] * len(arguments)
-        + [None] * len(returned)
-        + [k.default_value for k in kwarg_nodes]
-    )
-
-    # args are the random variables whose distribution we want to sample.
-    args = [
+    random_variables = [
         ast.arg(arg=node[1]["content"].name, annotation=None)
         for node in graph.nodes(data=True)
         if isinstance(node[1]["content"], RandVar)
-        and not node[1]["content"].is_returned
     ]
+
+    logpdf_arguments = random_variables + model_arguments + model_kwargs
+
+    # We propagate the kwargs' default values
+    defaults = [kwarg.default_value for kwarg in kwarg_nodes]
+
+    #
+    # FUNCTION BODY
+    # To write the function body, we traverse the graph in topological order
+    # while incrementing the value of the logpdf.
+    #
 
     body: List[Union[ast.Assign, ast.Constant, ast.Num, ast.Return]] = []
     body.append(
@@ -104,13 +102,13 @@ def compile_to_logpdf(graph: GraphicalModel, namespace: Dict) -> Artifact:
             ast.FunctionDef(
                 name=fn_name,
                 args=ast.arguments(
-                    args=args,
+                    args=logpdf_arguments,
                     vararg=None,
                     kwarg=None,
                     posonlyargs=[],
-                    kwonlyargs=kwonlyargs,
-                    defaults=[],
-                    kw_defaults=defaults,
+                    kwonlyargs=[],
+                    defaults=defaults,
+                    kw_defaults=[],
                 ),
                 body=body,
                 decorator_list=[],
@@ -123,9 +121,9 @@ def compile_to_logpdf(graph: GraphicalModel, namespace: Dict) -> Artifact:
     exec(logpdf, namespace)
     fn = namespace[fn_name]
 
-    arguments = [arg.arg for arg in args]
+    argument_names = [arg.arg for arg in logpdf_arguments]
 
-    return Artifact(fn, arguments, fn_name, astor.code_gen.to_source(logpdf_ast))
+    return Artifact(fn, argument_names, fn_name, astor.code_gen.to_source(logpdf_ast))
 
 
 def compile_to_sampler(graph, namespace) -> Artifact:
