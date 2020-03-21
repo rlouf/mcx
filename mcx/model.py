@@ -283,6 +283,11 @@ class model(Distribution):
         return self.graph.arguments
 
     @property
+    def posargs(self):
+        """Return the names of the graph's positional arguments."""
+        return self.graph.posargs
+
+    @property
     def returned_variables(self):
         """Return the names of the graph's return variables."""
         return self.graph.returned_variables
@@ -292,6 +297,12 @@ class model(Distribution):
         """Return the names of the random variables and transformed variables.
         """
         return self.graph.variables
+
+    @property
+    def random_variables(self):
+        """Return the names of the random variables.
+        """
+        return self.graph.random_variables
 
     @property
     def posterior_variables(self):
