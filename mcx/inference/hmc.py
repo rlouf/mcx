@@ -1,82 +1,113 @@
+from typing import NamedTuple
+
 import jax
 from jax import numpy as np
-import numpy
+from jax.flatten_util import ravel_pytree
 
-import mcx
+from mcx import sample_forward
+from mcx.core import compile_to_logpdf
 from mcx.inference.integrators import velocity_verlet, hmc_proposal
 from mcx.inference.kernels import hmc_kernel, HMCState
 from mcx.inference.metrics import gaussian_euclidean_metric
-from mcx.inference.runtime import Runtime
 
 
-class HMC(Runtime):
-    """Hamiltonian Monte Carlo runtime.
+class HMCParameters(NamedTuple):
+    step_size: float
+    path_length: float
+    mass_matrix_sqrt: np.DeviceArray
+    inverse_mass_matrix: np.DeviceArray
 
-    Programs carry a state with them; when they are re-sampled after a first
-    iteration they carry out computations from the last sampled position.
 
-    >>> algorithm = HMC(model)
-    ... samples = mcx.sample(algorithm, x=np.array([1., 2.]), y=np.array([2, 3]))
-    ... new_samples = mcx.sample(algorithm, ...)
-    """
+def HMC(model, step_size=None, path_length=None, mass_matrix_sqrt=None, inverse_mass_matrix=None, is_mass_matrix_diagonal=True):
 
-    def __init__(
-        self, model, step_size, path_length, is_mass_matrix_diagonal=True, state=None
-    ):
-        super().__init__(model, state)
-        self.is_mass_matrix_diagonal = is_mass_matrix_diagonal
-        self.step_size = step_size
-        self.path_length = path_length
-        # If step size is not None run the warmup otherwise meh
+    artifact = compile_to_logpdf(model.graph, model.namespace)
+    logpdf = artifact.compiled_fn
+    parameters = HMCParameters(step_size, path_length, mass_matrix_sqrt, inverse_mass_matrix)
 
-    @property
-    def logpdf_fn(self):
-        artifact = mcx.core.compile_to_logpdf(self.model.graph, self.model.namespace)
-        return artifact.compiled_fn
+    def _flatten_logpdf(logpdf, unravel_fn):
+        def flattened_logpdf(array):
+            kwargs = unravel_fn(array)
+            return logpdf(**kwargs)
+        return flattened_logpdf
 
-    def warmup(self, initial_states, num_iterations):
-        """Return a function that implements the warmup."""
-        pass
-
-    def initialize(self, logpdf, num_warmup, num_chains, **kwargs):
-        samples = mcx.sample_forward(self.model, num_samples=num_chains, **kwargs)
-
-        position = np.stack(
-            [samples[k][:num_chains] for k in self.model.posterior_variables]
-        ).T
-        logprob = np.array([logpdf(p) for p in position])
-        logprob_grad = np.array([jax.grad(logpdf)(p) for p in position])
-        initial_state = HMCState(position, logprob, logprob_grad)
-
-        return initial_state
-
-    def inference_kernel(self, logpdf, inverse_mass_matrix, mass_matrix_sqrt):
-        """Returns the HMC runtime's transition kernel.
+    def initialize(num_chains, **kwargs):
         """
-        momentum_generator, kinetic_energy = gaussian_euclidean_metric(
-            inverse_mass_matrix, mass_matrix_sqrt, self.unravel_fn,
-        )
-        integrator_step = velocity_verlet(logpdf, kinetic_energy)
-        proposal = hmc_proposal(integrator_step, self.step_size, self.path_length)
-        transition_kernel = hmc_kernel(
-            proposal, momentum_generator, kinetic_energy, logpdf
-        )
+        kwargs: a dictionary of arguments and variables we condition on and
+                their value.
+        """
 
-        def kernel(rng_key, state):
-            new_state, new_info = transition_kernel(rng_key, state)
-            return new_state
+        conditioning_vars = set(kwargs.keys())
+        model_randvars = set(model.random_variables)
+        model_args = set(model.arguments)
+        available_vars = model_randvars.union(model_args)
+
+        # The variables passed as an argument to the initialization (variables
+        # on which the logpdf is conditionned) must be either a random variable
+        # or an argument to the model definition.
+        if not available_vars.issuperset(conditioning_vars):
+            unknown_vars = list(conditioning_vars.difference(available_vars))
+            unknown_str = ", ".join(unknown_vars)
+            raise AttributeError("You passed a value for {} which are neither random variables nor arguments to the model definition.".format(unknown_str))
+
+        # The user must provide a value for all of the model definition's
+        # positional arguments.
+        model_posargs = set(model.posargs)
+        if model_posargs.difference(conditioning_vars):
+            missing_vars = (model_posargs.difference(conditioning_vars))
+            missing_str = ", ".join(missing_vars)
+            raise AttributeError("You need to specify a value for the following arguments: {}".format(missing_str))
+
+        # Condition on data to obtain the model's log-likelihood
+        loglikelihood = jax.partial(logpdf, **kwargs)
+
+        # Sample one initial position per chain from the prior
+        to_sample_vars = model_randvars.difference(conditioning_vars)
+        samples = sample_forward(model, num_samples=num_chains, **kwargs)
+        initial_positions = dict((var, samples[var]) for var in to_sample_vars)
+
+        positions = []
+        for i in range(num_chains):
+            position = {k: value[i] for k, value in initial_positions.items()}
+            flat_position, unravel_fn = ravel_pytree(position)
+            positions.append(flat_position)
+        positions = np.stack(positions)
+
+        # Transform the likelihood to use a flat array as single argument
+        flat_loglikelihood = _flatten_logpdf(loglikelihood, unravel_fn)
+
+        # Compute the log probability and gradient to define initial state
+        logprobs, logprob_grads = jax.vmap(jax.value_and_grad(flat_loglikelihood))(positions)
+        initial_state = HMCState(positions, logprobs, logprob_grads)
+
+        return flat_loglikelihood, initial_state, parameters, unravel_fn
+
+    def build_kernel(logpdf, parameters):
+        """Builds the kernel that moves the chain from one point
+        to the next.
+        """
+
+        try:
+            mass_matrix_sqrt = parameters.mass_matrix_sqrt
+            inverse_mass_matrix = parameters.inverse_mass_matrix
+            step_size = parameters.step_size
+        except AttributeError:
+            AttributeError(
+                "The Hamiltonian Monte Carlo algorithm requires the following parameters: mass matrix, inverse mass matrix and step size."
+            )
+
+        momentum_generator, kinetic_energy = gaussian_euclidean_metric(
+            mass_matrix_sqrt, inverse_mass_matrix,
+        )
+        integrator = velocity_verlet(logpdf, kinetic_energy)
+        proposal = hmc_proposal(integrator, step_size, path_length)
+        kernel = hmc_kernel(proposal, momentum_generator, kinetic_energy, logpdf)
 
         return kernel
 
-    def to_trace(self, states):
-        """To build the trace we need the unraveling function to transform the
-        positions back to the original shape.
-
-        self.unravel_fn
+    def to_trace(states_chain, ravel_fn):
+        """ Translate the raw chains to a format that can be understood by and
+        is useful to humans.
         """
+        return states_chain
 
-        trace = {}
-        for arg, state in zip(self.model.posterior_variables, states):
-            samples = state.position
-            trace[arg] = numpy.asarray(samples).T.squeeze()
-        return trace
+    return initialize, build_kernel, to_trace

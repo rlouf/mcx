@@ -1,72 +1,47 @@
 import jax
-import jax.numpy as np
-
-from mcx.inference.runtime import Runtime
 
 
-def sample(runtime: Runtime, num_samples=1000, num_warmup=1000, num_chains=4, **kwargs):
-    """Sample is a runtime: it is in charge of executing the program and manage
-    the input (data) - output.
-    """
-    # Check that all necessary variables were passed (it will yell anyway)
-    logpdf = runtime.logpdf_fn
-    logpdf = jax.partial(logpdf, **kwargs)
-    logpdf = jax.jit(logpdf)
-    initial_state = runtime.state
-    if runtime.state is None:
-        initial_state = runtime.initialize(logpdf, num_warmup, num_chains, **kwargs)
+def sample(rng_key, runtime, num_samples=1000, num_warmup=1000, num_chains=4, **kwargs):
+    """ The sampling runtime. """
+    initialize, build_kernel, to_trace = runtime
 
-    # Create and compile the inference kernel
-    kernel = runtime.inference_kernel(
-        logpdf, np.array([1.0, 1.0]), np.array([1.0, 1.0])
-    )
+    loglikelihood, initial_state, parameters, unravel_fn = initialize(num_chains, **kwargs)
+    loglikelihood = jax.jit(loglikelihood)
+
+    kernel = build_kernel(loglikelihood, parameters)
     kernel = jax.jit(kernel)
 
     # Run the inference
     @jax.jit
-    # @jax.jit
-    def chain_update(states, rng_key):
+    def update_chains(states, rng_key):
         keys = jax.random.split(rng_key, num_chains)
-        new_states = jax.vmap(kernel)(keys, states)
-        new_states = jax.vmap(kernel, in_axes=(0, 0))(keys, states)
-        return new_states, new_states
+        new_states, info = jax.vmap(kernel, in_axes=(0, 0))(keys, states)
+        return new_states, states
 
-    # scanning over vectorization is likely to be completely inefficient!
-    # we may circumvent this by running a "test" chain in parallel in a
-    # fori loop to return divergences?
-    rng_keys = jax.random.split(runtime.rng_key, num_samples)
-    states = jax.lax.scan(chain_update, initial_state, rng_keys)
+    rng_keys = jax.random.split(rng_key, num_samples)
+    _, states = jax.lax.scan(update_chains, initial_state, rng_keys)
 
-    trace = runtime.to_trace(states)
+    trace = to_trace(states, unravel_fn)
 
     return trace
 
 
-def generate(runtime: Runtime, num_warmup=1000, num_chains=4, **kwargs):
-    """Returns a generator of samples.
-    """
+def generate(rng_key, runtime, num_warmup=1000, num_chains=4, **kwargs):
+    """ The generator runtime """
 
-    # Check that all necessary variables were passed (it will yell anyway)
-    logpdf = runtime.logpdf_fn
-    logpdf = jax.partial(logpdf, **kwargs)
-    logpdf = jax.jit(logpdf)
+    initialize, build_kernel, to_trace = runtime
 
-    initial_state = runtime.state
-    if runtime.state is None:
-        initial_state = runtime.initialize(logpdf, num_warmup, num_chains, **kwargs)
+    loglikelihood, initial_state, parameters, unravel_fn = initialize(num_chains, **kwargs)
+    loglikelihood = jax.jit(loglikelihood)
 
-    # Create and compile the inference kernel
-    kernel = runtime.inference_kernel(
-        logpdf, np.array([1.0, 1.0]), np.array([1.0, 1.0]),
-    )
+    kernel = build_kernel(loglikelihood, parameters)
     kernel = jax.jit(kernel)
 
-    states = initial_state
-    rng_key = runtime.rng_key
+    state = initial_state
     while True:
         _, rng_key = jax.random.split(rng_key)
 
         keys = jax.random.split(rng_key, num_chains)
-        new_states = jax.vmap(kernel)(keys, states)
+        new_states = jax.vmap(kernel)(keys, state)
 
         yield new_states
