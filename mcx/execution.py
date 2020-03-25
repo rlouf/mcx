@@ -1,29 +1,43 @@
 import jax
 
 
-def sample(rng_key, runtime, num_samples=1000, num_warmup=1000, num_chains=4, **kwargs):
-    """ The sampling runtime. """
-    initialize, build_kernel, to_trace = runtime
+class sample(object):
 
-    loglikelihood, initial_state, parameters, unravel_fn = initialize(rng_key, num_chains, **kwargs)
-    loglikelihood = jax.jit(loglikelihood)
+    def __init__(self, rng_key, runtime, num_warmup=1000, num_chains=4, **kwargs):
+        """ Initialize the sampling runtime.
+        """
+        self.runtime = runtime
+        self.num_chains = num_chains
+        self.num_warmup = num_warmup
+        self.rng_key = rng_key
 
-    kernel = build_kernel(loglikelihood, parameters)
-    kernel = jax.jit(kernel)
+        initialize, build_kernel, to_trace = self.runtime
+        loglikelihood, initial_state, parameters, unravel_fn = initialize(rng_key, self.num_chains, **kwargs)
+        loglikelihood = jax.jit(loglikelihood)
 
-    # Run the inference
-    @jax.jit
-    def update_chains(states, rng_key):
-        keys = jax.random.split(rng_key, num_chains)
-        new_states, info = jax.vmap(kernel, in_axes=(0, 0))(keys, states)
-        return new_states, states
+        kernel = build_kernel(loglikelihood, parameters)
+        self.kernel = jax.jit(kernel)
 
-    rng_keys = jax.random.split(rng_key, num_samples)
-    _, states = jax.lax.scan(update_chains, initial_state, rng_keys)
+        self.state = initial_state
+        self.unravel_fn = unravel_fn
+        self.to_trace = to_trace
 
-    trace = to_trace(states, unravel_fn)
+    def take(self, num_samples=1000):
+        _, self.rng_key = jax.random.split(self.rng_key)
 
-    return trace
+        @jax.jit
+        def update_chains(states, rng_key):
+            keys = jax.random.split(rng_key, self.num_chains)
+            new_states, info = jax.vmap(self.kernel, in_axes=(0, 0))(keys, states)
+            return new_states, states
+
+        rng_keys = jax.random.split(self.rng_key, num_samples)
+        last_state, states = jax.lax.scan(update_chains, self.state, rng_keys)
+        self.state = last_state
+
+        trace = self.to_trace(states, self.unravel_fn)
+
+        return trace
 
 
 def generate(rng_key, runtime, num_warmup=1000, num_chains=4, **kwargs):
