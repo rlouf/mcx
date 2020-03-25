@@ -54,15 +54,7 @@ class RandVar(object):
         )
 
     def to_sampler(self, graph):
-        add_sample_shape = True
-        ancestors = nx.ancestors(graph, self.name)
-        for node in ancestors:
-            if isinstance(graph.nodes[node]["content"], RandVar):
-                add_sample_shape = False
-
         args = [ast.Name(id="rng_key", ctx=ast.Load())]
-        if add_sample_shape:
-            args.append(ast.Name(id="sample_shape", ctx=ast.Load()))
 
         return ast.Assign(
             targets=[ast.Name(id=self.name, ctx=ast.Store())],

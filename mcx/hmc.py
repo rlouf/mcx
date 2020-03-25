@@ -30,7 +30,7 @@ def HMC(model, step_size=None, path_length=None, mass_matrix_sqrt=None, inverse_
             return logpdf(**kwargs)
         return flattened_logpdf
 
-    def initialize(num_chains, **kwargs):
+    def initialize(rng_key, num_chains, **kwargs):
         """
         kwargs: a dictionary of arguments and variables we condition on and
                 their value.
@@ -62,7 +62,7 @@ def HMC(model, step_size=None, path_length=None, mass_matrix_sqrt=None, inverse_
 
         # Sample one initial position per chain from the prior
         to_sample_vars = model_randvars.difference(conditioning_vars)
-        samples = sample_forward(model, num_samples=num_chains, **kwargs)
+        samples = sample_forward(rng_key, model, num_samples=num_chains, **kwargs)
         initial_positions = dict((var, samples[var]) for var in to_sample_vars)
 
         positions = []

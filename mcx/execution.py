@@ -5,7 +5,7 @@ def sample(rng_key, runtime, num_samples=1000, num_warmup=1000, num_chains=4, **
     """ The sampling runtime. """
     initialize, build_kernel, to_trace = runtime
 
-    loglikelihood, initial_state, parameters, unravel_fn = initialize(num_chains, **kwargs)
+    loglikelihood, initial_state, parameters, unravel_fn = initialize(rng_key, num_chains, **kwargs)
     loglikelihood = jax.jit(loglikelihood)
 
     kernel = build_kernel(loglikelihood, parameters)
@@ -31,7 +31,7 @@ def generate(rng_key, runtime, num_warmup=1000, num_chains=4, **kwargs):
 
     initialize, build_kernel, to_trace = runtime
 
-    loglikelihood, initial_state, parameters, unravel_fn = initialize(num_chains, **kwargs)
+    loglikelihood, initial_state, parameters, unravel_fn = initialize(rng_key, num_chains, **kwargs)
     loglikelihood = jax.jit(loglikelihood)
 
     kernel = build_kernel(loglikelihood, parameters)

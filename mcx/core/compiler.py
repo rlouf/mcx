@@ -153,7 +153,6 @@ def compile_to_sampler(graph, namespace) -> Artifact:
 
     args = (
         [ast.arg(arg="rng_key", annotation=None)]
-        + [ast.arg(arg="sample_shape", annotation=None)]
         + [
             node[1]["content"].to_sampler()
             for node in graph.nodes(data=True)

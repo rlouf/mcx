@@ -314,15 +314,48 @@ class model(Distribution):
 # Convenience functions
 
 
-def sample_forward(model: model, num_samples=1000, **kwargs) -> Dict:
+def sample_forward(rng_key, model: model, num_samples=1000, **kwargs) -> Dict:
     """Returns forward samples from the model.
 
     The samples are returned in a dictionary, with the names of
     the variables as keys.
     """
-    args = list(kwargs.values())
-    sample_shape = (num_samples,)
-    samples = model.sample(*args, sample_shape=sample_shape)
+    model_posargs = model.posargs
+    model_kwargs = tuple(set(model.arguments).difference(model.posargs))
+
+    keys = jax.random.split(rng_key, num_samples)
+    sampler_args = (keys,)
+    in_axes = (0,)
+
+    for arg in model_posargs:
+        try:
+            value = kwargs[arg]
+            if isinstance(value, jax.numpy.DeviceArray):
+                idx = jax.random.randint(rng_key, (num_samples,), 0, value.shape[0])
+                sampler_args += (value[idx],)
+                in_axes += (0,)
+            else:
+                sampler_args += (value,)
+                in_axes += (None,)
+        except AttributeError:
+            raise AttributeError(
+                "You need to specify the value of the variable {}".format(arg)
+            )
+
+    for kwarg in model_kwargs:
+        if kwarg in kwargs:
+            value = kwargs[kwarg]
+        else:
+            value = model.nodes[kwarg]["content"].default_value.n
+        sampler_args += (value,)
+        in_axes += (None,)
+
+    out_axes = (0,) * len(model.variables)
+
+    artifact = core.compile_to_sampler(model.graph, model.namespace)
+    sampler_fn = artifact.compiled_fn
+    sampler_fn = jax.jit(sampler_fn)
+    samples = jax.vmap(sampler_fn, in_axes=in_axes, out_axes=out_axes)(*sampler_args)
 
     trace = {}
     for arg, arg_samples in zip(model.variables, samples):

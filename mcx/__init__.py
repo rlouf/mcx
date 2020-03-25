@@ -1,7 +1,7 @@
 from mcx.model import model
 from mcx.model import sample_forward, seed
 from mcx.execution import sample, generate
-from mcx.inference import HMC
+from mcx.hmc import HMC
 
 __all__ = [
     "model",
