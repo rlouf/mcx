@@ -45,23 +45,21 @@ Integrator = Callable[[IntegratorState, float], IntegratorState]
 
 
 def hmc_proposal(
-    integrator: Integrator, step_size: float, path_length: float = 1.0
+    integrator: Integrator, step_size: float, num_integration_steps: int = 1
 ) -> Proposer:
     """Vanilla HMC proposal.
 
     Given a path length and a step size, the HMC proposer will run the appropriate
     number of integration steps (typically with the velocity Verlet algorithm).
 
-    When `path_length` = `step_size` the proposer reduces to the integrator
+    When `num_integration_steps` = 1 the proposer reduces to the integrator
     step.
     """
-
-    num_steps = np.clip(path_length / step_size, a_min=1).astype("int32")
 
     @jax.jit
     def propose(_, init_state: Proposal) -> Proposal:
         new_state = jax.lax.fori_loop(
-            0, num_steps, lambda i, state: integrator(state, step_size), init_state
+            0, num_integration_steps, lambda i, state: integrator(state, step_size), init_state
         )
         return new_state
 
