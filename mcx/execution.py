@@ -22,7 +22,7 @@ class sample(object):
         self.unravel_fn = unravel_fn
         self.to_trace = to_trace
 
-    def take(self, num_samples=1000):
+    def run(self, num_samples=1000):
         _, self.rng_key = jax.random.split(self.rng_key)
 
         @jax.jit
