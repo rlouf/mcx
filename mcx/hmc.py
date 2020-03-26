@@ -13,16 +13,16 @@ from mcx.inference.metrics import gaussian_euclidean_metric
 
 class HMCParameters(NamedTuple):
     step_size: float
-    path_length: float
+    num_integration_steps: float
     mass_matrix_sqrt: np.DeviceArray
     inverse_mass_matrix: np.DeviceArray
 
 
-def HMC(model, step_size=None, path_length=None, mass_matrix_sqrt=None, inverse_mass_matrix=None, is_mass_matrix_diagonal=True):
+def HMC(model, step_size=None, num_integration_steps=None, mass_matrix_sqrt=None, inverse_mass_matrix=None, is_mass_matrix_diagonal=True):
 
     artifact = compile_to_logpdf(model.graph, model.namespace)
     logpdf = artifact.compiled_fn
-    parameters = HMCParameters(step_size, path_length, mass_matrix_sqrt, inverse_mass_matrix)
+    parameters = HMCParameters(step_size, num_integration_steps, mass_matrix_sqrt, inverse_mass_matrix)
 
     def _flatten_logpdf(logpdf, unravel_fn):
         def flattened_logpdf(array):
@@ -89,6 +89,7 @@ def HMC(model, step_size=None, path_length=None, mass_matrix_sqrt=None, inverse_
         try:
             mass_matrix_sqrt = parameters.mass_matrix_sqrt
             inverse_mass_matrix = parameters.inverse_mass_matrix
+            num_integration_steps = parameters.num_integration_steps
             step_size = parameters.step_size
         except AttributeError:
             AttributeError(
@@ -99,7 +100,7 @@ def HMC(model, step_size=None, path_length=None, mass_matrix_sqrt=None, inverse_
             mass_matrix_sqrt, inverse_mass_matrix,
         )
         integrator = velocity_verlet(logpdf, kinetic_energy)
-        proposal = hmc_proposal(integrator, step_size, path_length)
+        proposal = hmc_proposal(integrator, step_size, num_integration_steps)
         kernel = hmc_kernel(proposal, momentum_generator, kinetic_energy, logpdf)
 
         return kernel
