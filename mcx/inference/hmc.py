@@ -20,7 +20,7 @@ def HMC(
     mass_matrix_sqrt=None,
     inverse_mass_matrix=None,
     integrator=velocity_verlet,
-    is_mass_matrix_diagonal=True,
+    is_mass_matrix_diagonal=False,
 ):
 
     parameters = HMCParameters(
@@ -31,7 +31,7 @@ def HMC(
         log_prob, log_prob_grad = value_and_grad(position)
         return HMCState(position, log_prob, log_prob_grad)
 
-    def warmup(initial_state, logpdf):
+    def warmup(initial_state, logpdf, num_warmup_steps):
         return parameters, initial_state
 
     def build_kernel(logpdf, parameters):
