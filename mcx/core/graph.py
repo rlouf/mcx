@@ -96,7 +96,12 @@ class GraphicalModel(nx.DiGraph):
     @property
     def posargs(self):
         """Returns the list of arguments to the model definition function."""
-        args = [n for n in self.nodes if isinstance(self.nodes[n]["content"], Argument) and self.nodes[n]["content"].default_value is None]
+        args = [
+            n
+            for n in self.nodes
+            if isinstance(self.nodes[n]["content"], Argument)
+            and self.nodes[n]["content"].default_value is None
+        ]
         return args
 
     @property
@@ -121,11 +126,7 @@ class GraphicalModel(nx.DiGraph):
     def random_variables(self):
         """Returns the random variables.
         """
-        args = [
-            n
-            for n in self.nodes
-            if isinstance(self.nodes[n]["content"], RandVar)
-        ]
+        args = [n for n in self.nodes if isinstance(self.nodes[n]["content"], RandVar)]
         return args
 
     @property

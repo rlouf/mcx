@@ -54,7 +54,10 @@ def hmc_proposal(
     @jax.jit
     def propose(_, init_state: Proposal) -> Proposal:
         new_state = jax.lax.fori_loop(
-            0, num_integration_steps, lambda i, state: integrator(state, step_size), init_state
+            0,
+            num_integration_steps,
+            lambda i, state: integrator(state, step_size),
+            init_state,
         )
         return new_state
 
