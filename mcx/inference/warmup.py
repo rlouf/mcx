@@ -1,7 +1,4 @@
 """Warming up the chain.
-
-.. note:
-    This is a "flat zone": all positions are 1D array.
 """
 from functools import partial
 from typing import Callable, Tuple

@@ -1,8 +1,4 @@
 """Sampling kernels.
-
-.. note:
-    This file is a "flat zone": positions and logprobs are 1 dimensional
-    arrays. Raveling and unraveling logic must happen outside.
 """
 from typing import Callable, NamedTuple, Tuple
 

@@ -2,10 +2,6 @@
 manifolds.
 
 IntegratorStep does not need to compute and return the logprob!
-
-.. note:
-    This file is a "flat zone": position and momentum are one-dimensional arrays.
-    Any raveling/unraveling logic must be placed at a higher level.
 """
 from functools import partial
 from typing import Callable, NamedTuple
