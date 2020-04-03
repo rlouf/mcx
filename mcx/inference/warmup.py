@@ -82,8 +82,8 @@ def stan_hmc_warmup(
     da_state = da_init(step_size)
 
     # initial kernel
-    integrator = hmc_proposal(integrator_step, path_length, step_size)
-    kernel = hmc_kernel(integrator, momentum_generator, kinetic_energy)
+    proposal = hmc_proposal(integrator_step, path_length, step_size)
+    kernel = hmc_kernel(proposal, momentum_generator, kinetic_energy, logpdf)
 
     # Get warmup schedule
     schedule = warmup_schedule(num_steps)
@@ -98,12 +98,12 @@ def stan_hmc_warmup(
 
             da_state = da_update(info.acceptance_probability, da_state)
             step_size = np.exp(da_state.log_step_size)
-            integrator = hmc_proposal(integrator_step, path_length, step_size)
+            proposal = hmc_proposal(integrator_step, path_length, step_size)
 
             if is_middle_window:
                 mm_state = mm_update(mm_state, state.position)
 
-            kernel = hmc_kernel(integrator, momentum_generator, kinetic_energy)
+            kernel = hmc_kernel(proposal, momentum_generator, kinetic_energy, logpdf)
 
         if is_middle_window:
             inverse_mass_matrix, mass_matrix_sqrt = mm_final(mm_state)
@@ -120,8 +120,8 @@ def stan_hmc_warmup(
                 step_size,
             )
             da_state = da_init(step_size)
-            integrator = hmc_proposal(integrator_step, path_length, step_size)
-            kernel = hmc_kernel(integrator, momentum_generator, kinetic_energy)
+            proposal = hmc_proposal(integrator_step, path_length, step_size)
+            kernel = hmc_kernel(proposal, momentum_generator, kinetic_energy, logpdf)
 
     return state, da_state, mm_state
 
@@ -184,7 +184,7 @@ def ehmc_warmup(
         return momentum, position, log_prob, log_prob_grad, batch_length
 
     ehmc_warmup_kernel = hmc_kernel(
-        longest_batch_integrator, momentum_generator, kinetic_energy
+        longest_batch_integrator, momentum_generator, kinetic_energy, logpdf
     )
 
     # Run the kernel and return an array of longest batch lengths
