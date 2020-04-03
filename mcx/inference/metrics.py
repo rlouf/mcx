@@ -1,8 +1,4 @@
 """Generate dynamics on a Euclidean Manifold or Riemannian Manifold.
-
-.. note:
-    This file is a "flat zone": positions and logprobs are 1 dimensional
-    arrays. Raveling and unraveling logic must happen outside.
 """
 from typing import Callable, Tuple
 
