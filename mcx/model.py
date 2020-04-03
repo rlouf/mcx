@@ -357,7 +357,10 @@ def sample_forward(rng_key, model: model, num_samples=1000, **kwargs) -> Dict:
     sampler_fn = jax.jit(sampler_fn)
     samples = jax.vmap(sampler_fn, in_axes=in_axes, out_axes=out_axes)(*sampler_args)
 
-    trace = {arg: numpy.asarray(arg_samples).T.squeeze() for arg, arg_samples in zip(model.variables, samples)}
+    trace = {
+        arg: numpy.asarray(arg_samples).T.squeeze()
+        for arg, arg_samples in zip(model.variables, samples)
+    }
 
     return trace
 
