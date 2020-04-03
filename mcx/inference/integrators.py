@@ -8,7 +8,6 @@ from typing import Callable, NamedTuple
 
 import jax
 from jax import numpy as np
-from jax.tree_util import tree_multimap
 from jax.numpy import DeviceArray as Array
 
 

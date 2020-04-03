@@ -6,7 +6,6 @@ import ast
 from typing import List, Optional, Union
 
 import astor
-import networkx as nx
 
 from mcx.distributions import Distribution
 
