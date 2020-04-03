@@ -1,7 +1,7 @@
 import ast
 import functools
 from types import FunctionType
-from typing import Dict, List, Union
+from typing import Any, Dict, List, Tuple, Union
 
 import jax
 import numpy
@@ -324,8 +324,8 @@ def sample_forward(rng_key, model: model, num_samples=1000, **kwargs) -> Dict:
     model_kwargs = tuple(set(model.arguments).difference(model.posargs))
 
     keys = jax.random.split(rng_key, num_samples)
-    sampler_args = (keys,)
-    in_axes = (0,)
+    sampler_args: Tuple[Any, ...] = (keys,)
+    in_axes: Tuple[int, ...] = (0,)
 
     for arg in model_posargs:
         try:
