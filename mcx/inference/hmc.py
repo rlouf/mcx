@@ -1,5 +1,6 @@
 from typing import NamedTuple
 
+import jax
 from jax import numpy as np
 
 from mcx.inference.integrators import velocity_verlet, hmc_proposal
@@ -58,10 +59,31 @@ def HMC(
 
         return kernel
 
-    def to_trace(states_chain, ravel_fn):
+    def to_trace(chain, ravel_fn):
         """ Translate the raw chains to a format that can be understood by and
         is useful to humans.
         """
-        return states_chain
+
+        trace = {}
+
+        def ravel_chain(chain):
+            return jax.vmap(ravel_fn, in_axes=(0,))(chain)
+
+        positions_array = np.stack([state.position for state, _ in chain], axis=1)
+        trace["posterior"] = jax.vmap(ravel_chain, in_axes=(0,))(positions_array)
+
+        trace["log_likelihood"] = np.stack(
+            [state.log_prob for state, _ in chain], axis=1
+        )
+
+        trace["info"] = {}
+        trace["info"]["is_divergent"] = np.stack(
+            [info.is_divergent for _, info in chain], axis=1
+        )
+        trace["info"]["is_accepted"] = np.stack(
+            [info.is_accepted for _, info in chain], axis=1
+        )
+
+        return trace
 
     return init, warmup, build_kernel, to_trace

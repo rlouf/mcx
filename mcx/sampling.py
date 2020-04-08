@@ -63,7 +63,7 @@ class sample(object):
         def update_chains(state, rng_key):
             keys = jax.random.split(rng_key, self.num_chains)
             new_states, info = jax.vmap(self.kernel, in_axes=(0, 0))(keys, state)
-            return new_states
+            return new_states, info
 
         state = self.state
         chain = []
@@ -77,8 +77,8 @@ class sample(object):
                 refresh=False,
             )
             for key in progress:
-                state = update_chains(state, key)
-                chain.append(state)
+                state, info = update_chains(state, key)
+                chain.append((state, info))
         self.state = state
 
         trace = self.to_trace(chain, self.unravel_fn)
