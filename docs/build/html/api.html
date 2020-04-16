@@ -205,7 +205,7 @@ Framework.” (2019).</p>
 <h2>Forward sampling<a class="headerlink" href="#forward-sampling" title="Permalink to this headline">¶</a></h2>
 <dl class="function">
 <dt id="mcx.sample_forward">
-<code class="sig-prename descclassname">mcx.</code><code class="sig-name descname">sample_forward</code><span class="sig-paren">(</span><em class="sig-param">model: mcx.model.model</em>, <em class="sig-param">num_samples=1000</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span> &#x2192; Dict<a class="headerlink" href="#mcx.sample_forward" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">mcx.</code><code class="sig-name descname">sample_forward</code><span class="sig-paren">(</span><em class="sig-param">rng_key</em>, <em class="sig-param">model: mcx.model.model</em>, <em class="sig-param">num_samples=1000</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span> &#x2192; Dict<a class="headerlink" href="#mcx.sample_forward" title="Permalink to this definition">¶</a></dt>
 <dd><p>Returns forward samples from the model.</p>
 <p>The samples are returned in a dictionary, with the names of
 the variables as keys.</p>
@@ -240,7 +240,6 @@ the variables as keys.</p>
 
 
 <h3>Navigation</h3>
-<p class="caption"><span class="caption-text">Contents:</span></p>
 <ul class="current">
 <li class="toctree-l1 current"><a class="current reference internal" href="#">MCX interface</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="#interactions-with-the-model">Interactions with the Model</a></li>

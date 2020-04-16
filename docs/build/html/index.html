@@ -39,7 +39,8 @@ JAX. <strong>mcx</strong> natively supports batching on GPU and TPU. It offers �
 algorithms, but its inference engine is highly customizable.</p>
 <hr class="docutils" />
 <p><strong>MCX by example</strong>:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">jax</span> <span class="kn">import</span> <span class="n">numpy</span> <span class="k">as</span> <span class="n">np</span>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">jax</span>
+<span class="kn">from</span> <span class="nn">jax</span> <span class="kn">import</span> <span class="n">numpy</span> <span class="k">as</span> <span class="n">np</span>
 <span class="kn">import</span> <span class="nn">mcx</span>
 <span class="kn">import</span> <span class="nn">mcx.distributions</span> <span class="k">as</span> <span class="nn">dist</span>
 
@@ -48,41 +49,55 @@ algorithms, but its inference engine is highly customizable.</p>
 
 <span class="nd">@mcx</span><span class="o">.</span><span class="n">model</span>
 <span class="k">def</span> <span class="nf">linear_regression</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">lmbda</span><span class="o">=</span><span class="mf">1.</span><span class="p">):</span>
-    <span class="n">scale</span> <span class="o">~</span> <span class="n">dist</span><span class="o">.</span><span class="n">Exponential</span><span class="p">(</span><span class="n">lmbda</span><span class="p">)</span>
-    <span class="n">coefs</span> <span class="o">~</span> <span class="n">dist</span><span class="o">.</span><span class="n">Normal</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">shape</span><span class="p">(</span><span class="n">x</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">]))</span>
+    <span class="n">scale</span> <span class="o">@</span> <span class="n">dist</span><span class="o">.</span><span class="n">Exponential</span><span class="p">(</span><span class="n">lmbda</span><span class="p">)</span>
+    <span class="n">coefs</span> <span class="o">@</span> <span class="n">dist</span><span class="o">.</span><span class="n">Normal</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">shape</span><span class="p">(</span><span class="n">x</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">]))</span>
     <span class="n">y</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">coefs</span><span class="p">)</span>
-    <span class="n">predictions</span> <span class="o">~</span> <span class="n">dist</span><span class="o">.</span><span class="n">Normal</span><span class="p">(</span><span class="n">y</span><span class="p">,</span> <span class="n">scale</span><span class="p">)</span>
+    <span class="n">predictions</span> <span class="o">@</span> <span class="n">dist</span><span class="o">.</span><span class="n">Normal</span><span class="p">(</span><span class="n">y</span><span class="p">,</span> <span class="n">scale</span><span class="p">)</span>
     <span class="k">return</span> <span class="n">predictions</span>
 
-<span class="c1"># Forward (or prior-predictive) samples</span>
+<span class="n">rng_key</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">PRNGKey</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+
+<span class="c1"># Sample the model forward, conditioning on the value of `x`</span>
 <span class="n">mcx</span><span class="o">.</span><span class="n">sample_forward</span><span class="p">(</span>
+    <span class="n">rng_key</span><span class="p">,</span>
     <span class="n">linear_regression</span><span class="p">,</span>
-    <span class="n">x</span><span class="o">=</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;x&#39;</span><span class="p">],</span>
+    <span class="n">x</span><span class="o">=</span><span class="n">x_data</span><span class="p">,</span>
     <span class="n">num_samples</span><span class="o">=</span><span class="mi">10_000</span>
 <span class="p">)</span>
 
-<span class="c1"># Posterior samples</span>
-<span class="n">kernel</span> <span class="o">=</span> <span class="n">mcx</span><span class="o">.</span><span class="n">dynamicHMC</span><span class="p">(</span><span class="n">model</span><span class="p">)</span>
-<span class="n">samples</span> <span class="o">=</span> <span class="n">mcx</span><span class="o">.</span><span class="n">sample</span><span class="p">(</span>
-    <span class="n">kernel</span><span class="p">,</span>
-    <span class="n">x</span><span class="o">=</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;x&#39;</span><span class="p">],</span>
-    <span class="n">predictions</span><span class="o">=</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;y&#39;</span><span class="p">],</span>
-    <span class="n">lmbda</span><span class="o">=</span><span class="mf">3.</span><span class="p">,</span>
-    <span class="n">num_samples</span><span class="o">=</span><span class="mi">1000</span>
+<span class="c1"># Sample from the posterior distribution using HMC</span>
+<span class="n">kernel</span> <span class="o">=</span> <span class="n">mcx</span><span class="o">.</span><span class="n">HMC</span><span class="p">(</span>
+    <span class="n">step_size</span><span class="o">=</span><span class="mf">0.01</span><span class="p">,</span>
+    <span class="n">num_integration_steps</span><span class="o">=</span><span class="mi">100</span><span class="p">,</span>
+    <span class="n">mass_matrix_sqrt</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="mf">1.</span><span class="p">,</span> <span class="mf">1.</span><span class="p">]),</span>
+    <span class="n">inverse_mass_matrix</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="mf">1.</span><span class="p">,</span> <span class="mf">1.</span><span class="p">]),</span>
 <span class="p">)</span>
+
+<span class="n">observations</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;x&#39;</span><span class="p">:</span> <span class="n">x_data</span><span class="p">,</span> <span class="s1">&#39;predictions&#39;</span><span class="p">:</span> <span class="n">y_data</span><span class="p">,</span> <span class="s1">&#39;lmbda&#39;</span><span class="p">:</span> <span class="mf">3.</span><span class="p">}</span>
+<span class="n">sampler</span> <span class="o">=</span> <span class="n">mcx</span><span class="o">.</span><span class="n">sample</span><span class="p">(</span>
+    <span class="n">rng_key</span><span class="p">,</span>
+    <span class="n">linear_regression</span><span class="p">,</span>
+    <span class="n">kernel</span><span class="p">,</span>
+    <span class="o">**</span><span class="n">observations</span>
+<span class="p">)</span>
+<span class="n">trace</span> <span class="o">=</span> <span class="n">sampler</span><span class="o">.</span><span class="n">run</span><span class="p">()</span>
 </pre></div>
 </div>
+<p>The <cite>HMC</cite> kernel API seems convoluted for now; once warmup will be implemented,
+every parameter besides <cite>num_integration_steps</cite> will be optional. Empirical HMC
+is being implemented at the same time and all parameters will be optional in this
+case.</p>
 <div class="section" id="features">
 <h2>Features<a class="headerlink" href="#features" title="Permalink to this headline">¶</a></h2>
 <ul class="simple">
-<li><p>dynamic HMC (NUTS) and empirical HMC algorithms</p></li>
+<li><p>HMC and empirical HMC algorithms</p></li>
 <li><p>A dozen of distributions. More to come!</p></li>
-<li><p>Sequential inference</p></li>
 <li><p>Iterative inference</p></li>
+<li><p>Sequential inference</p></li>
 <li><p>Rhat, effective sample size and simulation based calibration</p></li>
-<li><p>mcx models are dynamic graphs that can be inspected and modified at runtime.</p></li>
 <li><p>Batch inference on GPU &amp; TPU</p></li>
 </ul>
+<p>mcx models are dynamic graphs that can be inspected and modified at runtime.</p>
 </div>
 <div class="section" id="from-practice-to-research">
 <h2>From practice to research<a class="headerlink" href="#from-practice-to-research" title="Permalink to this headline">¶</a></h2>
@@ -91,10 +106,9 @@ algorithms, but its inference engine is highly customizable.</p>
 <li><p>It can be used as a <em>modeling</em> language; mcx models can be exported as a
 forward sampling and a log probability density functions to be used with
 custom inference algorithms.</p></li>
-<li><p>It can be used as an inference library; mcx’s inference module is
+<li><p>It can be used as an <strong>inference</strong> library; mcx’s inference module is
 purposefully designed as a collection of loosely coupled elements. Advanced
-users are free to compose these elements in any way they see fit. Warmup is
-also very customizable.</p></li>
+users are free to compose these elements in any way they see fit.</p></li>
 </ol>
 <p><strong>mcx</strong> strikes the right balance between customizability (for researchers) and
 sane defaults for people who want the benefits of inference without having to
