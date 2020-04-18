@@ -103,6 +103,18 @@ Sampling the posterior is an iterative process. Yet most libraries only provide 
 - Dynamical interruption of inference (say after getting a set number of effective samples);
 - Real-time monitoring of inference with something like tensorboard;
 
+```python
+samples = mcx.generate(
+    rng_key,
+    linear_regression,
+    kernel,
+    **observations
+)
+
+for sample in samples:
+  print(sample)
+```
+
 ## Sequential Markov Chain Monte Carlo
 
 One of Bayesian statistics' promises is the ability to update one's knowledge as
@@ -117,6 +129,18 @@ application:
   our knowledge as more users arive.
   
 Sequential Markov Chain Monte-Carlo is already implemented in `mcx`. However, more work is needed to diagnose the obtained samples and possibly stop sampling dynamically.
+
+```python
+sampler = mcx.sequential(
+    rng_key,
+    linear_regression,
+    kernel,
+    **observations
+)
+
+trace_1 = sampler.update(**observations_1)
+trace_2 = sampler.update(**observations_2)
+```
 
 
 ## Important note
