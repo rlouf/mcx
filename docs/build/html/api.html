@@ -1,21 +1,19 @@
 
 <!DOCTYPE html>
 
-<html xmlns="http://www.w3.org/1999/xhtml">
+<html>
   <head>
     <meta charset="utf-8" />
     <title>MCX interface &#8212; mcx  documentation</title>
     <link rel="stylesheet" href="_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
-    <script type="text/javascript" id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
-    <script type="text/javascript" src="_static/jquery.js"></script>
-    <script type="text/javascript" src="_static/underscore.js"></script>
-    <script type="text/javascript" src="_static/doctools.js"></script>
-    <script type="text/javascript" src="_static/language_data.js"></script>
-    <script async="async" type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/latest.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <script id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+    <script src="_static/jquery.js"></script>
+    <script src="_static/underscore.js"></script>
+    <script src="_static/doctools.js"></script>
+    <script src="_static/language_data.js"></script>
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
-    <link rel="prev" title="MCX: XLA-rated Bayesian inference" href="index.html" />
    
   <link rel="stylesheet" href="_static/custom.css" type="text/css" />
   
@@ -37,180 +35,9 @@
 <p>This part of the documentation covers the public interface of <cite>mcx</cite>.</p>
 <div class="section" id="interactions-with-the-model">
 <h2>Interactions with the Model<a class="headerlink" href="#interactions-with-the-model" title="Permalink to this headline">¶</a></h2>
-<dl class="function">
-<dt id="mcx.seed">
-<code class="sig-prename descclassname">mcx.</code><code class="sig-name descname">seed</code><span class="sig-paren">(</span><em class="sig-param">model: mcx.model.model</em>, <em class="sig-param">rng_key: jax.random.PRNGKey</em><span class="sig-paren">)</span> &#x2192; mcx.model.model<a class="headerlink" href="#mcx.seed" title="Permalink to this definition">¶</a></dt>
-<dd><p>Set the random seed of the model.</p>
-</dd></dl>
-
-<dl class="class">
-<dt id="mcx.model">
-<em class="property">class </em><code class="sig-prename descclassname">mcx.</code><code class="sig-name descname">model</code><span class="sig-paren">(</span><em class="sig-param">fn: function</em><span class="sig-paren">)</span><a class="headerlink" href="#mcx.model" title="Permalink to this definition">¶</a></dt>
-<dd><p>Representation of a model.</p>
-<p>Since it represents a probability graphical model, the <cite>model</cite> instance is
-a (multivariate) probability distribution, and as such inherits from the
-<cite>Distribution</cite> class. It implements the <cite>sample</cite> and <cite>logpdf</cite> methods.</p>
-<p>Models are expressed as functions. The expression of the model within the
-function should be as close to the mathematical expression as possible. The
-only difference with standard python code is the use of the “&#64;” operator
-for random variable assignments.</p>
-<p>The models are then parsed into an internal graph representation that can
-be conditioned on data, compiled into a logpdf or a forward sampler. The
-result is pure functions that can be further JIT-compiled with JAX,
-differentiated and dispatched on GPUs and TPUs.</p>
-<p>The graph can be inspected and modified at runtime.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
-<dd class="field-odd"><p><strong>model</strong> (A function that contains <cite>mcx</cite> model definition.) – </p>
-</dd>
-</dl>
-<p class="rubric">Examples</p>
-<p>Let us define a linear model in 1 dimension. In <cite>mcx</cite>, models are expressed
-in their generative form, that is a function that transforms some
-(optional) input—data, parameters—and returns the result:</p>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span> <span class="nn">jax.numpy</span> <span class="k">as</span> <span class="nn">np</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span> <span class="nn">mcx</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span> <span class="nn">mcx.distributions</span> <span class="k">as</span> <span class="nn">dist</span>
-<span class="go">&gt;&gt;&gt;</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="k">def</span> <span class="nf">linear_model</span><span class="p">(</span><span class="n">X</span><span class="p">):</span>
-<span class="gp">... </span>    <span class="n">weights</span> <span class="o">@</span> <span class="n">dist</span><span class="o">.</span><span class="n">Normal</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
-<span class="gp">... </span>    <span class="n">sigma</span> <span class="o">@</span> <span class="n">dist</span><span class="o">.</span><span class="n">Exponential</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
-<span class="gp">... </span>    <span class="n">z</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">weights</span><span class="p">)</span>
-<span class="gp">... </span>    <span class="n">y</span> <span class="o">@</span> <span class="n">Normal</span><span class="p">(</span><span class="n">z</span><span class="p">,</span> <span class="n">sigma</span><span class="p">)</span>
-<span class="gp">... </span>    <span class="k">return</span> <span class="n">y</span>
-</pre></div>
-</div>
-<p>The symbol <cite>&#64;</cite> is used here does not stand for the matrix multiplication but for
-the assignment of a random variable. The model can then be instantiated by calling:</p>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">model</span> <span class="o">=</span> <span class="n">mcx</span><span class="o">.</span><span class="n">model</span><span class="p">(</span><span class="n">linear_model</span><span class="p">)</span>
-</pre></div>
-</div>
-<p>Generative models are stochastic functions, you can call them like you would any function:</p>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">model</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
-<span class="go">-2.31</span>
-</pre></div>
-</div>
-<p>If you call it again, it will give you a different result:</p>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">model</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
-<span class="go">1.57</span>
-</pre></div>
-</div>
-<p>We say that these results are drawn from the prior predictive distribution for x=1.
-More formally, <span class="math notranslate nohighlight">\(P(y|weights, sigma, x=1)\)</span>. If you add the decorator <cite>&#64;mcx.model</cite>
-on top of the function:</p>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="nd">@mcx</span><span class="o">.</span><span class="n">model</span>
-<span class="gp">... </span><span class="k">def</span> <span class="nf">linear_model</span><span class="p">(</span><span class="n">X</span><span class="p">):</span>
-<span class="gp">... </span>    <span class="n">weights</span> <span class="o">@</span> <span class="n">dist</span><span class="o">.</span><span class="n">Normal</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
-<span class="gp">... </span>    <span class="n">sigma</span> <span class="o">@</span> <span class="n">dist</span><span class="o">.</span><span class="n">Exponential</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
-<span class="gp">... </span>    <span class="n">z</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">weights</span><span class="p">)</span>
-<span class="gp">... </span>    <span class="n">y</span> <span class="o">@</span> <span class="n">Normal</span><span class="p">(</span><span class="n">z</span><span class="p">,</span> <span class="n">sigma</span><span class="p">)</span>
-<span class="gp">... </span>    <span class="k">return</span> <span class="n">y</span>
-</pre></div>
-</div>
-<p>You can directly call the function:</p>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">linear_model</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
-<span class="go">1.57</span>
-</pre></div>
-</div>
-<p>While this recompiles the graph at each call, the performance hit is not
-noticeable in practice.</p>
-<p>Calling the function directly is useful for quick sanity check and debugging, but
-we often need a more complete view of the prior predictive distribution, or the
-forward sampling distribution of each parameter in the model:</p>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">mcx</span><span class="o">.</span><span class="n">sample_forward</span><span class="p">(</span><span class="n">linear_model</span><span class="p">,</span> <span class="n">x</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">num_samples</span><span class="o">=</span><span class="mi">1000</span><span class="p">)</span>
-<span class="go">{&#39;weight&#39;: array([1, ....]), &#39;sigma&#39;: array([2.1, ...]), &#39;y&#39;: array([1.56, ...])}</span>
-</pre></div>
-</div>
-<p>This also works for an array input; standard broadcasting rules apply:</p>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">mcx</span><span class="o">.</span><span class="n">sample_forward</span><span class="p">(</span><span class="n">linear_model</span><span class="p">,</span> <span class="n">x</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">]),</span> <span class="n">num_samples</span><span class="o">=</span><span class="mi">1000</span><span class="p">)</span>
-</pre></div>
-</div>
-<p>Unlike calling the model directly, this function JIT-compiles the forward
-sampler; if your machine has a GPU, it will automatically run on it. This
-should allow for quick iteration on the initial phase of the modeling
-process.</p>
-<p>To explore the model, we can also use the “do” operator to fix the value of
-a random variable. This returns a copy of the model where all connections
-with the parent nodes have been removed:</p>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">conditioned</span> <span class="o">=</span> <span class="n">linear_model</span><span class="o">.</span><span class="n">do</span><span class="p">(</span><span class="n">sigma</span><span class="o">=</span><span class="mi">1000</span><span class="p">)</span>
-<span class="gp">... </span><span class="n">conditioned</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
-<span class="go">435.7</span>
-</pre></div>
-</div>
-<p>‘mcx’ translates your model definition into a graph. This graph can be explored
-and modified at runtime. You can explore nodes:</p>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">linear_model</span><span class="p">[</span><span class="s2">&quot;weight&quot;</span><span class="p">])</span>
-<span class="go">[should have distibution, plus info about distirbution]</span>
-</pre></div>
-</div>
-<p>And modify them:</p>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">linear_model</span><span class="p">[</span><span class="s2">&quot;weight&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;dist.Normal(0, 4)&quot;</span>
-</pre></div>
-</div>
-<p>Behind the scenes, <cite>mcx</cite> inspects the definition’s source code and
-translates it to a graph. Since <cite>mcx</cite> sticks closely to python’s syntax (in
-fact, only adds one construct), most of what you would do inside a function
-in Python is also valid in model definitions. For instance, complex
-transformations can be defined in functions that are called within the
-model:</p>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">utils</span> <span class="kn">import</span> <span class="n">mult</span>
-<span class="gp">...</span>
-<span class="gp">... </span><span class="nd">@mcx</span><span class="o">.</span><span class="n">model</span>
-<span class="gp">... </span><span class="k">def</span> <span class="nf">linear_model</span><span class="p">(</span><span class="n">X</span><span class="p">):</span>
-<span class="gp">... </span>    <span class="n">weights</span> <span class="o">@</span> <span class="n">Normal</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
-<span class="gp">... </span>    <span class="n">sigma</span> <span class="o">@</span> <span class="n">HalfNormal</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
-<span class="gp">... </span>    <span class="n">z</span> <span class="o">=</span> <span class="n">mult</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">weights</span><span class="p">)</span>
-<span class="gp">... </span>    <span class="n">y</span> <span class="o">@</span> <span class="n">Normal</span><span class="p">(</span><span class="n">z</span><span class="p">,</span> <span class="n">sigma</span><span class="p">)</span>
-<span class="gp">... </span>    <span class="k">return</span> <span class="n">y</span>
-</pre></div>
-</div>
-<p>Models also implicitly define a multivariate distribution. Following
-PyMC4’s philosophy <a class="footnote-reference brackets" href="#id3" id="id1">2</a>, we can use other models as distributions when
-defining a random variable. More precisely, what is meant by <cite>x &#64; linear_model(1)</cite>
-is “x is distributed according to <span class="math notranslate nohighlight">\(P_{linear_model}(y|weights, sigma, x=1)\)</span>:</p>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">my_module</span> <span class="kn">import</span> <span class="n">hyperprior</span>
-<span class="gp">...</span>
-<span class="gp">... </span><span class="nd">@mcx</span><span class="o">.</span><span class="n">model</span>
-<span class="gp">... </span><span class="k">def</span> <span class="nf">prior</span><span class="p">(</span><span class="n">a</span><span class="p">):</span>
-<span class="gp">... </span>    <span class="n">s</span> <span class="o">@</span> <span class="n">hyperprior</span><span class="p">()</span>
-<span class="gp">... </span>    <span class="n">p</span> <span class="o">@</span> <span class="n">dist</span><span class="o">.</span><span class="n">Normal</span><span class="p">(</span><span class="n">a</span><span class="p">,</span><span class="n">a</span><span class="p">)</span>
-<span class="gp">... </span>    <span class="k">return</span> <span class="n">p</span>
-<span class="gp">...</span>
-<span class="gp">... </span><span class="nd">@mcx</span><span class="o">.</span><span class="n">model</span>
-<span class="gp">... </span><span class="k">def</span> <span class="nf">linear_model</span><span class="p">(</span><span class="n">X</span><span class="p">):</span>
-<span class="gp">... </span>    <span class="n">weights</span> <span class="o">@</span> <span class="n">prior</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
-<span class="gp">... </span>    <span class="n">sigma</span> <span class="o">@</span> <span class="n">HalfNormal</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
-<span class="gp">... </span>    <span class="n">z</span> <span class="o">=</span> <span class="n">mult</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">weights</span><span class="p">)</span>
-<span class="gp">... </span>    <span class="n">y</span> <span class="o">@</span> <span class="n">Normal</span><span class="p">(</span><span class="n">z</span><span class="p">,</span> <span class="n">sigma</span><span class="p">)</span>
-<span class="gp">... </span>    <span class="k">return</span> <span class="n">y</span>
-</pre></div>
-</div>
-<p class="rubric">References</p>
-<dl class="footnote brackets">
-<dt class="label" id="id2"><span class="brackets">1</span></dt>
-<dd><p>van de Meent, Jan-Willem, Brooks Paige, Hongseok Yang, and Frank
-Wood. “An introduction to probabilistic programming.” arXiv preprint
-arXiv:1809.10756 (2018).</p>
-</dd>
-<dt class="label" id="id3"><span class="brackets"><a class="fn-backref" href="#id1">2</a></span></dt>
-<dd><p>Kochurov, Max, Colin Carroll, Thomas Wiecki, and Junpeng Lao.
-“PyMC4: Exploiting Coroutines for Implementing a Probabilistic Programming
-Framework.” (2019).</p>
-</dd>
-</dl>
-</dd></dl>
-
 </div>
 <div class="section" id="forward-sampling">
 <h2>Forward sampling<a class="headerlink" href="#forward-sampling" title="Permalink to this headline">¶</a></h2>
-<dl class="function">
-<dt id="mcx.sample_forward">
-<code class="sig-prename descclassname">mcx.</code><code class="sig-name descname">sample_forward</code><span class="sig-paren">(</span><em class="sig-param">rng_key</em>, <em class="sig-param">model: mcx.model.model</em>, <em class="sig-param">num_samples=1000</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span> &#x2192; Dict<a class="headerlink" href="#mcx.sample_forward" title="Permalink to this definition">¶</a></dt>
-<dd><p>Returns forward samples from the model.</p>
-<p>The samples are returned in a dictionary, with the names of
-the variables as keys.</p>
-</dd></dl>
-
 </div>
 </div>
 
@@ -240,19 +67,14 @@ the variables as keys.</p>
 
 
 <h3>Navigation</h3>
-<ul class="current">
-<li class="toctree-l1 current"><a class="current reference internal" href="#">MCX interface</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="#interactions-with-the-model">Interactions with the Model</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#forward-sampling">Forward sampling</a></li>
-</ul>
-</li>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="build_model.html">Build models in MCX</a></li>
 </ul>
 
 <div class="relations">
 <h3>Related Topics</h3>
 <ul>
   <li><a href="index.html">Documentation overview</a><ul>
-      <li>Previous: <a href="index.html" title="previous chapter">MCX: XLA-rated Bayesian inference</a></li>
   </ul></li>
 </ul>
 </div>
@@ -265,7 +87,7 @@ the variables as keys.</p>
     </form>
     </div>
 </div>
-<script type="text/javascript">$('#searchbox').show(0);</script>
+<script>$('#searchbox').show(0);</script>
 
 
 
