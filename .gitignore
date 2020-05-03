@@ -110,3 +110,4 @@ dmypy.json
 
 # Custom stuff
 mcx/distributions/.ipynb_checkpoints/*
+.ipynb_checkpoints/*
