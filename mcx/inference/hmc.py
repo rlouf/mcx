@@ -40,6 +40,8 @@ def HMC(
         to the next.
         """
 
+        potential = logpdf
+
         try:
             mass_matrix_sqrt = parameters.mass_matrix_sqrt
             inverse_mass_matrix = parameters.inverse_mass_matrix
@@ -53,11 +55,18 @@ def HMC(
         momentum_generator, kinetic_energy = gaussian_euclidean_metric(
             mass_matrix_sqrt, inverse_mass_matrix,
         )
-        integrator_step = integrator(logpdf, kinetic_energy)
+        integrator_step = integrator(potential, kinetic_energy)
         proposal = hmc_proposal(integrator_step, step_size, num_integration_steps)
-        kernel = hmc_kernel(proposal, momentum_generator, kinetic_energy, logpdf)
+        kernel = hmc_kernel(proposal, momentum_generator, kinetic_energy, potential)
 
         return kernel
+
+    def adapt_loglikelihood(logpdf):
+        """Potential is minus the loglikelihood.
+        """
+        def potential(array):
+            return - logpdf(array)
+        return potential
 
     def to_trace(chain, ravel_fn):
         """ Translate the raw chains to a format that can be understood by and
@@ -86,4 +95,4 @@ def HMC(
 
         return trace
 
-    return init, warmup, build_kernel, to_trace
+    return init, warmup, build_kernel, to_trace, adapt_loglikelihood

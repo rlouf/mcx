@@ -25,7 +25,7 @@ class sample(object):
         self.num_chains = num_chains
         self.rng_key = rng_key
 
-        init, warmup, build_kernel, to_trace = self.program
+        init, warmup, build_kernel, to_trace, adapt_loglikelihood = self.program
 
         print("Initialize the sampler\n")
 
@@ -37,6 +37,7 @@ class sample(object):
             rng_key, model, num_chains, **kwargs
         )
         loglikelihood = flatten_loglikelihood(loglikelihood, unravel_fn)
+        loglikelihood = adapt_loglikelihood(loglikelihood)
         initial_state = jax.vmap(init, in_axes=(0, None))(
             initial_position, jax.value_and_grad(loglikelihood)
         )
@@ -94,7 +95,7 @@ class sample(object):
 def generate(rng_key, model, program, num_warmup_steps=1000, num_chains=4, **kwargs):
     """ The generator runtime """
 
-    init, warmup, build_kernel, to_trace = program
+    init, warmup, build_kernel, to_trace, adapt_loglikelihood = program
 
     print("Initialize the sampler\n")
 
@@ -106,6 +107,7 @@ def generate(rng_key, model, program, num_warmup_steps=1000, num_chains=4, **kwa
         rng_key, model, num_chains, **kwargs
     )
     loglikelihood = flatten_loglikelihood(loglikelihood, unravel_fn)
+    loglikelihood = adapt_loglikelihood(loglikelihood)
     initial_state = jax.vmap(init, in_axes=(0, None))(
         initial_position, jax.value_and_grad(loglikelihood)
     )
@@ -149,11 +151,12 @@ class sequential(object):
         self.num_warmup_steps = num_warmup_steps
         self.rng_key = rng_key
 
-        init, warmup, build_kernel, to_trace = self.program
+        init, warmup, build_kernel, to_trace, adapt_loglikelihood = self.program
         self.prg_init = init
         self.prg_warmup = warmup
         self.prg_build_kernel = build_kernel
         self.prg_to_trace = to_trace
+        self.prg_adapt_loglikelihood = adapt_loglikelihood
 
         self.state = None
 
@@ -163,6 +166,7 @@ class sequential(object):
             self.rng_key, self.model, self.num_samples, **kwargs
         )
         loglikelihood = flatten_loglikelihood(loglikelihood, self.unravel_fn)
+        loglikelihood = self.prg_adapt_loglikelihood(loglikelihood)
         initial_state = jax.vmap(self.prg_init, in_axes=(0, None))(
             initial_position, jax.value_and_grad(loglikelihood)
         )
@@ -171,6 +175,7 @@ class sequential(object):
     def _update_loglikelihood(self, **kwargs):
         loglikelihood = build_loglikelihood(self.model, **kwargs)
         loglikelihood = flatten_loglikelihood(loglikelihood, self.unravel_fn)
+        loglikelihood = self.prg_adapt_loglikelihood(loglikelihood)
         loglikelihood = jax.jit(loglikelihood)
         return loglikelihood
 

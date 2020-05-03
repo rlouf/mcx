@@ -42,7 +42,7 @@ def hmc_kernel(
     proposal_generator: Proposer,
     momentum_generator: MomentumGenerator,
     kinetic_energy: KineticEnergy,
-    logpdf: Callable,
+    potential: Callable,
     divergence_threshold: float = 1000.0,
 ) -> Callable:
     """Creates a Hamiltonian Monte Carlo transition kernel.
@@ -127,7 +127,7 @@ def hmc_kernel(
         new_position, new_momentum, new_log_prob_grad = proposal
 
         flipped_momentum = -1.0 * new_momentum  # to make the transition reversible
-        new_log_prob = logpdf(new_position)
+        new_log_prob = potential(new_position)
         new_energy = new_log_prob + kinetic_energy(flipped_momentum)
         new_state = HMCState(new_position, new_log_prob, new_log_prob_grad)
 
