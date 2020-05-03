@@ -23,4 +23,4 @@ class Exponential(Distribution):
     @limit_to_support
     def logpdf(self, x):
         scale = lax.div(1.0, self.lmbda)
-        return stats.exponential(x, loc=0.0, scale=scale)
+        return stats.expon.logpdf(x, loc=0.0, scale=scale)
