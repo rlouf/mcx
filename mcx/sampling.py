@@ -125,9 +125,9 @@ def generate(rng_key, model, program, num_warmup_steps=1000, num_chains=4, **kwa
             _, rng_key = jax.random.split(rng_key)
 
             keys = jax.random.split(rng_key, num_chains)
-            new_states = jax.vmap(kernel)(keys, state)
+            state, info = jax.vmap(kernel)(keys, state)
 
-            yield new_states
+            yield (state, info)
 
     return run(rng_key, initial_state)
 
