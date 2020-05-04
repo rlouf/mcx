@@ -113,3 +113,5 @@ mcx/distributions/.ipynb_checkpoints/*
 .ipynb_checkpoints/*
 *.profraw
 *.DS_Store
+*.ipynb_checkpoints/*
+examples/.ipynb_checkpoints/*
