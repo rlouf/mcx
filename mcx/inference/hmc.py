@@ -64,8 +64,10 @@ def HMC(
     def adapt_loglikelihood(logpdf):
         """Potential is minus the loglikelihood.
         """
+
         def potential(array):
-            return - logpdf(array)
+            return -logpdf(array)
+
         return potential
 
     def to_trace(chain, ravel_fn):

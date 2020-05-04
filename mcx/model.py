@@ -294,7 +294,8 @@ class model(Distribution):
 
     @property
     def variables(self):
-        """Return the names of the random variables and transformed variables.
+        """Return the names of the random variables and transformed variables
+        in the order in which they are returned by the sampler.
         """
         return self.graph.variables
 

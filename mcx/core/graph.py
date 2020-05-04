@@ -112,15 +112,16 @@ class GraphicalModel(nx.DiGraph):
 
     @property
     def variables(self):
-        """Returns the random and deterministic variables.
+        """Returns the random and deterministic variables in the same
+        order as returned by the sampler.
         """
-        args = [
-            n
-            for n in self.nodes
-            if isinstance(self.nodes[n]["content"], RandVar)
-            or isinstance(self.nodes[n]["content"], Transformation)
+        ordered_nodes = [
+            node
+            for node in nx.topological_sort(self)
+            if not isinstance(self.nodes[node]["content"], Argument)
+            and not isinstance(self.nodes[node]["content"], Var)
         ]
-        return args
+        return ordered_nodes
 
     @property
     def random_variables(self):
