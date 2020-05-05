@@ -1,7 +1,6 @@
 import ast
 import functools
-from types import FunctionType
-from typing import Any, Dict, List, Tuple, Union
+from typing import Any, Callable, Dict, List, Tuple, Union
 
 import jax
 import numpy
@@ -171,11 +170,11 @@ class model(Distribution):
            Framework." (2019).
     """
 
-    def __init__(self, fn: FunctionType) -> None:
+    def __init__(self, fn: Callable) -> None:
         self.model_fn = fn
-        self.namespace = fn.__globals__
+        self.namespace = fn.__globals__  # type: ignore
         self.graph = core.parse_definition(fn, self.namespace)
-        self.rng_key = jax.random.PRNGKey(53)  # random.org
+        self.rng_key = jax.random.PRNGKey(53)
         functools.update_wrapper(self, fn)
 
     def __call__(self, *args) -> numpy.ndarray:
