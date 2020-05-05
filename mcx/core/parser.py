@@ -1,7 +1,6 @@
 import ast
 import inspect
-from types import FunctionType
-from typing import Any, Dict, List, Union
+from typing import Any, Callable, Dict, List, Union
 
 import astor
 
@@ -10,7 +9,7 @@ from mcx.core.graph import GraphicalModel
 from mcx.core.utils import read_object_name
 
 
-def parse_definition(model: FunctionType, namespace: Dict):
+def parse_definition(model: Callable, namespace: Dict):
     """Build a graph representation of the model from its definition.
 
     Arguments
