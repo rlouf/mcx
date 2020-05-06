@@ -15,6 +15,7 @@ def rng_key():
 # SAMPLING CORRECTNESS
 #
 
+
 @pytest.mark.parametrize("p", [0, 1, 0.5])
 def test_sample_frequency(rng_key, p):
     samples = Bernoulli(p).sample(rng_key, (1_000_000,))
