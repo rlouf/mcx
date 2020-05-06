@@ -23,4 +23,5 @@ jobs:
     - name: Test with pytest
       run: |
         pip install pytest
-        pytest tests 
+        pip install pytest-xdist
+        pytest -n 4 tests 
