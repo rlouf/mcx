@@ -34,6 +34,7 @@ def test_sample_frequency_vectorized(rng_key):
 
 #
 # LOGPDF CORRECTNESS
+#  We trust the implementation in `jax.scipy.stats` for numerical correctness.
 #
 
 edge_cases = [
@@ -59,24 +60,6 @@ out_of_support_cases = [
 def test_logpdf_out_of_support(case):
     logprob = Bernoulli(case["p"]).logpdf(case["x"])
     assert logprob.item() == case["expected"]
-
-
-example_values = [
-    {"p": 0.5, "x": 0, "expected": -0.6931471805599453},
-    {"p": 0.5, "x": 1, "expected": -0.6931471805599453},
-    {"p": 0.2, "x": 1, "expected": -1.6094379124341003},
-    {"p": 0.2, "x": 0, "expected": -0.22314355131420976},
-    {"p": 0.7, "x": 1, "expected": -0.35667494393873245},
-    {"p": 0.7, "x": 0, "expected": -1.203972804325936},
-]
-
-
-@pytest.mark.parametrize("example", example_values)
-def test_logpdf_example_values(rng_key, example):
-    """The values are obtained from `scipy.stats.bernoulli.logpmf`.
-    """
-    logprob = Bernoulli(example["p"]).logpdf(example["x"])
-    assert logprob.item() == pytest.approx(example["expected"], abs=1e-7)
 
 
 #
