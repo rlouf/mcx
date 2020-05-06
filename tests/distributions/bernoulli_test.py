@@ -15,7 +15,6 @@ def rng_key():
 # SAMPLING CORRECTNESS
 #
 
-
 @pytest.mark.parametrize("p", [0, 1, 0.5])
 def test_sample_frequency(rng_key, p):
     samples = Bernoulli(p).sample(rng_key, (1_000_000,))
@@ -37,7 +36,6 @@ def test_sample_frequency_vectorized(rng_key):
 # LOGPDF CORRECTNESS
 #
 
-
 edge_cases = [
     {"p": 1, "x": 0, "expected": -np.inf},
     {"p": 0, "x": 1, "expected": -np.inf},
@@ -45,7 +43,7 @@ edge_cases = [
 
 
 @pytest.mark.parametrize("case", edge_cases)
-def test_logpdf_edge_cases(rng_key, case):
+def test_logpdf_edge_cases(case):
     logprob = Bernoulli(case["p"]).logpdf(case["x"])
     assert logprob.item() == pytest.approx(case["expected"])
 
@@ -58,7 +56,7 @@ out_of_support_cases = [
 
 
 @pytest.mark.parametrize("case", out_of_support_cases)
-def test_logpdf_out_of_support(rng_key, case):
+def test_logpdf_out_of_support(case):
     logprob = Bernoulli(case["p"]).logpdf(case["x"])
     assert logprob.item() == case["expected"]
 
@@ -85,7 +83,6 @@ def test_logpdf_example_values(rng_key, example):
 # LOGPDF SHAPES
 #
 
-
 expected_logpdf_shapes = [
     {"x": 1, "p": 0, "expected_shape": ()},
     {"x": 1, "p": np.array([0.1, 0.2]), "expected_shape": (2,)},
@@ -93,7 +90,7 @@ expected_logpdf_shapes = [
 
 
 @pytest.mark.parametrize("case", expected_logpdf_shapes)
-def test_logpdf_shape(rng_key, case):
+def test_logpdf_shape(case):
     log_prob = Bernoulli(case["p"]).logpdf(case["x"])
     assert log_prob.shape == case["expected_shape"]
 
