@@ -110,5 +110,4 @@ ehthumbs.db
 
 # Apparently both patterns _have_ to be present on my system.
 # Having both is a nice backup, I guess.
-*/.ipynb_checkpoints/*
-.ipynb_checkpoints/*
+.ipynb_checkpoints
