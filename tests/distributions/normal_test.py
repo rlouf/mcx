@@ -1,179 +1,153 @@
-import unittest
-
 from jax import numpy as np
 from jax import random
-from numpy.testing import assert_array_almost_equal
+import pytest
 
 from mcx.distributions import Normal
 
 
-class NormalTest(unittest.TestCase):
-    def setUp(self):
-        self.rng_key = random.PRNGKey(0)
-
-    #
-    # SAMPLING CORRECTNESS
-    #
-
-    def test_sample_mean(self):
-        means = [0, -1, 10, 100]
-        for mu in means:
-            samples = Normal(mu, 0.01).sample(self.rng_key, (1_000_000,))
-            avg = np.mean(samples, axis=0).block_until_ready().item()
-            self.assertAlmostEqual(avg, mu, places=4)
-
-    def test_sample_mean_vectorized(self):
-        means = np.array([0, -1, 10, 100])
-        samples = Normal(means, 0.01).sample(self.rng_key, (100_000,))
-        avg = np.mean(samples, axis=0).block_until_ready().__array__()
-        assert_array_almost_equal(means, avg, decimal=4)
-
-    def test_sample_std(self):
-        std = [0.1, 1, 10]
-        for sigma in std:
-            samples = Normal(0, sigma).sample(self.rng_key, (1_000_000,))
-            deviation = np.std(samples, axis=0).block_until_ready().item()
-            self.assertAlmostEqual(deviation, sigma, places=1)
-
-    #
-    # LOGPDF CORRECTNESS
-    # We trust JAX's implementation in scipy.stats.norm.logpdf
-    #
-
-    #
-    # SAMPLING SHAPES
-    #
-
-    def test_sample_shape_scalar_arguments(self):
-        """Test the correctness of broadcasting when both arguments are
-        scalars. They are tested separately as scalars are an edge case when
-        it comes to broadcasting.
-
-        The trailing `1` stands for the batch size.
-        """
-        test_cases = [
-            {"sample_shape": (), "expected_shape": (1,)},
-            {"sample_shape": (100,), "expected_shape": (100, 1)},
-            {"sample_shape": (100, 10), "expected_shape": (100, 10, 1)},
-            {"sample_shape": (1, 100), "expected_shape": (1, 100, 1)},
-        ]
-        for case in test_cases:
-            samples = Normal(0, 1).sample(self.rng_key, case["sample_shape"])
-            self.assertEqual(samples.shape, case["expected_shape"])
-
-    def test_sample_shape_array_arguments_no_sample_shape(self):
-        """Test the correctness of broadcasting when arguments can be arrays."""
-        test_cases = [
-            {
-                "mu": 1,
-                "sigma": np.array([1, 2, 3]),
-                "sample_shape": (),
-                "expected_shape": (3,),
-            },
-            {
-                "mu": np.array([1, 2, 3]),
-                "sigma": 1,
-                "sample_shape": (),
-                "expected_shape": (3,),
-            },
-            {
-                "mu": 1,
-                "sigma": np.array([[1, 2], [3, 4]]),
-                "sample_shape": (),
-                "expected_shape": (2, 2),
-            },
-            {
-                "mu": np.array([1, 2]),
-                "sigma": np.array([[1, 2], [3, 4]]),
-                "sample_shape": (),
-                "expected_shape": (2, 2),
-            },
-        ]
-        for case in test_cases:
-            samples = Normal(case["mu"], case["sigma"]).sample(
-                self.rng_key, case["sample_shape"]
-            )
-            self.assertEqual(samples.shape, case["expected_shape"])
-
-    def test_sample_shape_array_arguments_1d_sample_shape(self):
-        test_cases = [
-            {
-                "mu": 1,
-                "sigma": np.array([1, 2, 3]),
-                "sample_shape": (100,),
-                "expected_shape": (100, 3),
-            },
-            {
-                "mu": np.array([1, 2, 3]),
-                "sigma": 1,
-                "sample_shape": (100,),
-                "expected_shape": (100, 3),
-            },
-            {
-                "mu": 1,
-                "sigma": np.array([[1, 2], [3, 4]]),
-                "sample_shape": (100,),
-                "expected_shape": (100, 2, 2),
-            },
-            {
-                "mu": np.array([1, 2]),
-                "sigma": np.array([[1, 2], [3, 4]]),
-                "sample_shape": (100,),
-                "expected_shape": (100, 2, 2),
-            },
-        ]
-        for case in test_cases:
-            samples = Normal(case["mu"], case["sigma"]).sample(
-                self.rng_key, case["sample_shape"]
-            )
-            self.assertEqual(samples.shape, case["expected_shape"])
-
-    def test_sample_shape_array_arguments_2d_sample_shape(self):
-        test_cases = [
-            {
-                "mu": 1,
-                "sigma": np.array([1, 2, 3]),
-                "sample_shape": (100, 2),
-                "expected_shape": (100, 2, 3),
-            },
-            {
-                "mu": np.array([1, 2, 3]),
-                "sigma": 1,
-                "sample_shape": (100, 3),
-                "expected_shape": (100, 3, 3),
-            },
-            {
-                "mu": 1,
-                "sigma": np.array([[1, 2], [3, 4]]),
-                "sample_shape": (100, 2),
-                "expected_shape": (100, 2, 2, 2),
-            },
-            {
-                "mu": np.array([1, 2]),
-                "sigma": np.array([[1, 2], [3, 4]]),
-                "sample_shape": (100, 2),
-                "expected_shape": (100, 2, 2, 2),
-            },
-        ]
-        for case in test_cases:
-            samples = Normal(case["mu"], case["sigma"]).sample(
-                self.rng_key, case["sample_shape"]
-            )
-            self.assertEqual(samples.shape, case["expected_shape"])
-
-    #
-    # LOGPDF SHAPES
-    #
-
-    def test_logpdf_shape(self):
-        test_cases = [
-            {"x": 1, "mu": 0, "sigma": 1, "expected_shape": ()},
-            {"x": 1, "mu": np.array([1, 2]), "sigma": 1, "expected_shape": (2,)},
-        ]
-        for case in test_cases:
-            log_prob = Normal(case["mu"], case["sigma"]).logpdf(case["x"])
-            self.assertEqual(log_prob.shape, case["expected_shape"])
+@pytest.fixture
+def rng_key():
+    return random.PRNGKey(0)
 
 
-if __name__ == "__main__":
-    unittest.main()
+#
+# LOGPDF SHAPES
+#
+
+expected_logpdf_shapes = [
+    {"x": 1, "mu": 0, "sigma": 1, "expected_shape": ()},
+    {"x": 1, "mu": np.array([1, 2]), "sigma": 1, "expected_shape": (2,)},
+]
+
+
+@pytest.mark.parametrize("case", expected_logpdf_shapes)
+def test_logpdf_shape(case):
+    log_prob = Normal(case["mu"], case["sigma"]).logpdf(case["x"])
+    assert log_prob.shape == case["expected_shape"]
+
+
+#
+# SAMPLING SHAPES
+#
+
+scalar_argument_expected_shapes = [
+    {"sample_shape": (), "expected_shape": (1,)},
+    {"sample_shape": (100,), "expected_shape": (100, 1)},
+    {"sample_shape": (100, 10), "expected_shape": (100, 10, 1)},
+    {"sample_shape": (1, 100), "expected_shape": (1, 100, 1)},
+]
+
+
+@pytest.mark.parametrize("case", scalar_argument_expected_shapes)
+def test_sample_shape_scalar_arguments(rng_key, case):
+    """Test the correctness of broadcasting when both arguments are
+    scalars. We test scalars arguments separately from array arguments
+    since scalars are edge cases when it comes to broadcasting.
+
+    The trailing `1` in the result shapes stands for the batch size.
+    """
+    samples = Normal(0, 1).sample(rng_key, case["sample_shape"])
+    assert samples.shape == case["expected_shape"]
+
+
+array_argument_expected_shapes_zero_dim = [
+    {
+        "mu": 1,
+        "sigma": np.array([1, 2, 3]),
+        "sample_shape": (),
+        "expected_shape": (3,),
+    },
+    {
+        "mu": np.array([1, 2, 3]),
+        "sigma": 1,
+        "sample_shape": (),
+        "expected_shape": (3,),
+    },
+    {
+        "mu": 1,
+        "sigma": np.array([[1, 2], [3, 4]]),
+        "sample_shape": (),
+        "expected_shape": (2, 2),
+    },
+    {
+        "mu": np.array([1, 2]),
+        "sigma": np.array([[1, 2], [3, 4]]),
+        "sample_shape": (),
+        "expected_shape": (2, 2),
+    },
+]
+
+
+@pytest.mark.parametrize("case", array_argument_expected_shapes_zero_dim)
+def test_sample_shape_array_arguments_no_sample_shape(rng_key, case):
+    """Test the correctness of broadcasting when arguments can be arrays."""
+    samples = Normal(case["mu"], case["sigma"]).sample(rng_key, case["sample_shape"])
+    assert samples.shape == case["expected_shape"]
+
+
+array_argument_expected_shapes_one_dim = [
+    {
+        "mu": 1,
+        "sigma": np.array([1, 2, 3]),
+        "sample_shape": (100,),
+        "expected_shape": (100, 3),
+    },
+    {
+        "mu": np.array([1, 2, 3]),
+        "sigma": 1,
+        "sample_shape": (100,),
+        "expected_shape": (100, 3),
+    },
+    {
+        "mu": 1,
+        "sigma": np.array([[1, 2], [3, 4]]),
+        "sample_shape": (100,),
+        "expected_shape": (100, 2, 2),
+    },
+    {
+        "mu": np.array([1, 2]),
+        "sigma": np.array([[1, 2], [3, 4]]),
+        "sample_shape": (100,),
+        "expected_shape": (100, 2, 2),
+    },
+]
+
+
+@pytest.mark.parametrize("case", array_argument_expected_shapes_one_dim)
+def test_sample_shape_array_arguments_1d_sample_shape(rng_key, case):
+    samples = Normal(case["mu"], case["sigma"]).sample(rng_key, case["sample_shape"])
+    assert samples.shape == case["expected_shape"]
+
+
+array_argument_expected_shapes_two_dims = [
+    {
+        "mu": 1,
+        "sigma": np.array([1, 2, 3]),
+        "sample_shape": (100, 2),
+        "expected_shape": (100, 2, 3),
+    },
+    {
+        "mu": np.array([1, 2, 3]),
+        "sigma": 1,
+        "sample_shape": (100, 3),
+        "expected_shape": (100, 3, 3),
+    },
+    {
+        "mu": 1,
+        "sigma": np.array([[1, 2], [3, 4]]),
+        "sample_shape": (100, 2),
+        "expected_shape": (100, 2, 2, 2),
+    },
+    {
+        "mu": np.array([1, 2]),
+        "sigma": np.array([[1, 2], [3, 4]]),
+        "sample_shape": (100, 2),
+        "expected_shape": (100, 2, 2, 2),
+    },
+]
+
+
+@pytest.mark.parametrize("case", array_argument_expected_shapes_two_dims)
+def test_sample_shape_array_arguments_2d_sample_shape(rng_key, case):
+    samples = Normal(case["mu"], case["sigma"]).sample(rng_key, case["sample_shape"])
+    assert samples.shape == case["expected_shape"]
