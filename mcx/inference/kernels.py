@@ -14,7 +14,7 @@ __all__ = ["HMCState", "HMCInfo", "hmc_init", "hmc_kernel", "rwm_kernel"]
 
 
 class HMCState(NamedTuple):
-    """Describes the state of the HMC kernel.
+    """Describes the state of the HMC algorithm.
     """
 
     position: Array
@@ -23,7 +23,8 @@ class HMCState(NamedTuple):
 
 
 class HMCInfo(NamedTuple):
-    """Additional information on the current HMC step.
+    """Additional information on the current HMC step that can be useful for
+    debugging or diagnostics.
     """
 
     proposed_state: HMCState
@@ -34,6 +35,9 @@ class HMCInfo(NamedTuple):
 
 
 def hmc_init(position: Array, logpdf: Callable) -> HMCState:
+    """Compute the initial state of the HMC algorithm from the initial position
+    and the log-likelihood.
+    """
     log_prob, log_prob_grad = jax.value_and_grad(logpdf)(position)
     return HMCState(position, log_prob, log_prob_grad)
 
@@ -57,32 +61,37 @@ def hmc_kernel(
     value from the `momentum_generator` function. We then use Hamilton's
     equations [HamiltonEq]_ to push the state forward; we then compute the new
     state's energy using the `kinetic_energy` function and `logpdf` (potential
-    energy). While the hamiltonian dynamics is conservative, numerically
-    integration can introduce some discrepancy; we perform a metropolis
+    energy). While the hamiltonian dynamics is conservative, numerical
+    integration can introduce some discrepancy; we perform a Metropolis
     acceptance test to compensate for integration errors after having flipped
     the new state's momentum to make the transition reversible.
 
     I encourage anyone interested in the theoretical underpinning of the method
-    to read Michael Betancourts' excellent introduction [Betancourt2018]_.
+    to read Michael Betancourts' excellent introduction [Betancourt2018]_ and his
+    more technical paper [Betancourt2017]_ on the geometric foundations of the method.
 
     This implementation is very general and should accomodate most variations
-    of the method.
+    on the method.
 
     Arguments
     ---------
-    integrator:
-        The function used to integrate the equations of motion.
+    proposal_generator:
+        The function used to propose a new state for the chain. For vanilla HMC this
+        function integrates the trajectory over many steps, but gets more involved
+        with other algorithms such as empirical and dynamical HMC.
     momentum_generator:
         A function that returns a new value for the momentum when called.
     kinetic_energy:
-        A function that computes the trajectory's kinetic energy.
+        A function that computes the current state's kinetic energy.
+    potential:
+        The potential function that is being explored, equal to minus the likelihood.
     divergence_threshold:
         The maximum difference in energy between the initial and final state
         after which we consider the transition to be divergent.
 
     Returns
     -------
-    A kernel that moves the chain by one step.
+    A kernel that moves the chain by one step when called.
 
     References
     ----------
@@ -91,6 +100,8 @@ def hmc_kernel(
     .. [Neal1994]: Neal, Radford M. "An improved acceptance procedure for the
                    hybrid Monte Carlo algorithm." Journal of Computational Physics 111.1
                    (1994): 194-203.
+    .. [Betancourt2017]: Betancourt, Michael, et al. "The geometric foundations
+                          of hamiltonian monte carlo." Bernoulli 23.4A (2017): 2257-2298.
     .. [Betancourt2018]: Betancourt, Michael. "A conceptual introduction to
                          Hamiltonian Monte Carlo." arXiv preprint arXiv:1701.02434 (2018).
     .. [HamiltonEq]: "Hamiltonian Mechanics", Wikipedia.
@@ -113,7 +124,7 @@ def hmc_kernel(
 
         Returns
         -------
-        Next state of the chain and information about the current step.
+        The next state of the chain and additional information about the current step.
         """
         key_momentum, key_integrator, key_accept = jax.random.split(rng_key, 3)
 
@@ -162,7 +173,7 @@ def hmc_kernel(
 
 
 class RWMState(NamedTuple):
-    """Describes the state of the Random Walk Metropolis chain.
+    """Describes the state of the Random Walk Metropolis algorithm.
     """
 
     position: Array
@@ -170,7 +181,8 @@ class RWMState(NamedTuple):
 
 
 class RWMInfo(NamedTuple):
-    """Additional information on the current Random Walk Metropolis step.
+    """Additional information on the current Random Walk Metropolis step that
+    can be useful for debugging or diagnostics.
     """
 
     proposed_state: RWMState
@@ -178,32 +190,44 @@ class RWMInfo(NamedTuple):
     is_accepted: bool
 
 
-def rwm_kernel(logpdf: Callable, proposal_fn: Callable) -> Callable:
-    """Random Walk Metropolis transition kernel.
-
-    Moves the chain by one step using the Random Walk Metropolis algorithm.
+def rwm_kernel(logpdf: Callable, proposal_generator: Callable) -> Callable:
+    """Creates a Random Walk Metropolis transition kernel.
 
     Arguments
     ---------
-    logpdf: function
+    logpdf:
         Returns the log-probability of the model given a position.
-    proposal_fn: function
-        Returns a move proposal.
+    proposal_generator:
+        The function used to propose a new state for the chain.
 
     Returns
     -------
-    A kernel that moves the chain by one step.
+    A kernel that moves the chain by one step when called.
     """
 
     @jax.jit
     def kernel(
         rng_key: jax.random.PRNGKey, state: RWMState
     ) -> Tuple[RWMState, RWMInfo]:
+        """Moves the chain by one step using the Random Walk Metropolis algorithm.
+
+        Arguments
+        ---------
+        rng_key:
+           The pseudo-random number generator key used to generate random numbers.
+        state:
+            The current state of the chain: position, log-probability and gradient
+            of the log-probability.
+
+        Returns
+        -------
+        The next state of the chain and additional information about the current step.
+        """
         key_move, key_accept = jax.random.split(rng_key)
 
         position, log_prob = state
 
-        move_proposal = proposal_fn(key_move)
+        move_proposal = proposal_generator(key_move)
         new_position = position + move_proposal
         new_log_prob = logpdf(new_position)
         new_state = RWMState(new_position, new_log_prob)
