@@ -32,7 +32,6 @@ def test_linear_regression():
     kernel = HMC(
         step_size=0.001,
         num_integration_steps=90,
-        mass_matrix_sqrt=np.array([1.0, 1.0]),
         inverse_mass_matrix=np.array([1.0, 1.0]),
     )
 

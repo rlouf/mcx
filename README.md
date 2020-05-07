@@ -66,7 +66,6 @@ mcx.sample_forward(
 kernel = mcx.HMC(
     step_size=0.01,
     num_integration_steps=100,
-    mass_matrix_sqrt=np.array([1., 1.]),
     inverse_mass_matrix=np.array([1., 1.]),
 )
 

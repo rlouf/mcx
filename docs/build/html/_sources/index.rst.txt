@@ -43,7 +43,7 @@ MCX by example
   hmc_kernel = mcx.HMC(
       step_size=0.01,
       num_integration_steps=100,
-      mass_matrix=np.array([1., 1.])
+      inverse_mass_matrix=np.array([1., 1.])
   )
         
   observations = {'x': X, 'predictions': y, 'lmbda': 3.}

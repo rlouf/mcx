@@ -16,7 +16,6 @@ from typing import Callable, NamedTuple, Tuple
 
 import jax
 from jax import numpy as np
-from jax import scipy
 from jax.numpy import DeviceArray as Array
 
 from mcx.inference.kernels import hmc_kernel, HMCState
@@ -42,7 +41,6 @@ class WelfordAlgorithmState(NamedTuple):
 
 class MassMatrixAdaptationState(NamedTuple):
     inverse_mass_matrix: Array
-    mass_matrix_sqrt: Array
     wc_state: WelfordAlgorithmState
 
 
@@ -223,25 +221,20 @@ def mass_matrix_adaptation(
             inverse_mass_matrix = np.ones(n_dims)
         else:
             inverse_mass_matrix = np.identity(n_dims)
-        mass_matrix_sqrt = inverse_mass_matrix
 
         wc_state = wc_init(n_dims)
 
-        return MassMatrixAdaptationState(
-            inverse_mass_matrix, mass_matrix_sqrt, wc_state
-        )
+        return MassMatrixAdaptationState(inverse_mass_matrix, wc_state)
 
     def update(
         state: MassMatrixAdaptationState, value: Array
     ) -> MassMatrixAdaptationState:
-        mass_matrix_sqrt, inverse_mass_matrix, wc_state = state
+        inverse_mass_matrix, wc_state = state
         wc_state = wc_update(wc_state, value)
-        return MassMatrixAdaptationState(
-            mass_matrix_sqrt, inverse_mass_matrix, wc_state
-        )
+        return MassMatrixAdaptationState(inverse_mass_matrix, wc_state)
 
-    def final(state: MassMatrixAdaptationState,) -> Tuple[Array, Array]:
-        mass_matrix_sqrt, inverse_mass_matrix, wc_state = state
+    def final(state: MassMatrixAdaptationState,) -> Array:
+        inverse_mass_matrix, wc_state = state
         covariance, count, mean = wc_final(wc_state)
 
         # Regularize the covariance matrix, see Stan
@@ -254,12 +247,7 @@ def mass_matrix_adaptation(
                 mean.shape[0]
             )
 
-        if np.ndim(inverse_mass_matrix) == 2:
-            mass_matrix_sqrt = cholesky_triangular(inverse_mass_matrix)
-        else:
-            mass_matrix_sqrt = np.sqrt(np.reciprocal(inverse_mass_matrix))
-
-        return inverse_mass_matrix, mass_matrix_sqrt
+        return inverse_mass_matrix
 
     return init, update, final
 
@@ -362,14 +350,3 @@ def is_u_turn(initial_position, position, inverse_mass_matrix, momentum):
     position_vec = position - initial_position
     projection = np.multiply(position_vec, v)
     return np.where(projection < 0, True, False)
-
-
-# Sourced from numpyro.distributions.utils.py
-# Copyright Contributors to the NumPyro project.
-# SPDX-License-Identifier: Apache-2.0
-def cholesky_triangular(matrix: Array) -> Array:
-    tril_inv = np.swapaxes(
-        np.linalg.cholesky(matrix[..., ::-1, ::-1])[..., ::-1, ::-1], -2, -1
-    )
-    identity = np.broadcast_to(np.identity(matrix.shape[-1]), tril_inv.shape)
-    return scipy.linalg.solve_triangular(tril_inv, identity, lower=True)

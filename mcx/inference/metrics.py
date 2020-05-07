@@ -5,6 +5,7 @@ from typing import Callable, Tuple
 import jax
 import jax.numpy as np
 from jax.numpy import DeviceArray as Array
+from jax import scipy
 
 
 __all__ = ["gaussian_euclidean_metric"]
@@ -14,9 +15,7 @@ KineticEnergy = Callable[[Array], float]
 MomentumGenerator = Callable[[jax.random.PRNGKey], Array]
 
 
-def gaussian_euclidean_metric(
-    mass_matrix_sqrt: Array, inverse_mass_matrix: Array
-) -> Tuple[Callable, Callable]:
+def gaussian_euclidean_metric(inverse_mass_matrix: Array) -> Tuple[Callable, Callable]:
     """Emulate dynamics on an Euclidean Manifold [1]_ for vanilla Hamiltonian
     Monte Carlo with a standard gaussian as the conditional density
     :math:`\\pi(momentum|position)`.
@@ -28,25 +27,12 @@ def gaussian_euclidean_metric(
             Information. Springer, Berlin, Heidelberg, 2013.
     """
 
-    if np.ndim(inverse_mass_matrix) != np.ndim(mass_matrix_sqrt):
-        raise ValueError(
-            "The inverse mass matrix and mass matrix have a different "
-            "number of dimensions: {} vs {} respectively.".format(
-                np.ndim(inverse_mass_matrix), np.dim(mass_matrix_sqrt)
-            )
-        )
-    ndim = np.ndim(mass_matrix_sqrt)
-
-    if np.shape(inverse_mass_matrix) != np.shape(mass_matrix_sqrt):
-        raise ValueError(
-            "The inverse mass matrix and mass matrix have different "
-            "shapes: {} vs {} respectively.".format(
-                np.ndim(inverse_mass_matrix), np.dim(mass_matrix_sqrt)
-            )
-        )
-    shape = np.shape(mass_matrix_sqrt)[:1]
+    ndim = np.ndim(inverse_mass_matrix)
+    shape = np.shape(inverse_mass_matrix)[:1]
 
     if ndim == 1:  # diagonal mass matrix
+
+        mass_matrix_sqrt = np.sqrt(np.reciprocal(inverse_mass_matrix))
 
         @jax.jit
         def momentum_generator(rng_key: jax.random.PRNGKey) -> Array:
@@ -62,6 +48,8 @@ def gaussian_euclidean_metric(
         return momentum_generator, kinetic_energy
 
     elif ndim == 2:
+
+        mass_matrix_sqrt = cholesky_triangular(inverse_mass_matrix)
 
         @jax.jit
         def momentum_generator(rng_key: jax.random.PRNGKey) -> Array:
@@ -81,3 +69,14 @@ def gaussian_euclidean_metric(
             "The mass matrix has the wrong number of dimensions: "
             + "expected 1 or 2, got {}.".format(np.ndim(inverse_mass_matrix))
         )
+
+
+# Sourced from numpyro.distributions.utils.py
+# Copyright Contributors to the NumPyro project.
+# SPDX-License-Identifier: Apache-2.0
+def cholesky_triangular(matrix: Array) -> Array:
+    tril_inv = np.swapaxes(
+        np.linalg.cholesky(matrix[..., ::-1, ::-1])[..., ::-1, ::-1], -2, -1
+    )
+    identity = np.broadcast_to(np.identity(matrix.shape[-1]), tril_inv.shape)
+    return scipy.linalg.solve_triangular(tril_inv, identity, lower=True)
