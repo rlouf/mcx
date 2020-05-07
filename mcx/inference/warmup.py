@@ -65,9 +65,7 @@ def stan_hmc_warmup(
     mm_state = mm_init(n_dims)
 
     # Initialize the HMC transition kernel
-    momentum_generator, kinetic_energy = euclidean_metric(
-        mm_state.mass_matrix_sqrt, mm_state.inverse_mass_matrix
-    )
+    momentum_generator, kinetic_energy = euclidean_metric(mm_state.inverse_mass_matrix)
 
     # Find a first reasonable step size and initialize dual averaging
     step_size = find_reasonable_step_size(
@@ -106,9 +104,9 @@ def stan_hmc_warmup(
             kernel = hmc_kernel(proposal, momentum_generator, kinetic_energy, logpdf)
 
         if is_middle_window:
-            inverse_mass_matrix, mass_matrix_sqrt = mm_final(mm_state)
+            inverse_mass_matrix = mm_final(mm_state)
             momentum_generator, kinetic_energy = gaussian_euclidean_metric(
-                mass_matrix_sqrt, inverse_mass_matrix
+                inverse_mass_matrix
             )
             mm_state = mm_init(n_dims)
             step_size = find_reasonable_step_size(

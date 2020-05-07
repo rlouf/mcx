@@ -15,12 +15,9 @@ def test_find_reasonable_step_size():
 
     init_position = np.array([3.0])
     inv_mass_matrix = np.array([1.0])
-    mass_matrix_sqrt = np.array([1.0])
 
     init_state = hmc_init(init_position, potential_fn)
-    momentum_generator, kinetic_energy = gaussian_euclidean_metric(
-        mass_matrix_sqrt, inv_mass_matrix
-    )
+    momentum_generator, kinetic_energy = gaussian_euclidean_metric(inv_mass_matrix)
     integrator_step = velocity_verlet(potential_fn, kinetic_energy)
 
     # Test that the algorithm actually does something

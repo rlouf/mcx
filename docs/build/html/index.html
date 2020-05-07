@@ -12,6 +12,7 @@
     <script src="_static/underscore.js"></script>
     <script src="_static/doctools.js"></script>
     <script src="_static/language_data.js"></script>
+    <script async="async" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/latest.js?config=TeX-AMS-MML_HTMLorMML"></script>
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
     <link rel="next" title="Build models in MCX" href="build_model.html" />
@@ -67,7 +68,7 @@ compose their own inference kernel from multiple parts.</p>
 <span class="n">hmc_kernel</span> <span class="o">=</span> <span class="n">mcx</span><span class="o">.</span><span class="n">HMC</span><span class="p">(</span>
     <span class="n">step_size</span><span class="o">=</span><span class="mf">0.01</span><span class="p">,</span>
     <span class="n">num_integration_steps</span><span class="o">=</span><span class="mi">100</span><span class="p">,</span>
-    <span class="n">mass_matrix</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="mf">1.</span><span class="p">,</span> <span class="mf">1.</span><span class="p">])</span>
+    <span class="n">inverse_mass_matrix</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="mf">1.</span><span class="p">,</span> <span class="mf">1.</span><span class="p">])</span>
 <span class="p">)</span>
 
 <span class="n">observations</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;x&#39;</span><span class="p">:</span> <span class="n">X</span><span class="p">,</span> <span class="s1">&#39;predictions&#39;</span><span class="p">:</span> <span class="n">y</span><span class="p">,</span> <span class="s1">&#39;lmbda&#39;</span><span class="p">:</span> <span class="mf">3.</span><span class="p">}</span>

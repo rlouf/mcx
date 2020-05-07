@@ -11,22 +11,18 @@ from mcx.inference.metrics import gaussian_euclidean_metric
 class HMCParameters(NamedTuple):
     step_size: float
     num_integration_steps: float
-    mass_matrix_sqrt: np.DeviceArray
     inverse_mass_matrix: np.DeviceArray
 
 
 def HMC(
     step_size=None,
     num_integration_steps=None,
-    mass_matrix_sqrt=None,
     inverse_mass_matrix=None,
     integrator=velocity_verlet,
     is_mass_matrix_diagonal=False,
 ):
 
-    parameters = HMCParameters(
-        step_size, num_integration_steps, mass_matrix_sqrt, inverse_mass_matrix
-    )
+    parameters = HMCParameters(step_size, num_integration_steps, inverse_mass_matrix)
 
     def init(position, value_and_grad):
         log_prob, log_prob_grad = value_and_grad(position)
@@ -43,7 +39,6 @@ def HMC(
         potential = logpdf
 
         try:
-            mass_matrix_sqrt = parameters.mass_matrix_sqrt
             inverse_mass_matrix = parameters.inverse_mass_matrix
             num_integration_steps = parameters.num_integration_steps
             step_size = parameters.step_size
@@ -53,7 +48,7 @@ def HMC(
             )
 
         momentum_generator, kinetic_energy = gaussian_euclidean_metric(
-            mass_matrix_sqrt, inverse_mass_matrix,
+            inverse_mass_matrix,
         )
         integrator_step = integrator(potential, kinetic_energy)
         proposal = hmc_proposal(integrator_step, step_size, num_integration_steps)
