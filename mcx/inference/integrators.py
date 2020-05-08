@@ -8,7 +8,6 @@ from typing import Callable, NamedTuple
 
 import jax
 from jax import numpy as np
-from jax.numpy import DeviceArray as Array
 
 
 __all__ = [
@@ -22,8 +21,8 @@ __all__ = [
 
 
 class IntegratorState(NamedTuple):
-    position: Array
-    momentum: Array
+    position: np.DeviceArray
+    momentum: np.DeviceArray
     log_prob_grad: float
 
 

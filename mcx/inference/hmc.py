@@ -1,4 +1,4 @@
-from typing import NamedTuple
+from typing import Any, Callable, NamedTuple, Tuple
 
 import jax
 from jax import numpy as np
@@ -10,28 +10,30 @@ from mcx.inference.metrics import gaussian_euclidean_metric
 
 class HMCParameters(NamedTuple):
     step_size: float
-    num_integration_steps: float
+    num_integration_steps: int
     inverse_mass_matrix: np.DeviceArray
 
 
 def HMC(
-    step_size=None,
-    num_integration_steps=None,
-    inverse_mass_matrix=None,
-    integrator=velocity_verlet,
-    is_mass_matrix_diagonal=False,
-):
+    step_size: float,
+    num_integration_steps: int,
+    inverse_mass_matrix: np.DeviceArray,
+    integrator: Callable = velocity_verlet,
+    is_mass_matrix_diagonal: bool = False,
+) -> Tuple[Callable, Callable, Callable, Callable, Callable]:
 
     parameters = HMCParameters(step_size, num_integration_steps, inverse_mass_matrix)
 
-    def init(position, value_and_grad):
+    def init(position: np.DeviceArray, value_and_grad: Callable) -> HMCState:
         log_prob, log_prob_grad = value_and_grad(position)
         return HMCState(position, log_prob, log_prob_grad)
 
-    def warmup(initial_state, logpdf, num_warmup_steps):
+    def warmup(
+        initial_state: HMCState, logpdf: Callable, num_warmup_steps: int
+    ) -> Tuple[HMCParameters, HMCState]:
         return parameters, initial_state
 
-    def build_kernel(logpdf, parameters):
+    def build_kernel(logpdf: Callable, parameters: HMCParameters) -> Callable:
         """Builds the kernel that moves the chain from one point
         to the next.
         """
@@ -56,16 +58,16 @@ def HMC(
 
         return kernel
 
-    def adapt_loglikelihood(logpdf):
+    def adapt_loglikelihood(logpdf: Callable) -> Callable:
         """Potential is minus the loglikelihood.
         """
 
-        def potential(array):
+        def potential(array: np.DeviceArray) -> float:
             return -logpdf(array)
 
         return potential
 
-    def to_trace(chain, ravel_fn):
+    def to_trace(chain: Any, ravel_fn: Callable) -> dict:
         """ Translate the raw chains to a format that can be understood by and
         is useful to humans.
         """

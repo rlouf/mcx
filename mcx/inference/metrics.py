@@ -4,20 +4,21 @@ from typing import Callable, Tuple
 
 import jax
 import jax.numpy as np
-from jax.numpy import DeviceArray as Array
 from jax import scipy
 
 
 __all__ = ["gaussian_euclidean_metric"]
 
 
-KineticEnergy = Callable[[Array], float]
-MomentumGenerator = Callable[[jax.random.PRNGKey], Array]
+KineticEnergy = Callable[[np.DeviceArray], float]
+MomentumGenerator = Callable[[jax.random.PRNGKey], np.DeviceArray]
 
 
-def gaussian_euclidean_metric(inverse_mass_matrix: Array) -> Tuple[Callable, Callable]:
+def gaussian_euclidean_metric(
+    inverse_mass_matrix: np.DeviceArray,
+) -> Tuple[Callable, Callable]:
     """Emulate dynamics on an Euclidean Manifold [1]_ for vanilla Hamiltonian
-    Monte Carlo with a standard gaussian as the conditional density
+    Monte Carlo with a standard gaussian as the conditional probability density
     :math:`\\pi(momentum|position)`.
 
     References
@@ -35,13 +36,13 @@ def gaussian_euclidean_metric(inverse_mass_matrix: Array) -> Tuple[Callable, Cal
         mass_matrix_sqrt = np.sqrt(np.reciprocal(inverse_mass_matrix))
 
         @jax.jit
-        def momentum_generator(rng_key: jax.random.PRNGKey) -> Array:
+        def momentum_generator(rng_key: jax.random.PRNGKey) -> np.DeviceArray:
             std = jax.random.normal(rng_key, shape)
             p = np.multiply(std, mass_matrix_sqrt)
             return p
 
         @jax.jit
-        def kinetic_energy(momentum: Array) -> float:
+        def kinetic_energy(momentum: np.DeviceArray) -> float:
             velocity = np.multiply(inverse_mass_matrix, momentum)
             return 0.5 * np.dot(velocity, momentum)
 
@@ -52,13 +53,13 @@ def gaussian_euclidean_metric(inverse_mass_matrix: Array) -> Tuple[Callable, Cal
         mass_matrix_sqrt = cholesky_triangular(inverse_mass_matrix)
 
         @jax.jit
-        def momentum_generator(rng_key: jax.random.PRNGKey) -> Array:
+        def momentum_generator(rng_key: jax.random.PRNGKey) -> np.DeviceArray:
             std = jax.random.normal(rng_key, shape)
             p = np.dot(std, mass_matrix_sqrt)
             return p
 
         @jax.jit
-        def kinetic_energy(momentum: Array) -> float:
+        def kinetic_energy(momentum: np.DeviceArray) -> float:
             velocity = np.matmul(inverse_mass_matrix, momentum)
             return 0.5 * np.dot(velocity, momentum)
 
@@ -74,7 +75,7 @@ def gaussian_euclidean_metric(inverse_mass_matrix: Array) -> Tuple[Callable, Cal
 # Sourced from numpyro.distributions.utils.py
 # Copyright Contributors to the NumPyro project.
 # SPDX-License-Identifier: Apache-2.0
-def cholesky_triangular(matrix: Array) -> Array:
+def cholesky_triangular(matrix: np.DeviceArray) -> np.DeviceArray:
     tril_inv = np.swapaxes(
         np.linalg.cholesky(matrix[..., ::-1, ::-1])[..., ::-1, ::-1], -2, -1
     )

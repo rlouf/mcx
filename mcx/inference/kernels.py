@@ -4,10 +4,9 @@ from typing import Callable, NamedTuple, Tuple
 
 import jax
 import jax.numpy as np
-from jax.numpy import DeviceArray as Array
 
-from mcx.inference.integrators import Proposer, Proposal
-from mcx.inference.metrics import MomentumGenerator, KineticEnergy
+from mcx.inference.integrators import Proposal, Proposer
+from mcx.inference.metrics import KineticEnergy, MomentumGenerator
 
 
 __all__ = ["HMCState", "HMCInfo", "hmc_init", "hmc_kernel", "rwm_kernel"]
@@ -17,7 +16,7 @@ class HMCState(NamedTuple):
     """Describes the state of the HMC algorithm.
     """
 
-    position: Array
+    position: np.DeviceArray
     log_prob: float
     log_prob_grad: float
 
@@ -34,7 +33,7 @@ class HMCInfo(NamedTuple):
     proposal: Proposal
 
 
-def hmc_init(position: Array, logpdf: Callable) -> HMCState:
+def hmc_init(position: np.DeviceArray, logpdf: Callable) -> HMCState:
     """Compute the initial state of the HMC algorithm from the initial position
     and the log-likelihood.
     """
@@ -167,16 +166,16 @@ def hmc_kernel(
     return kernel
 
 
-#
-# Random Walk Metropolis
-#
+# --------------------------------------
+#      == Random Walk Metropolis ==
+# --------------------------------------
 
 
 class RWMState(NamedTuple):
     """Describes the state of the Random Walk Metropolis algorithm.
     """
 
-    position: Array
+    position: np.DeviceArray
     log_prob: float
 
 
