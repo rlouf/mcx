@@ -1,9 +1,9 @@
 """Adaptive algorithms for Markov Chain Monte Carlo.
 
 This is a collection of re-usable adaptive schemes for monte carlo algorithms.
-It only contains algorithms that are used during the warm-up phase of the
-inference and are decorrelated from any particular kernel (NUTS' adaptive
-choice of path length is not included, for instance).
+The algorithms are used during the warm-up phase of the inference and are
+decorrelated from any particular algorithm (dynamic HMC's adaptive choice of
+path length is not included, for instance).
 
 The Stan Manual [1]_ is a very good reference on automatic tuning of
 parameters used in Hamiltonian Monte Carlo.
@@ -16,13 +16,22 @@ from typing import Callable, NamedTuple, Tuple
 
 import jax
 from jax import numpy as np
-from jax.numpy import DeviceArray as Array
 
-from mcx.inference.kernels import hmc_kernel, HMCState
 from mcx.inference.integrators import hmc_proposal
+from mcx.inference.kernels import hmc_kernel, HMCState
 
 
-__all__ = ["dual_averaging", "find_reasonable_step_size", "mass_matrix_adaptation"]
+__all__ = [
+    "dual_averaging",
+    "find_reasonable_step_size",
+    "mass_matrix_adaptation",
+    "longest_batch_before_turn",
+]
+
+
+# --------------------------------------
+#      == STEP SIZE ADAPTATION ==
+# --------------------------------------
 
 
 class DualAveragingState(NamedTuple):
@@ -33,21 +42,10 @@ class DualAveragingState(NamedTuple):
     mu: float
 
 
-class WelfordAlgorithmState(NamedTuple):
-    mean: float  # the current sample mean
-    m2: float  # the current value of the sum of difference of squares
-    sample_size: int  # the sample size
-
-
-class MassMatrixAdaptationState(NamedTuple):
-    inverse_mass_matrix: Array
-    wc_state: WelfordAlgorithmState
-
-
 def dual_averaging(
     t0: int = 10, gamma: float = 0.05, kappa: float = 0.75, target: float = 0.65
 ) -> Tuple[Callable, Callable]:
-    """Tune the step size to achieve a desired target acceptance rate.
+    """Tune the step size in order to achieve a desired target acceptance rate.
 
     Let us note :math:`\\epsilon` the current step size, :math:`\\alpha_t` the
     metropolis acceptance rate at time :math:`t` and :math:`\\delta` the desired
@@ -67,7 +65,7 @@ def dual_averaging(
         \\overline{x}_{t+1} \\LongLeftArrow x_{t+1}\\, t^{-\\kappa}  + \\left(1-t^\\kappa\\right)\\overline{x}_t
 
     :math:`\\overline{x}_{t}` is guaranteed to converge to a value such that
-    :math:`h(\\overline{x}_t)` converges to 0, i.e. the metropolis acceptance
+    :math:`h(\\overline{x}_t)` converges to 0, i.e. the Metropolis acceptance
     rate converges to the desired rate.
 
     See reference [2]_ (section 3.2.1) for a detailed discussion.
@@ -75,7 +73,7 @@ def dual_averaging(
     Arguments
     ---------
     t0: float > 0
-        Free parameter that stabilizies the initial iterations of the algorithm.
+        Free parameter that stabilizes the initial iterations of the algorithm.
         Large values may slow down convergence. Introduced in [2]_ with a default
         value of 10.
     gamma: float
@@ -88,19 +86,19 @@ def dual_averaging(
 
     Returns
     -------
-    init: function
-        Function to initialize the state of the dual averaging scheme.
+    init:
+        A function that initializes the state of the dual averaging scheme.
     update: function
-        Function that updates the state of the dual averaging scheme.
+        A function that updates the state of the dual averaging scheme.
 
     References
     ----------
 
-    .. [1] Nesterov, Yurii. "Primal-dual subgradient methods for convex
-           problems." Mathematical programming 120.1 (2009): 221-259.
-    .. [2] Hoffman, Matthew D., and Andrew Gelman. "The No-U-Turn sampler:
-           adaptively setting path lengths in Hamiltonian Monte Carlo." Journal
-           of Machine Learning Research 15.1 (2014): 1593-1623.
+    .. [1]: Nesterov, Yurii. "Primal-dual subgradient methods for convex
+            problems." Mathematical programming 120.1 (2009): 221-259.
+    .. [2]: Hoffman, Matthew D., and Andrew Gelman. "The No-U-Turn sampler:
+            adaptively setting path lengths in Hamiltonian Monte Carlo." Journal
+            of Machine Learning Research 15.1 (2014): 1593-1623.
     """
 
     def init(inital_step_size: float) -> DualAveragingState:
@@ -123,6 +121,7 @@ def dual_averaging(
         log_step_size_avg: float = 0
         return DualAveragingState(log_step_size, log_step_size_avg, t, avg_error, mu)
 
+    @jax.jit
     def update(p_accept: float, state: DualAveragingState) -> DualAveragingState:
         """Update the state of the Dual Averaging adaptive scheme.
 
@@ -143,7 +142,7 @@ def dual_averaging(
     return init, update
 
 
-@partial(jax.jit, static_argnums=(0, 1, 2, 3, 4))
+@partial(jax.jit, static_argnums=(0, 1, 2, 3, 4, 5, 6, 7))
 def find_reasonable_step_size(
     rng_key: jax.random.PRNGKey,
     momentum_generator: Callable,
@@ -159,21 +158,23 @@ def find_reasonable_step_size(
     While the dual averaging scheme is guaranteed to converge to a reasonable
     value for the step size starting from any value, choosing a good first
     value can speed up the convergence. This heuristics doubles and halves the
-    step size until the acceptance probability of the HMC proposal crossed the
+    step size until the acceptance probability of the HMC proposal crosses the
     .5 value.
 
     Returns
     -------
     float
-        A reasonable first value of the step size.
+        A reasonable first value for the step size.
 
     Reference
     ---------
-    .. [1]: NUTS paper.
+    .. [1]: Hoffman, Matthew D., and Andrew Gelman. "The No-U-Turn sampler:
+            adaptively setting path lengths in Hamiltonian Monte Carlo." Journal
+            of Machine Learning Research 15.1 (2014): 1593-1623.
     """
     fp_limit = np.finfo(jax.lax.dtype(initial_step_size))
 
-    def _new_hmc_kernel(step_size):
+    def _new_hmc_kernel(step_size: float) -> Callable:
         """Return a HMC kernel that operates with the provided step size."""
         integrator = hmc_proposal(integrator_step, step_size, 1)
         kernel = hmc_kernel(
@@ -181,7 +182,7 @@ def find_reasonable_step_size(
         )
         return kernel
 
-    def _update(search_state):
+    def _update(search_state: Tuple) -> Tuple:
         rng_key, direction, _, step_size = search_state
         _, rng_key = jax.random.split(rng_key)
 
@@ -192,9 +193,12 @@ def find_reasonable_step_size(
         new_direction = np.where(target_accept < hmc_info.acceptance_probability, 1, -1)
         return (rng_key, new_direction, direction, step_size)
 
-    def _do_continue(search_state):
-        """We cross the `target_accept` threshold when the current direction is opposite to
-        the previous direction"""
+    def _do_continue(search_state: Tuple) -> bool:
+        """Decides whether the search should continue.
+
+        The search stops when it crosses the `target_accept` threshold, i.e.
+        when the current direction is opposite to the previous direction.
+        """
         _, direction, previous_direction, step_size = search_state
 
         not_too_large = (step_size < fp_limit.max) | (direction <= 0)
@@ -211,9 +215,28 @@ def find_reasonable_step_size(
     return step_size
 
 
+# --------------------------------------
+#      == MASS MATRIX ADAPTATION ==
+# --------------------------------------
+
+
+class WelfordAlgorithmState(NamedTuple):
+    mean: float  # the current sample mean
+    m2: float  # the current value of the sum of difference of squares
+    sample_size: int  # the sample size
+
+
+class MassMatrixAdaptationState(NamedTuple):
+    inverse_mass_matrix: np.DeviceArray
+    wc_state: WelfordAlgorithmState
+
+
 def mass_matrix_adaptation(
     is_diagonal_matrix: bool = True,
 ) -> Tuple[Callable, Callable, Callable]:
+    """Adapts the values in the mass matrix by computing the covariance
+    between parameters.
+    """
     wc_init, wc_update, wc_final = welford_algorithm(is_diagonal_matrix)
 
     def init(n_dims: int) -> MassMatrixAdaptationState:
@@ -227,13 +250,14 @@ def mass_matrix_adaptation(
         return MassMatrixAdaptationState(inverse_mass_matrix, wc_state)
 
     def update(
-        state: MassMatrixAdaptationState, value: Array
+        state: MassMatrixAdaptationState, value: np.DeviceArray
     ) -> MassMatrixAdaptationState:
         inverse_mass_matrix, wc_state = state
         wc_state = wc_update(wc_state, value)
         return MassMatrixAdaptationState(inverse_mass_matrix, wc_state)
 
-    def final(state: MassMatrixAdaptationState,) -> Array:
+    @partial(jax.jit, static_argnums=(0,))
+    def final(state: MassMatrixAdaptationState) -> np.DeviceArray:
         inverse_mass_matrix, wc_state = state
         covariance, count, mean = wc_final(wc_state)
 
@@ -290,7 +314,10 @@ def welford_algorithm(is_diagonal_matrix: bool) -> Tuple[Callable, Callable, Cal
             m2 = np.zeros((n_dims, n_dims))
         return WelfordAlgorithmState(mean, m2, count)
 
-    def update(state: WelfordAlgorithmState, value: Array) -> WelfordAlgorithmState:
+    @jax.jit
+    def update(
+        state: WelfordAlgorithmState, value: np.DeviceArray
+    ) -> WelfordAlgorithmState:
         """Update the M2 matrix using the new value.
 
         Arguments:
@@ -321,14 +348,38 @@ def welford_algorithm(is_diagonal_matrix: bool) -> Tuple[Callable, Callable, Cal
     return init, update, covariance
 
 
-def longest_batch_before_turn(integrator_step: Callable):
-    @partial(jax.jit, static_argnums=(2, 3))
-    def run(initial_position, initial_momentum, step_size, path_length):
-        def cond(state):
-            iteration, position, momentum = state
-            return is_u_turn or iteration == path_length
+# ------------------------------------------
+#      == INTEGRATION STEPS ADAPTATION ==
+# ------------------------------------------
 
-        def update(state):
+
+def longest_batch_before_turn(integrator_step: Callable) -> Callable:
+    """Learn the number of steps one can make before the trajectory makes a
+    U-Turn. This routine is part of the adaptive strategy described in [1]_:
+    during the warmup phase we run this scheme many times in order to get a
+    distribution of numbers of steps before U-Turn. We then sample elements
+    from this distribution during inference to use as the number of integration
+    steps.
+
+    References
+    ----------
+    .. [1]: Wu, Changye, Julien Stoehr, and Christian P. Robert. "Faster
+            Hamiltonian Monte Carlo by learning leapfrog scale." arXiv preprint
+            arXiv:1810.04449 (2018).
+    """
+
+    @partial(jax.jit, static_argnums=(0, 1, 2, 3))
+    def run(
+        initial_position: np.DeviceArray,
+        initial_momentum: np.DeviceArray,
+        step_size: float,
+        num_integration_steps: int,
+    ):
+        def cond(state: Tuple) -> bool:
+            iteration, position, momentum = state
+            return is_u_turn or iteration == num_integration_steps
+
+        def update(state: Tuple) -> Tuple:
             iteration, position, momentum = state
             iteration += 1
             position, momentum = integrator_step(position, momentum, step_size, 1)
@@ -340,9 +391,16 @@ def longest_batch_before_turn(integrator_step: Callable):
 
         return result[0]
 
+    return run
+
 
 @partial(jax.jit, static_argnums=(0, 2))
-def is_u_turn(initial_position, position, inverse_mass_matrix, momentum):
+def is_u_turn(
+    initial_position: np.DeviceArray,
+    position: np.DeviceArray,
+    inverse_mass_matrix: np.DeviceArray,
+    momentum: np.DeviceArray,
+) -> bool:
     """Detect when the trajectory starts turning back towards the point
     where it started.
     """

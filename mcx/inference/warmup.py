@@ -6,7 +6,7 @@ from typing import Callable, Tuple
 import jax
 from jax import numpy as np
 
-from mcx.inference.adaptive import (
+from mcx.inference.adaptation import (
     DualAveragingState,
     MassMatrixAdaptationState,
     dual_averaging,

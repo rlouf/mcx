@@ -1,7 +1,7 @@
 import jax
 from jax import numpy as np
 
-from mcx.inference.adaptive import find_reasonable_step_size
+from mcx.inference.adaptation import find_reasonable_step_size
 from mcx.inference.integrators import velocity_verlet
 from mcx.inference.kernels import hmc_init
 from mcx.inference.metrics import gaussian_euclidean_metric
