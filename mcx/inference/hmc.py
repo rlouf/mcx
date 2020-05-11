@@ -6,6 +6,7 @@ from jax import numpy as np
 from mcx.inference.integrators import velocity_verlet, hmc_proposal
 from mcx.inference.kernels import HMCState, hmc_kernel
 from mcx.inference.metrics import gaussian_euclidean_metric
+from mcx.inference.warmup import stan_hmc_warmup
 
 
 class HMCParameters(NamedTuple):
@@ -21,17 +22,37 @@ def HMC(
     integrator: Callable = velocity_verlet,
     is_mass_matrix_diagonal: bool = False,
 ) -> Tuple[Callable, Callable, Callable, Callable, Callable]:
-
-    parameters = HMCParameters(step_size, num_integration_steps, inverse_mass_matrix)
-
     def init(position: np.DeviceArray, value_and_grad: Callable) -> HMCState:
         log_prob, log_prob_grad = value_and_grad(position)
         return HMCState(position, log_prob, log_prob_grad)
 
     def warmup(
-        initial_state: HMCState, logpdf: Callable, num_warmup_steps: int
+        rng_key: jax.random.PRNGKey,
+        initial_state: HMCState,
+        logpdf: Callable,
+        num_warmup_steps: int,
     ) -> Tuple[HMCParameters, HMCState]:
-        return parameters, initial_state
+
+        state, step_size, inverse_mass_matrix = jax.vmap(
+            stan_hmc_warmup, in_axes=(None, None, 0, None, None, None, None, None, None)
+        )(
+            rng_key,
+            logpdf,
+            initial_state,
+            gaussian_euclidean_metric,
+            integrator,
+            0.1,
+            num_integration_steps,
+            num_warmup_steps,
+            is_mass_matrix_diagonal,
+        )
+        print(step_size, inverse_mass_matrix)
+
+        parameters = HMCParameters(
+            step_size, num_integration_steps, inverse_mass_matrix
+        )
+
+        return parameters, state
 
     def build_kernel(logpdf: Callable, parameters: HMCParameters) -> Callable:
         """Builds the kernel that moves the chain from one point
