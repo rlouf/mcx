@@ -24,9 +24,9 @@ def stan_hmc_warmup(
     logpdf: Callable,
     initial_state: HMCState,
     euclidean_metric: Callable,
-    integrator_step: Callable,
+    integrator: Callable,
     inital_step_size: float,
-    path_length: float,
+    num_integration_steps: int,
     num_steps: int,
     is_mass_matrix_diagonal=True,
 ) -> Tuple[HMCState, DualAveragingState, MassMatrixAdaptationState]:
@@ -48,6 +48,15 @@ def stan_hmc_warmup(
     size is re-initialized to a "reasonable" value.
     3. A last fast adaptation window where only the step size is adapted.
 
+    Note
+    ----
+
+    As much as I would want to generalize this warmup, we are kind of stuck
+    because `hmc_proposal` and `ehmc_proposal` take different arguments. It
+    would still be possible to generalize, but maybe at the expense of
+    legibility. It would be nice to provide the user with the possibility
+    to write custom warmups.
+
     Arguments
     ---------
 
@@ -66,12 +75,14 @@ def stan_hmc_warmup(
 
     # Initialize the HMC transition kernel
     momentum_generator, kinetic_energy = euclidean_metric(mm_state.inverse_mass_matrix)
+    integrator_step = integrator(logpdf, kinetic_energy)
 
     # Find a first reasonable step size and initialize dual averaging
     step_size = find_reasonable_step_size(
         rng_key,
         momentum_generator,
         kinetic_energy,
+        logpdf,
         integrator_step,
         initial_state,
         inital_step_size,
@@ -80,7 +91,7 @@ def stan_hmc_warmup(
     da_state = da_init(step_size)
 
     # initial kernel
-    proposal = hmc_proposal(integrator_step, path_length, step_size)
+    proposal = hmc_proposal(integrator_step, step_size, num_integration_steps)
     kernel = hmc_kernel(proposal, momentum_generator, kinetic_energy, logpdf)
 
     # Get warmup schedule
@@ -90,13 +101,13 @@ def stan_hmc_warmup(
     for i, window in enumerate(schedule):
         is_middle_window = (0 < i) & (i < (len(schedule) - 1))
 
-        for step in range(window):
+        for step in range(window[1]):
             _, rng_key = jax.random.split(rng_key)
             state, info = kernel(rng_key, state)
 
             da_state = da_update(info.acceptance_probability, da_state)
             step_size = np.exp(da_state.log_step_size)
-            proposal = hmc_proposal(integrator_step, path_length, step_size)
+            proposal = hmc_proposal(integrator_step, step_size, num_integration_steps)
 
             if is_middle_window:
                 mm_state = mm_update(mm_state, state.position)
@@ -109,6 +120,7 @@ def stan_hmc_warmup(
                 inverse_mass_matrix
             )
             mm_state = mm_init(n_dims)
+            # adaptation of integrator missing here
             step_size = find_reasonable_step_size(
                 rng_key,
                 momentum_generator,
@@ -118,10 +130,13 @@ def stan_hmc_warmup(
                 step_size,
             )
             da_state = da_init(step_size)
-            proposal = hmc_proposal(integrator_step, path_length, step_size)
+            proposal = hmc_proposal(integrator_step, step_size, num_integration_steps)
             kernel = hmc_kernel(proposal, momentum_generator, kinetic_energy, logpdf)
 
-    return state, da_state, mm_state
+    inverse_mass_matrix = mm_final(mm_state)
+    step_size = np.exp(da_state.log_step_size)
+
+    return state, step_size, inverse_mass_matrix
 
 
 @partial(jax.jit, static_argnums=(0, 1, 2, 3, 4, 5, 6, 7))
@@ -133,7 +148,7 @@ def ehmc_warmup(
     kinetic_energy: Callable,
     integrator_step: Callable,
     step_size: float,
-    path_length: float,
+    max_path_length: float,
     num_longest_batch: int,
 ):
     """Warmup scheme for empirical Hamiltonian Monte Carlo.
@@ -170,7 +185,7 @@ def ehmc_warmup(
             integrator_state.step_size,
             integrator_state.path_length,
         )
-        if batch_length < path_length:
+        if batch_length < max_path_length:
             position, momentum, log_prob, log_prob_grad = step(
                 position,
                 momentum,

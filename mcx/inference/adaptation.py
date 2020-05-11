@@ -142,7 +142,7 @@ def dual_averaging(
     return init, update
 
 
-@partial(jax.jit, static_argnums=(0, 1, 2, 3, 4, 5, 6, 7))
+@partial(jax.jit, static_argnums=(0, 1, 2, 3, 4, 5))
 def find_reasonable_step_size(
     rng_key: jax.random.PRNGKey,
     momentum_generator: Callable,
