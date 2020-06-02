@@ -5,6 +5,7 @@ import jax
 from jax import numpy as np
 
 from .constraints import Constraint
+from .utils import broadcast_batch_shape
 
 
 class Distribution(ABC):
@@ -81,6 +82,14 @@ class Distribution(ABC):
             An array of shape sample_shape + batch_shape + event_shape with independent samples.
         """
         pass
+
+    def broadcast_to(self, destination_shape):
+        """Broadcast the distribution to a destination shape.
+
+        This is used for instance in Neural Network where you want to
+        broadcast the distribution to match the layer size.
+        """
+        self.batch_shape = broadcast_batch_shape(self.batch_shape, destination_shape)
 
     def forward(
         self,
