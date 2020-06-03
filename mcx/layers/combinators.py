@@ -12,14 +12,14 @@ class Serial(tl.Serial, md.Distribution):
     """Combinator that applies layers sequentially.
 
     >>> def mnist(image):
-    ...     nn @ ml.Serial(
+    ...     nn <~ ml.Serial(
     ...         dense(400, Normal(0, 1)),
     ...         dense(400, Normal(0, 1)),
     ...         dense(10, Normal(0, 1)),
     ...         softmax(),
     ...     )
     ...     p = nn(image)
-    ...     cat @ Categorical(p)
+    ...     cat <~ Categorical(p)
     ...     return cat
 
     Computing the logpdf:
@@ -41,7 +41,7 @@ class Serial(tl.Serial, md.Distribution):
     ...         softmax(),
     ...     ).sample(rng_key, shape)
     ...     p = nn(image)
-    ...     cat @ Categorical(p).sample(rng_key, shape)
+    ...     cat = Categorical(p).sample(rng_key, shape)
     ...     return cat
 
     """
@@ -60,7 +60,7 @@ class Serial(tl.Serial, md.Distribution):
 
         >>> @mcx.model
         ... def prior():
-        ...     nn @ ml.Serial(
+        ...     nn <~ ml.Serial(
         ...         dense(10, Normal(0, 1)),
         ...         relu(),
         ...         dense(20, Normal(0, 1)),

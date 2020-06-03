@@ -16,13 +16,13 @@ class Dense(tl.Dense, md.Distribution):
         self,
         n_units: int,
         distribution: Optional[md.Distribution] = None,
-        fn: Optional[Callable] = None,
+        transform: Optional[Callable] = None,
         kernel_initializer=tl.init.GlorotUniformInitializer(),
         bias_initializer=tl.init.RandomNormalInitializer(1e-6),
     ):
         super(tl.Dense, self).__init__(n_units, kernel_initializer, bias_initializer)
         self.distribution = distribution
-        self.fn = fn if fn else lambda x: x
+        self.transform = transform if transform else lambda x: x
 
     def forward(self, x, weights):
         w, b = weights
