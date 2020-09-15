@@ -8,7 +8,7 @@ from mcx.inference.kernels import HMCState, hmc_kernel
 from mcx.inference.metrics import gaussian_euclidean_metric
 
 # from mcx.inference.warmup import stan_hmc_warmup
-from mcx.inference.warmups import stan_hmc_warmup
+from mcx.inference.warmups import stan_hmc_warmup, stan_warmup_schedule
 
 
 class HMCParameters(NamedTuple):
@@ -46,8 +46,11 @@ def HMC(
             kernel = hmc_kernel(proposal, momentum_generator, kinetic_energy, logpdf)
             return kernel
 
+        schedule = stan_warmup_schedule(num_warmup_steps)
+        print(len(schedule))
+
         init, update, final = stan_hmc_warmup(
-            logpdf, integrator, num_integration_steps, num_warmup_steps
+            logpdf, integrator, generate_kernel, num_integration_steps, num_warmup_steps
         )
 
         initial_step_size = 0.1
@@ -59,9 +62,9 @@ def HMC(
         # around, or just the warmup state, actually
         # if you applied generate_kernel here you would still have to vmap
         # the function and it would not work.
-        for _ in range(num_warmup_steps):
-            rng_keys, state, warmup_state = jax.vmap(update, in_axes=(0, None, 0, 0))(
-                rng_keys, generate_kernel, state, warmup_state
+        for step in range(num_warmup_steps):
+            rng_keys, state, warmup_state = jax.vmap(update, in_axes=(0, 0, 0))(
+                rng_keys, state, warmup_state
             )
 
         print(state, warmup_state)
