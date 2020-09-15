@@ -76,7 +76,7 @@ def stan_hmc_warmup(
     # Initialize the HMC transition kernel
     momentum_generator, kinetic_energy = euclidean_metric(mm_state.inverse_mass_matrix)
     integrator_step = integrator(logpdf, kinetic_energy)
-
+    
     # Find a first reasonable step size and initialize dual averaging
     step_size = find_reasonable_step_size(
         rng_key,
@@ -89,6 +89,7 @@ def stan_hmc_warmup(
     )
     da_init, da_update = dual_averaging()
     da_state = da_init(step_size)
+    print(f"reasonable step size: {step_size}")
 
     # initial kernel
     proposal = hmc_proposal(integrator_step, step_size, num_integration_steps)
@@ -98,8 +99,10 @@ def stan_hmc_warmup(
     schedule = warmup_schedule(num_steps)
 
     state = initial_state
+    print(schedule)
     for i, window in enumerate(schedule):
         is_middle_window = (0 < i) & (i < (len(schedule) - 1))
+        print(window)
 
         for step in range(window[1]):
             _, rng_key = jax.random.split(rng_key)
@@ -115,16 +118,19 @@ def stan_hmc_warmup(
             kernel = hmc_kernel(proposal, momentum_generator, kinetic_energy, logpdf)
 
         if is_middle_window:
+            print('end of middle!')
             inverse_mass_matrix = mm_final(mm_state)
             momentum_generator, kinetic_energy = gaussian_euclidean_metric(
                 inverse_mass_matrix
             )
             mm_state = mm_init(n_dims)
+
             # adaptation of integrator missing here
             step_size = find_reasonable_step_size(
                 rng_key,
                 momentum_generator,
                 kinetic_energy,
+                logpdf,
                 integrator_step,
                 state,
                 step_size,
@@ -132,9 +138,12 @@ def stan_hmc_warmup(
             da_state = da_init(step_size)
             proposal = hmc_proposal(integrator_step, step_size, num_integration_steps)
             kernel = hmc_kernel(proposal, momentum_generator, kinetic_energy, logpdf)
+            print(step_size, mm_state, state)
 
     inverse_mass_matrix = mm_final(mm_state)
     step_size = np.exp(da_state.log_step_size)
+
+    print(step_size, inverse_mass_matrix)
 
     return state, step_size, inverse_mass_matrix
 
