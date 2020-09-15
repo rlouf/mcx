@@ -23,7 +23,9 @@ class StanWarmupState(NamedTuple):
     step: int
 
 
-def stan_hmc_warmup(potential_fn, integrator, kernel_generator, num_integration_steps, num_warmup_steps):
+def stan_hmc_warmup(
+    potential_fn, integrator, kernel_generator, num_integration_steps, num_warmup_steps
+):
     """Warmup scheme for sampling procedures based on euclidean manifold HMC.
     The schedule and algorithms used match Stan's [1]_ as closely as possible.
 
@@ -51,8 +53,6 @@ def stan_hmc_warmup(potential_fn, integrator, kernel_generator, num_integration_
     first_stage_init, first_stage_update = stan_first_stage(kernel_generator)
     second_stage_init, second_stage_update, _ = stan_second_stage(kernel_generator)
 
-    schedule = stan_warmup_schedule(num_warmup_steps)
-
     def init(rng_key, initial_state, initial_step_size):
         mm_state = second_stage_init(initial_state)
 
@@ -76,20 +76,16 @@ def stan_hmc_warmup(potential_fn, integrator, kernel_generator, num_integration_
         return rng_key, initial_state, warmup_state
 
     @jax.jit
-    def update(rng_key, state, warmup_state):
+    def update(rng_key, stage, state, warmup_state):
         """Only update the step size at first."""
         _, rng_key = jax.random.split(rng_key)
         kernel = kernel_generator(warmup_state)
         state, info = kernel(rng_key, state)
 
-        # rng_key, state, warmup_state = jax.lax.switch(
-        # stage,
-        # (first_stage_update, second_stage_update),
-        # (rng_key, kernel_generator, state, warmup_state),
-        # )
-
-        rng_key, state, warmup_state = first_stage_update(
-            rng_key, state, warmup_state
+        rng_key, state, warmup_state = jax.lax.switch(
+            stage,
+            (first_stage_update, second_stage_update),
+            (rng_key, state, warmup_state),
         )
 
         return rng_key, state, warmup_state
@@ -128,8 +124,9 @@ def stan_first_stage(kernel_generator):
         da_state = da_init(step_size)
         return da_state
 
-    @partial(jax.jit, static_argnums=(1,))
-    def update(rng_key, chain_state, warmup_state):
+    @jax.jit
+    def update(state):
+        rng_key, chain_state, warmup_state = state
         _, rng_key = jax.random.split(rng_key)
         kernel = kernel_generator(warmup_state)
         chain_state, info = kernel(rng_key, chain_state)
@@ -144,7 +141,7 @@ def stan_first_stage(kernel_generator):
     return init, update
 
 
-def stan_second_stage(is_mass_matrix_diagonal: bool = True):
+def stan_second_stage(kernel_generator, is_mass_matrix_diagonal: bool = True):
     """Slow stage of the Stan warmup.
 
     In this stage we adapt the mass matrix as the inverse of the chain's
@@ -159,16 +156,18 @@ def stan_second_stage(is_mass_matrix_diagonal: bool = True):
         mm_state = mm_init(n_dims)
         return mm_state
 
-    @partial(jax.jit, static_argnums=(1,))
-    def update(rng_key, kernel_generator, chain_state, warmup_state):
+    @jax.jit
+    def update(state):
         """The kernel does not change, we are just updating the chain's
         covariance.
         """
+        rng_key, chain_state, warmup_state = state
         _, rng_key = jax.random.split(rng_key)
         kernel = kernel_generator(warmup_state)
         chain_state, _ = kernel(rng_key, chain_state)
-        warmup_state.mm_state = mm_update(warmup_state.mm_state, chain_state.position)
-        return rng_key, kernel, chain_state, warmup_state
+        new_mm_state = mm_update(warmup_state.mm_state, chain_state.position)
+        new_warmup_state = StanWarmupState(warmup_state.da_state, new_mm_state, warmup_state.step)
+        return rng_key, chain_state, new_warmup_state
 
     def final(warmup_state):
         pass
