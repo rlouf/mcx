@@ -47,7 +47,6 @@ def HMC(
             return kernel
 
         schedule = stan_warmup_schedule(num_warmup_steps)
-        print(len(schedule))
 
         init, update, final = stan_hmc_warmup(
             logpdf, integrator, generate_kernel, num_integration_steps, num_warmup_steps
@@ -63,8 +62,9 @@ def HMC(
         # if you applied generate_kernel here you would still have to vmap
         # the function and it would not work.
         for step in range(num_warmup_steps):
-            rng_keys, state, warmup_state = jax.vmap(update, in_axes=(0, 0, 0))(
-                rng_keys, state, warmup_state
+            stage, _ = schedule[step]
+            rng_keys, state, warmup_state = jax.vmap(update, in_axes=(0, None, 0, 0))(
+                rng_keys, stage, state, warmup_state
             )
 
         print(state, warmup_state)
