@@ -176,9 +176,9 @@ def find_reasonable_step_size(
 
     def _new_hmc_kernel(step_size: float) -> Callable:
         """Return a HMC kernel that operates with the provided step size."""
-        integrator = hmc_proposal(integrator_step, step_size, 1)
+        proposal_generator = hmc_proposal(integrator_step, step_size, 1)
         kernel = hmc_kernel(
-            integrator, momentum_generator, kinetic_energy, potential_fn
+            proposal_generator, momentum_generator, kinetic_energy, potential_fn
         )
         return kernel
 

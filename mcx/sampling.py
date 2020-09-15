@@ -42,7 +42,9 @@ class sample(object):
         )
 
         print("Warmup the chains...")
-        parameters, state = warmup(initial_state, loglikelihood, num_warmup_steps)
+        parameters, state = warmup(
+            rng_key, initial_state, loglikelihood, num_warmup_steps
+        )
 
         print("Compile the log-likelihood...")
         loglikelihood = jax.jit(loglikelihood)
