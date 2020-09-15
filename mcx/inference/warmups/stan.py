@@ -23,9 +23,7 @@ class StanWarmupState(NamedTuple):
     step: int
 
 
-def stan_hmc_warmup(
-    potential_fn, integrator, kernel_generator, num_integration_steps, num_warmup_steps
-):
+def stan_hmc_warmup(potential_fn, integrator, kernel_generator, num_warmup_steps):
     """Warmup scheme for sampling procedures based on euclidean manifold HMC.
     The schedule and algorithms used match Stan's [1]_ as closely as possible.
 
@@ -43,15 +41,12 @@ def stan_hmc_warmup(
     are adapted. The mass matrix is recomputed at the end of each window; the step
     size is re-initialized to a "reasonable" value.
     3. A last fast adaptation window where only the step size is adapted.
-    Notes
-    -----
-    The warmup is currently specialized for vanilla HMC due to the necessity to
-    pass `num_integration_steps` as a variable. We could instead pass the function
-    that generates the kernel from `step_size` and `inverse_mass_matrix`.
-    """
 
+    """
     first_stage_init, first_stage_update = stan_first_stage(kernel_generator)
-    second_stage_init, second_stage_update, _ = stan_second_stage(kernel_generator)
+    second_stage_init, second_stage_update, second_stage_final = stan_second_stage(
+        kernel_generator
+    )
 
     def init(rng_key, initial_state, initial_step_size):
         mm_state = second_stage_init(initial_state)
@@ -76,7 +71,7 @@ def stan_hmc_warmup(
         return rng_key, initial_state, warmup_state
 
     @jax.jit
-    def update(rng_key, stage, state, warmup_state):
+    def update(rng_key, stage, is_middle_window_end, state, warmup_state):
         """Only update the step size at first."""
         _, rng_key = jax.random.split(rng_key)
         kernel = kernel_generator(warmup_state)
@@ -85,6 +80,13 @@ def stan_hmc_warmup(
         rng_key, state, warmup_state = jax.lax.switch(
             stage,
             (first_stage_update, second_stage_update),
+            (rng_key, state, warmup_state),
+        )
+
+        rng_key, state, warmup_state = jax.lax.cond(
+            is_middle_window_end,
+            second_stage_final,
+            lambda x: x,
             (rng_key, state, warmup_state),
         )
 
@@ -166,11 +168,13 @@ def stan_second_stage(kernel_generator, is_mass_matrix_diagonal: bool = True):
         kernel = kernel_generator(warmup_state)
         chain_state, _ = kernel(rng_key, chain_state)
         new_mm_state = mm_update(warmup_state.mm_state, chain_state.position)
-        new_warmup_state = StanWarmupState(warmup_state.da_state, new_mm_state, warmup_state.step)
+        new_warmup_state = StanWarmupState(
+            warmup_state.da_state, new_mm_state, warmup_state.step
+        )
         return rng_key, chain_state, new_warmup_state
 
-    def final(warmup_state):
-        pass
+    def final(state):
+        return state
 
     return init, update, final
 
