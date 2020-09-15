@@ -116,9 +116,9 @@ def dual_averaging(
         """
         mu: float = np.log(10 * inital_step_size)
         t = t0
-        avg_error: float = 0
-        log_step_size: float = 0
-        log_step_size_avg: float = 0
+        avg_error: float = 0.0
+        log_step_size: float = 0.0
+        log_step_size_avg: float = 0.0
         return DualAveragingState(log_step_size, log_step_size_avg, t, avg_error, mu)
 
     @jax.jit
