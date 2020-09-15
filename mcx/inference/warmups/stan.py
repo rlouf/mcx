@@ -1,0 +1,225 @@
+"""Implementation of the Stan warmup.
+"""
+from functools import partial
+from typing import Callable, NamedTuple, Tuple
+
+import jax
+import jax.numpy as np
+
+from mcx.inference.adaptation import DualAveragingState, MassMatrixAdaptationState
+from mcx.inference.kernels import hmc_kernel
+from mcx.inference.integrators import hmc_proposal
+from mcx.inference.metrics import gaussian_euclidean_metric
+from mcx.inference.warmup import (
+    find_reasonable_step_size,
+    dual_averaging,
+    mass_matrix_adaptation,
+)
+
+__all__ = ["stan_hmc_warmup"]
+
+
+class StanWarmupState(NamedTuple):
+    da_state: DualAveragingState
+    mm_state: MassMatrixAdaptationState
+    step: int
+
+
+def stan_hmc_warmup(potential_fn, integrator, num_integration_steps, num_warmup_steps):
+    """
+    Notes
+    -----
+    The warmup is currently specialized for vanilla HMC due to the necessity to
+    pass `num_integration_steps` as a variable. We could instead pass the function
+    that generates the kernel from `step_size` and `inverse_mass_matrix`.
+    """
+
+    first_stage_init, first_stage_update = stan_first_stage()
+    second_stage_init, _, _ = stan_second_stage()
+
+    def init(rng_key, initial_state, initial_step_size):
+        mm_state = second_stage_init(initial_state)
+
+        momentum_generator, kinetic_energy = gaussian_euclidean_metric(
+            mm_state.inverse_mass_matrix
+        )
+        integrator_step = integrator(potential_fn, kinetic_energy)
+
+        da_state = first_stage_init(
+            rng_key,
+            momentum_generator,
+            kinetic_energy,
+            potential_fn,
+            integrator_step,
+            initial_state,
+            initial_step_size,
+        )
+
+        warmup_state = StanWarmupState(da_state, mm_state, 0)
+
+        return rng_key, initial_state, warmup_state
+    
+    @partial(jax.jit, static_argnums=(1,))
+    def update(rng_key, kernel_generator, state, warmup_state):
+        """Only update the step size at first."""
+        _, rng_key = jax.random.split(rng_key)
+        kernel = kernel_generator(warmup_state)
+        state, info = kernel(rng_key, state)
+        rng_key, state, warmup_state = first_stage_update(
+            rng_key, kernel_generator, state, warmup_state
+        )
+        return rng_key, state, warmup_state
+
+    def final(state, warmup_state):
+        return state, warmup_state
+
+    return init, update, final
+
+
+def stan_first_stage():
+    """First stage of the Stan warmup. Only the step size is adapted using
+    Nesterov's dual averaging algorithms.
+    """
+
+    da_init, da_update = dual_averaging()
+    
+    def init(
+        rng_key,
+        momentum_generator,
+        kinetic_energy,
+        potential_fn,
+        integrator_step,
+        initial_state,
+        initial_step_size,
+    ):
+        step_size = find_reasonable_step_size(
+            rng_key,
+            momentum_generator,
+            kinetic_energy,
+            potential_fn,
+            integrator_step,
+            initial_state,
+            initial_step_size,
+        )
+        da_state = da_init(step_size)
+        return da_state
+
+    @partial(jax.jit, static_argnums=(1,))
+    def update(rng_key, kernel_generator, chain_state, warmup_state):
+        _, rng_key = jax.random.split(rng_key)
+        kernel = kernel_generator(warmup_state)
+        chain_state, info = kernel(rng_key, chain_state)
+
+        new_da_state = da_update(info.acceptance_probability, warmup_state.da_state)
+        new_warmup_state = StanWarmupState(
+            new_da_state, warmup_state.mm_state, warmup_state.step
+        )
+
+        return rng_key, chain_state, new_warmup_state
+
+    return init, update
+
+
+def stan_second_stage(is_mass_matrix_diagonal: bool = True):
+    """Slow stage of the Stan warmup.
+
+    In this stage we adapt the mass matrix as the inverse of the chain's
+    covariance. The step size and mass matrix are re-initialized at the end of
+    each window.
+    """
+
+    mm_init, mm_update, mm_final = mass_matrix_adaptation(is_mass_matrix_diagonal)
+
+    def init(chain_state):
+        n_dims = np.shape(chain_state.position)[-1]
+        mm_state = mm_init(n_dims)
+        return mm_state
+
+    @partial(jax.jit, static_argnums=(1,))
+    def update(rng_key, kernel_generator, chain_state, warmup_state):
+        """The kernel does not change, we are just updating the chain's
+        covariance.
+        """
+        _, rng_key = jax.random.split(rng_key)
+        kernel = kernel_generator(warmup_state)
+        chain_state, _ = kernel(rng_key, chain_state)
+        warmup_state.mm_state = mm_update(warmup_state.mm_state, chain_state.position)
+        return rng_key, kernel, chain_state, warmup_state
+
+    def final(warmup_state):
+        pass
+
+    return init, update, final
+
+
+def stan_warmup_schedule(
+    num_steps, initial_buffer_size=75, first_window_size=25, final_buffer_size=50
+):
+    """Returns an adaptation warmup schedule.
+
+    The schedule below is intended to be as close as possible to Stan's _[1].
+    The warmup period is split into three stages:
+
+    1. An initial fast interval to reach the typical set.
+    2. "Slow" parameters that require global information (typically covariance)
+       are estimated in a series of expanding windows with no memory.
+    3. Fast parameters are learned after the adaptation of the slow ones.
+
+    See _[1] for a more detailed explanation.
+
+    Parameters
+    ----------
+    num_warmup: int
+        The number of warmup steps to perform.
+    initial_buffer: int
+        The width of the initial fast adaptation interval.
+    first_window: int
+        The width of the first slow adaptation interval. There are 5 such
+        intervals; the width of a window interval is twice the size of the
+        preceding.
+    final_buffer: int
+        The width of the final fast adaptation interval.
+
+    References
+    ----------
+    .. [1]: Stan Reference Manual v2.22
+            Section 15.2 "HMC Algorithm"
+    """
+    schedule = []
+
+    # Handle the situations where the numbrer of warmup steps is smaller than
+    # the sum of the buffers' widths
+    if num_steps < 20:
+        schedule.append((0, num_steps - 1))
+        return schedule
+
+    if initial_buffer_size + first_window_size + final_buffer_size > num_steps:
+        initial_buffer_size = int(0.15 * num_steps)
+        final_buffer_size = int(0.1 * num_steps)
+        first_window_size = num_steps - initial_buffer_size - final_buffer_size
+
+    # First stage: adaptation of fast parameters
+    for _ in range(initial_buffer_size - 1):
+        yield "fast", False
+
+    yield "fast", True
+
+    # Second stage: adaptation of slow parameters
+    final_buffer_start = num_steps - final_buffer_size
+
+    next_window_size = first_window_size
+    next_window_start = initial_buffer_size
+    while next_window_start < final_buffer_start:
+        current_start, current_size = next_window_start, next_window_size
+        if 3 * current_size <= final_buffer_start - current_start:
+            next_window_size = 2 * current_size
+        else:
+            current_size = final_buffer_start - current_start
+        next_window_start = current_start + current_size
+        yield
+        schedule.append((current_start, next_window_start - 1))
+
+    # Last stage: adaptation of fast parameters
+    schedule.append((final_buffer_start, num_steps - 1))
+
+    return schedule

@@ -6,7 +6,9 @@ from jax import numpy as np
 from mcx.inference.integrators import velocity_verlet, hmc_proposal
 from mcx.inference.kernels import HMCState, hmc_kernel
 from mcx.inference.metrics import gaussian_euclidean_metric
-from mcx.inference.warmup import stan_hmc_warmup
+
+# from mcx.inference.warmup import stan_hmc_warmup
+from mcx.inference.warmups import stan_hmc_warmup
 
 
 class HMCParameters(NamedTuple):
@@ -33,6 +35,52 @@ def HMC(
         num_warmup_steps: int,
     ) -> Tuple[HMCParameters, HMCState]:
 
+        def generate_kernel(warmup_state):
+            inverse_mass_matrix = warmup_state.mm_state.inverse_mass_matrix
+            step_size = np.exp(warmup_state.da_state.log_step_size)
+            momentum_generator, kinetic_energy = gaussian_euclidean_metric(
+                inverse_mass_matrix
+            )
+            integrator_step = integrator(logpdf, kinetic_energy)
+            proposal = hmc_proposal(integrator_step, step_size, num_integration_steps)
+            kernel = hmc_kernel(proposal, momentum_generator, kinetic_energy, logpdf)
+            return kernel
+
+        init, update, final = stan_hmc_warmup(
+            logpdf, integrator, num_integration_steps, num_warmup_steps
+        )
+
+        initial_step_size = 0.1
+        rng_keys, state, warmup_state = jax.vmap(init, in_axes=(None, 0, None))(
+            rng_key, initial_state, initial_step_size
+        )
+        # NOTE: bugs because JAX seemingly does not like it when vmap
+        # outputs a function. We may have to pass an HMCKernel object
+        # around, or just the warmup state, actually
+        # if you applied generate_kernel here you would still have to vmap
+        # the function and it would not work.
+        for _ in range(num_warmup_steps):
+            rng_keys, state, warmup_state = jax.vmap(update, in_axes=(0, None, 0, 0))(
+                rng_keys, generate_kernel, state, warmup_state
+            )
+
+        print(state, warmup_state)
+
+        """
+
+        rng_keys, kernel, state, warmup_state = jax.vmap(init, in_axes=(None, 0, None))(
+            rng_key, initial_state, initial_step_size
+        )
+
+        for _ in range(num_warmup_steps):
+            rng_keys, kernel, state, warmup_state = jax.vmap(
+                update, in_axes=(0, 0, 0, 0)
+            )(rng_keys, kernel, state, warmup_state)
+
+        print(warmup_state)
+
+        kernel, state = jax.vmap(final, in_axes=(0, 0))(state, warmup_state)
+        
         state, step_size, inverse_mass_matrix = jax.vmap(
             stan_hmc_warmup, in_axes=(None, None, 0, None, None, None, None, None, None)
         )(
@@ -46,7 +94,7 @@ def HMC(
             num_warmup_steps,
             is_mass_matrix_diagonal,
         )
-        print(step_size, inverse_mass_matrix)
+        """
 
         parameters = HMCParameters(
             step_size, num_integration_steps, inverse_mass_matrix
