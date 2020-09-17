@@ -1,13 +1,11 @@
 """Implementation of the Stan warmup.
 """
-from functools import partial
 from typing import NamedTuple
 
 import jax
 import jax.numpy as np
 
 from mcx.inference.adaptation import DualAveragingState, MassMatrixAdaptationState
-from mcx.inference.metrics import gaussian_euclidean_metric
 from mcx.inference.warmup import (
     find_reasonable_step_size,
     dual_averaging,
@@ -23,7 +21,7 @@ class StanWarmupState(NamedTuple):
     step: int
 
 
-def stan_hmc_warmup(potential_fn, integrator, kernel_generator, num_warmup_steps):
+def stan_hmc_warmup(kernel_generator, num_warmup_steps):
     """Warmup scheme for sampling procedures based on euclidean manifold HMC.
     The schedule and algorithms used match Stan's [1]_ as closely as possible.
 
@@ -51,19 +49,8 @@ def stan_hmc_warmup(potential_fn, integrator, kernel_generator, num_warmup_steps
     def init(rng_key, initial_state, initial_step_size):
         mm_state = second_stage_init(initial_state)
 
-        momentum_generator, kinetic_energy = gaussian_euclidean_metric(
-            mm_state.inverse_mass_matrix
-        )
-        integrator_step = integrator(potential_fn, kinetic_energy)
-
         da_state = first_stage_init(
-            rng_key,
-            momentum_generator,
-            kinetic_energy,
-            potential_fn,
-            integrator_step,
-            initial_state,
-            initial_step_size,
+            rng_key, mm_state.inverse_mass_matrix, initial_state, initial_step_size,
         )
 
         warmup_state = StanWarmupState(da_state, mm_state, 0)
@@ -74,7 +61,11 @@ def stan_hmc_warmup(potential_fn, integrator, kernel_generator, num_warmup_steps
     def update(rng_key, stage, is_middle_window_end, state, warmup_state):
         """Only update the step size at first."""
         _, rng_key = jax.random.split(rng_key)
-        kernel = kernel_generator(warmup_state)
+
+        step_size = np.exp(warmup_state.da_state.log_step_size)
+        inverse_mass_matrix = warmup_state.mm_state.inverse_mass_matrix
+        kernel = kernel_generator(step_size, inverse_mass_matrix)
+
         state, info = kernel(rng_key, state)
 
         rng_key, state, warmup_state = jax.lax.switch(
@@ -92,8 +83,10 @@ def stan_hmc_warmup(potential_fn, integrator, kernel_generator, num_warmup_steps
 
         return rng_key, state, warmup_state
 
-    def final(state, warmup_state):
-        return state, warmup_state
+    def final(warmup_state):
+        step_size = np.exp(warmup_state.da_state.log_step_size)
+        inverse_mass_matrix = warmup_state.mm_state.inverse_mass_matrix
+        return step_size, inverse_mass_matrix
 
     return init, update, final
 
@@ -107,19 +100,14 @@ def stan_first_stage(kernel_generator):
 
     def init(
         rng_key,
-        momentum_generator,
-        kinetic_energy,
-        potential_fn,
-        integrator_step,
+        inverse_mass_matrix,
         initial_state,
         initial_step_size,
     ):
+        kernel_from_step_size = jax.partial(kernel_generator, inverse_mass_matrix=inverse_mass_matrix)
         step_size = find_reasonable_step_size(
             rng_key,
-            momentum_generator,
-            kinetic_energy,
-            potential_fn,
-            integrator_step,
+            kernel_from_step_size,
             initial_state,
             initial_step_size,
         )
@@ -130,7 +118,11 @@ def stan_first_stage(kernel_generator):
     def update(state):
         rng_key, chain_state, warmup_state = state
         _, rng_key = jax.random.split(rng_key)
-        kernel = kernel_generator(warmup_state)
+
+        step_size = np.exp(warmup_state.da_state.log_step_size)
+        inverse_mass_matrix = warmup_state.mm_state.inverse_mass_matrix
+        kernel = kernel_generator(step_size, inverse_mass_matrix)
+
         chain_state, info = kernel(rng_key, chain_state)
 
         new_da_state = da_update(info.acceptance_probability, warmup_state.da_state)
@@ -152,6 +144,7 @@ def stan_second_stage(kernel_generator, is_mass_matrix_diagonal: bool = True):
     """
 
     mm_init, mm_update, mm_final = mass_matrix_adaptation(is_mass_matrix_diagonal)
+    da_init, _ = dual_averaging()
 
     def init(chain_state):
         n_dims = np.shape(chain_state.position)[-1]
@@ -165,7 +158,11 @@ def stan_second_stage(kernel_generator, is_mass_matrix_diagonal: bool = True):
         """
         rng_key, chain_state, warmup_state = state
         _, rng_key = jax.random.split(rng_key)
-        kernel = kernel_generator(warmup_state)
+
+        step_size = np.exp(warmup_state.da_state.log_step_size)
+        inverse_mass_matrix = warmup_state.mm_state.inverse_mass_matrix
+        kernel = kernel_generator(step_size, inverse_mass_matrix)
+
         chain_state, _ = kernel(rng_key, chain_state)
         new_mm_state = mm_update(warmup_state.mm_state, chain_state.position)
         new_warmup_state = StanWarmupState(
@@ -174,7 +171,26 @@ def stan_second_stage(kernel_generator, is_mass_matrix_diagonal: bool = True):
         return rng_key, chain_state, new_warmup_state
 
     def final(state):
-        return state
+        rng_key, chain_state, warmup_state = state
+
+        step_size = np.exp(warmup_state.da_state.log_step_size)
+        inverse_mass_matrix = mm_final(warmup_state.mm_state)
+        step_size_to_kernel = jax.partial(kernel_generator, inverse_mass_matrix=inverse_mass_matrix)
+
+        step_size = find_reasonable_step_size(
+            rng_key,
+            step_size_to_kernel,
+            chain_state,
+            step_size,
+        )
+
+        n_dims = np.shape(chain_state.position)[0]  # not solid
+        da_state = da_init(step_size)
+        mm_state = mm_init(n_dims)
+
+        new_warmup_state = StanWarmupState(da_state, mm_state, 0)
+
+        return rng_key, chain_state, new_warmup_state
 
     return init, update, final
 
