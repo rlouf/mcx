@@ -142,13 +142,9 @@ def dual_averaging(
     return init, update
 
 
-@partial(jax.jit, static_argnums=(0, 1, 2, 3, 4, 5))
 def find_reasonable_step_size(
     rng_key: jax.random.PRNGKey,
-    momentum_generator: Callable,
-    kinetic_energy: Callable,
-    potential_fn: Callable,
-    integrator_step: Callable,
+    kernel_generator: Callable[[float], Callable],
     reference_hmc_state: HMCState,
     initial_step_size: float = 1.0,
     target_accept: float = 0.65,
@@ -160,6 +156,12 @@ def find_reasonable_step_size(
     value can speed up the convergence. This heuristics doubles and halves the
     step size until the acceptance probability of the HMC proposal crosses the
     .5 value.
+
+    Parameters
+    ----------
+    kernel_generator
+        A function that takes a step size as an input and returns the corresponding
+        sampling kernel.
 
     Returns
     -------
@@ -174,25 +176,19 @@ def find_reasonable_step_size(
     """
     fp_limit = np.finfo(jax.lax.dtype(initial_step_size))
 
-    def _new_hmc_kernel(step_size: float) -> Callable:
-        """Return a HMC kernel that operates with the provided step size."""
-        proposal_generator = hmc_proposal(integrator_step, step_size, 1)
-        kernel = hmc_kernel(
-            proposal_generator, momentum_generator, kinetic_energy, potential_fn
-        )
-        return kernel
-
+    @jax.jit
     def _update(search_state: Tuple) -> Tuple:
         rng_key, direction, _, step_size = search_state
         _, rng_key = jax.random.split(rng_key)
 
         step_size = (2.0 ** direction) * step_size
-        kernel = _new_hmc_kernel(step_size)
+        kernel = kernel_generator(step_size)
         _, hmc_info = kernel(rng_key, reference_hmc_state)
 
         new_direction = np.where(target_accept < hmc_info.acceptance_probability, 1, -1)
         return (rng_key, new_direction, direction, step_size)
 
+    @jax.jit
     def _do_continue(search_state: Tuple) -> bool:
         """Decides whether the search should continue.
 
@@ -257,7 +253,7 @@ def mass_matrix_adaptation(
         return MassMatrixAdaptationState(inverse_mass_matrix, wc_state)
 
     @partial(jax.jit, static_argnums=(0,))
-    def final(state: MassMatrixAdaptationState) -> np.DeviceArray:
+    def final(state: MassMatrixAdaptationState) -> MassMatrixAdaptationState:
         inverse_mass_matrix, wc_state = state
         covariance, count, mean = wc_final(wc_state)
 

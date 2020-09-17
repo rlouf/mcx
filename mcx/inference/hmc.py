@@ -2,6 +2,7 @@ from typing import Any, Callable, NamedTuple, Tuple
 
 import jax
 from jax import numpy as np
+from tqdm import trange
 
 from mcx.inference.integrators import velocity_verlet, hmc_proposal
 from mcx.inference.kernels import HMCState, hmc_kernel
@@ -33,10 +34,13 @@ def HMC(
         initial_state: HMCState,
         logpdf: Callable,
         num_warmup_steps: int,
+        initial_step_size: float = 0.1,
     ) -> Tuple[HMCParameters, HMCState]:
-        def generate_kernel(warmup_state):
-            inverse_mass_matrix = warmup_state.mm_state.inverse_mass_matrix
-            step_size = np.exp(warmup_state.da_state.log_step_size)
+        def generate_kernel(step_size: float, inverse_mass_matrix: np.DeviceArray):
+            """May be obtained by partial application of `build_kernel`.
+            There is duplication here. Problem is we don't need to raise an
+            error when building the kernel here.
+            """
             momentum_generator, kinetic_energy = gaussian_euclidean_metric(
                 inverse_mass_matrix
             )
@@ -46,33 +50,28 @@ def HMC(
             return kernel
 
         schedule = stan_warmup_schedule(num_warmup_steps)
+        init, update, final = stan_hmc_warmup(generate_kernel, num_warmup_steps)
 
-        init, update, final = stan_hmc_warmup(
-            logpdf, integrator, generate_kernel, num_warmup_steps
-        )
-
-        initial_step_size = 0.1
         rng_keys, state, warmup_state = jax.vmap(init, in_axes=(None, 0, None))(
             rng_key, initial_state, initial_step_size
         )
 
-        for step in range(num_warmup_steps):
+        for step in trange(num_warmup_steps):
             stage, is_middle_window_end = schedule[step]
-            rng_keys, state, warmup_state = jax.vmap(update, in_axes=(0, None, None, 0, 0))(
-                rng_keys, stage, is_middle_window_end, state, warmup_state
-            )
+            rng_keys, state, warmup_state = jax.vmap(
+                update, in_axes=(0, None, None, 0, 0)
+            )(rng_keys, stage, is_middle_window_end, state, warmup_state)
 
-        """
-        state = jax.vmap(final, in_axes=(0, 0))(state, warmup_state)
-        """
+        step_size, inverse_mass_matrix = jax.vmap(final, in_axes=(0,))(warmup_state)
 
         parameters = HMCParameters(
-            np.reshape(warmup_state.da_state.log_step_size, (-1, 1)),
+            step_size,
             num_integration_steps,
-            warmup_state.mm_state.inverse_mass_matrix,
+            inverse_mass_matrix,
         )
 
         print(parameters)
+        print(warmup_state)
 
         return parameters, state
 
