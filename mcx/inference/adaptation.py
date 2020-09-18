@@ -17,8 +17,7 @@ from typing import Callable, NamedTuple, Tuple
 import jax
 from jax import numpy as np
 
-from mcx.inference.integrators import hmc_proposal
-from mcx.inference.kernels import hmc_kernel, HMCState
+from mcx.inference.kernels import HMCState
 
 
 __all__ = [
@@ -254,7 +253,7 @@ def mass_matrix_adaptation(
 
     @partial(jax.jit, static_argnums=(0,))
     def final(state: MassMatrixAdaptationState) -> MassMatrixAdaptationState:
-        inverse_mass_matrix, wc_state = state
+        _, wc_state = state
         covariance, count, mean = wc_final(wc_state)
 
         # Regularize the covariance matrix, see Stan
@@ -267,7 +266,10 @@ def mass_matrix_adaptation(
                 mean.shape[0]
             )
 
-        return inverse_mass_matrix
+        ndims = np.shape(inverse_mass_matrix)[-1]
+        new_mm_state = MassMatrixAdaptationState(inverse_mass_matrix, wc_init(ndims))
+
+        return new_mm_state
 
     return init, update, final
 
@@ -330,11 +332,11 @@ def welford_algorithm(is_diagonal_matrix: bool) -> Tuple[Callable, Callable, Cal
         mean = mean + delta / count
         updated_delta = value - mean
         if is_diagonal_matrix:
-            m2 = m2 + delta * updated_delta
+            new_m2 = m2 + delta * updated_delta
         else:
-            m2 = m2 + np.outer(delta, updated_delta)
+            new_m2 = m2 + np.outer(delta, updated_delta)
 
-        return WelfordAlgorithmState(mean, m2, count)
+        return WelfordAlgorithmState(mean, new_m2, count)
 
     def covariance(state: WelfordAlgorithmState) -> np.DeviceArray:
         mean, m2, count = state
