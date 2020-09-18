@@ -99,17 +99,13 @@ def stan_first_stage(kernel_generator):
     da_init, da_update = dual_averaging()
 
     def init(
-        rng_key,
-        inverse_mass_matrix,
-        initial_state,
-        initial_step_size,
+        rng_key, inverse_mass_matrix, initial_state, initial_step_size,
     ):
-        kernel_from_step_size = jax.partial(kernel_generator, inverse_mass_matrix=inverse_mass_matrix)
+        kernel_from_step_size = jax.partial(
+            kernel_generator, inverse_mass_matrix=inverse_mass_matrix
+        )
         step_size = find_reasonable_step_size(
-            rng_key,
-            kernel_from_step_size,
-            initial_state,
-            initial_step_size,
+            rng_key, kernel_from_step_size, initial_state, initial_step_size,
         )
         da_state = da_init(step_size)
         return da_state
@@ -173,22 +169,19 @@ def stan_second_stage(kernel_generator, is_mass_matrix_diagonal: bool = True):
     def final(state):
         rng_key, chain_state, warmup_state = state
 
-        step_size = np.exp(warmup_state.da_state.log_step_size)
-        inverse_mass_matrix = mm_final(warmup_state.mm_state)
-        step_size_to_kernel = jax.partial(kernel_generator, inverse_mass_matrix=inverse_mass_matrix)
-
-        step_size = find_reasonable_step_size(
-            rng_key,
-            step_size_to_kernel,
-            chain_state,
-            step_size,
+        new_mm_state = mm_final(warmup_state.mm_state)
+        step_size_to_kernel = jax.partial(
+            kernel_generator, inverse_mass_matrix=new_mm_state.inverse_mass_matrix
         )
 
-        n_dims = np.shape(chain_state.position)[0]  # not solid
-        da_state = da_init(step_size)
-        mm_state = mm_init(n_dims)
+        step_size = np.exp(warmup_state.da_state.log_step_size)
+        step_size = find_reasonable_step_size(
+            rng_key, step_size_to_kernel, chain_state, step_size,
+        )
 
-        new_warmup_state = StanWarmupState(da_state, mm_state, 0)
+        da_state = da_init(step_size)
+
+        new_warmup_state = StanWarmupState(da_state, new_mm_state, 0)
 
         return rng_key, chain_state, new_warmup_state
 
@@ -260,12 +253,11 @@ def stan_warmup_schedule(
             else:
                 current_size = final_buffer_start - current_start
             next_window_start = current_start + current_size
-            schedule.append((current_start, next_window_start - 1))
             schedule += [(1, False)] * (next_window_start - 1 - current_start)
             schedule.append((1, True))
 
-            # Last stage: adaptation of fast parameters
-            schedule += [(0, False)] * (num_steps - 1 - final_buffer_start)
-            schedule.append((0, False))
+        # Last stage: adaptation of fast parameters
+        schedule += [(0, False)] * (num_steps - 1 - final_buffer_start)
+        schedule.append((0, False))
 
     return schedule

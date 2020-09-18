@@ -71,7 +71,6 @@ def HMC(
         )
 
         print(parameters)
-        print(warmup_state)
 
         return parameters, state
 

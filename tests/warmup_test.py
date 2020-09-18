@@ -23,5 +23,8 @@ from mcx.inference.warmup import warmup_schedule
     ],
 )
 def test_hmc_warmup_schedule(num_steps, expected_schedule):
+    """Make sure that the scheduler behaves as expected for
+    different number of warmup steps.
+    """
     schedule = warmup_schedule(num_steps)
     assert schedule == expected_schedule
