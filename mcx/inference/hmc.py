@@ -8,8 +8,7 @@ from mcx.inference.integrators import velocity_verlet, hmc_proposal
 from mcx.inference.kernels import HMCState, hmc_kernel
 from mcx.inference.metrics import gaussian_euclidean_metric
 
-# from mcx.inference.warmup import stan_hmc_warmup
-from mcx.inference.warmups import stan_hmc_warmup, stan_warmup_schedule
+from mcx.inference.warmup import stan_hmc_warmup, stan_warmup_schedule
 
 
 class HMCParameters(NamedTuple):

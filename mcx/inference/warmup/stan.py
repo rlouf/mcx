@@ -1,16 +1,19 @@
-"""Implementation of the Stan warmup.
-"""
+"""Implementation of the Stan warmup for the HMC family of sampling algorithms."""
 from typing import NamedTuple
 
 import jax
 import jax.numpy as np
 
-from mcx.inference.adaptation import DualAveragingState, MassMatrixAdaptationState
-from mcx.inference.warmup import (
-    find_reasonable_step_size,
+from mcx.inference.warmup.step_size_adaptation import (
+    DualAveragingState,
     dual_averaging,
+    find_reasonable_step_size,
+)
+from mcx.inference.warmup.mass_matrix_adaptation import (
+    MassMatrixAdaptationState,
     mass_matrix_adaptation,
 )
+
 
 __all__ = ["stan_hmc_warmup", "stan_warmup_schedule"]
 
