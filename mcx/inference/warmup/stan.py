@@ -1,4 +1,5 @@
 """Implementation of the Stan warmup for the HMC family of sampling algorithms."""
+from functools import partial
 from typing import NamedTuple
 
 import jax
@@ -94,6 +95,7 @@ def stan_hmc_warmup(kernel_generator, num_warmup_steps):
     return init, update, final
 
 
+@partial(jax.jit, static_argnums=(0,))
 def stan_first_stage(kernel_generator):
     """First stage of the Stan warmup. Only the step size is adapted using
     Nesterov's dual averaging algorithms.
@@ -134,6 +136,7 @@ def stan_first_stage(kernel_generator):
     return init, update
 
 
+@partial(jax.jit, static_argnums=(0,))
 def stan_second_stage(kernel_generator, is_mass_matrix_diagonal: bool = True):
     """Slow stage of the Stan warmup.
 
@@ -169,6 +172,7 @@ def stan_second_stage(kernel_generator, is_mass_matrix_diagonal: bool = True):
         )
         return rng_key, chain_state, new_warmup_state
 
+    @jax.jit
     def final(state):
         rng_key, chain_state, warmup_state = state
 

@@ -11,7 +11,6 @@ parameters used in Hamiltonian Monte Carlo.
 .. [1]: "HMC Algorithm Parameters", Stan Manual
         https://mc-stan.org/docs/2_20/reference-manual/hmc-algorithm-parameters.html
 """
-from functools import partial
 from typing import Callable, NamedTuple, Tuple
 
 import jax
@@ -142,7 +141,6 @@ def dual_averaging(
 # --------------------------------------------
 #      == FIND REASONABLE INITIAL VALUE ==
 # --------------------------------------------
-
 
 def find_reasonable_step_size(
     rng_key: jax.random.PRNGKey,

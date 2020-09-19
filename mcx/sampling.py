@@ -45,15 +45,21 @@ class sample(object):
         parameters, state = warmup(
             rng_key, initial_state, loglikelihood, num_warmup_steps
         )
-
+        
         print("Compile the log-likelihood...")
         loglikelihood = jax.jit(loglikelihood)
 
         print("Build and compile the inference kernel...")
-        kernel = build_kernel(loglikelihood, parameters)
-        kernel = jax.jit(kernel)
+        kernel_builder = build_kernel(loglikelihood)
+        def update_chains(rng_key, parameters, state):
+            _, rng_key = jax.random.split(rng_key)
+            kernel = kernel_builder(parameters)
+            new_states, info = kernel(rng_key, state)
+            return new_states, info
 
-        self.kernel = kernel
+        # self.kernel = kernel
+        self.updator = update_chains
+        self.parameters = parameters
         self.state = state
         self.to_trace = to_trace
         self.unravel_fn = unravel_fn
@@ -64,7 +70,8 @@ class sample(object):
         @jax.jit
         def update_chains(state, rng_key):
             keys = jax.random.split(rng_key, self.num_chains)
-            new_states, info = jax.vmap(self.kernel, in_axes=(0, 0))(keys, state)
+            new_states, info = jax.vmap(self.updator, in_axes=(0, 0, 0))(keys, self.parameters, state)
+            print(new_states)
             return new_states, info
 
         state = self.state

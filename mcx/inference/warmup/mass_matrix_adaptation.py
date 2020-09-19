@@ -50,6 +50,7 @@ def mass_matrix_adaptation(
 
         return MassMatrixAdaptationState(inverse_mass_matrix, wc_state)
 
+    @jax.jit
     def update(
         state: MassMatrixAdaptationState, value: np.DeviceArray
     ) -> MassMatrixAdaptationState:
@@ -57,7 +58,7 @@ def mass_matrix_adaptation(
         wc_state = wc_update(wc_state, value)
         return MassMatrixAdaptationState(inverse_mass_matrix, wc_state)
 
-    @partial(jax.jit, static_argnums=(0,))
+    @jax.jit
     def final(state: MassMatrixAdaptationState) -> MassMatrixAdaptationState:
         _, wc_state = state
         covariance, count, mean = wc_final(wc_state)
