@@ -1,3 +1,4 @@
+from functools import partial
 from typing import Any, Callable, NamedTuple, Tuple
 
 import jax
@@ -64,39 +65,40 @@ def HMC(
         step_size, inverse_mass_matrix = jax.vmap(final, in_axes=(0,))(warmup_state)
 
         parameters = HMCParameters(
-            step_size,
-            num_integration_steps,
-            inverse_mass_matrix,
+            step_size, np.ones(initial_state.position.shape[0]) * num_integration_steps, inverse_mass_matrix,
         )
-
-        print(parameters)
 
         return parameters, state
 
-    def build_kernel(logpdf: Callable, parameters: HMCParameters) -> Callable:
+    def build_kernel(logpdf: Callable):#, parameters: HMCParameters) -> Callable:
         """Builds the kernel that moves the chain from one point
         to the next.
         """
 
         potential = logpdf
 
-        try:
+        # try:
+            # inverse_mass_matrix = parameters.inverse_mass_matrix
+            # num_integration_steps = parameters.num_integration_steps
+            # step_size = parameters.step_size
+        # except AttributeError:
+            # AttributeError(
+                # "The Hamiltonian Monte Carlo algorithm requires the following parameters: mass matrix, inverse mass matrix and step size."
+            # )
+        @jax.jit
+        def init_kernel(parameters):
             inverse_mass_matrix = parameters.inverse_mass_matrix
             num_integration_steps = parameters.num_integration_steps
             step_size = parameters.step_size
-        except AttributeError:
-            AttributeError(
-                "The Hamiltonian Monte Carlo algorithm requires the following parameters: mass matrix, inverse mass matrix and step size."
+            momentum_generator, kinetic_energy = gaussian_euclidean_metric(
+                inverse_mass_matrix,
             )
-
-        momentum_generator, kinetic_energy = gaussian_euclidean_metric(
-            inverse_mass_matrix,
-        )
-        integrator_step = integrator(potential, kinetic_energy)
-        proposal = hmc_proposal(integrator_step, step_size, num_integration_steps)
-        kernel = hmc_kernel(proposal, momentum_generator, kinetic_energy, potential)
-
-        return kernel
+            integrator_step = integrator(potential, kinetic_energy)
+            proposal = hmc_proposal(integrator_step, step_size, num_integration_steps)
+            kernel = hmc_kernel(proposal, momentum_generator, kinetic_energy, potential)
+            return kernel
+        
+        return init_kernel
 
     def adapt_loglikelihood(logpdf: Callable) -> Callable:
         """Potential is minus the loglikelihood."""
