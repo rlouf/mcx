@@ -45,20 +45,15 @@ class sample(object):
         parameters, state = warmup(
             rng_key, initial_state, loglikelihood, num_warmup_steps
         )
-        
+
         print("Compile the log-likelihood...")
         loglikelihood = jax.jit(loglikelihood)
 
         print("Build and compile the inference kernel...")
         kernel_builder = build_kernel(loglikelihood)
-        def update_chains(rng_key, parameters, state):
-            _, rng_key = jax.random.split(rng_key)
-            kernel = kernel_builder(parameters)
-            new_states, info = kernel(rng_key, state)
-            return new_states, info
 
         # self.kernel = kernel
-        self.updator = update_chains
+        self.kernel_builder = kernel_builder
         self.parameters = parameters
         self.state = state
         self.to_trace = to_trace
@@ -68,10 +63,9 @@ class sample(object):
         _, self.rng_key = jax.random.split(self.rng_key)
 
         @jax.jit
-        def update_chains(state, rng_key):
-            keys = jax.random.split(rng_key, self.num_chains)
-            new_states, info = jax.vmap(self.updator, in_axes=(0, 0, 0))(keys, self.parameters, state)
-            print(new_states)
+        def update_chains(rng_key, parameters, state):
+            kernel = self.kernel_builder(parameters)
+            new_states, info = kernel(rng_key, state)
             return new_states, info
 
         state = self.state
@@ -86,9 +80,10 @@ class sample(object):
                 refresh=False,
             )
             for key in progress:
-                state, info = update_chains(state, key)
-                chain.append((state, info))
-        self.state = state
+                keys = jax.random.split(key, self.num_chains)
+                new_state, info = jax.vmap(update_chains, in_axes=(0, 0, 0))(keys, self.parameters, state)
+                chain.append((new_state, info))
+        self.state = new_state
 
         trace = self.to_trace(chain, self.unravel_fn)
 
