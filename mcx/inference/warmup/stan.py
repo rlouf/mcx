@@ -22,10 +22,9 @@ __all__ = ["stan_hmc_warmup", "stan_warmup_schedule"]
 class StanWarmupState(NamedTuple):
     da_state: DualAveragingState
     mm_state: MassMatrixAdaptationState
-    step: int
 
 
-def stan_hmc_warmup(kernel_generator, num_warmup_steps):
+def stan_hmc_warmup(kernel_generator, num_warmup_steps: int):
     """Warmup scheme for sampling procedures based on euclidean manifold HMC.
     The schedule and algorithms used match Stan's [1]_ as closely as possible.
 
@@ -57,7 +56,7 @@ def stan_hmc_warmup(kernel_generator, num_warmup_steps):
             rng_key, mm_state.inverse_mass_matrix, initial_state, initial_step_size,
         )
 
-        warmup_state = StanWarmupState(da_state, mm_state, 0)
+        warmup_state = StanWarmupState(da_state, mm_state)
 
         return rng_key, initial_state, warmup_state
 
@@ -127,9 +126,7 @@ def stan_first_stage(kernel_generator):
         chain_state, info = kernel(rng_key, chain_state)
 
         new_da_state = da_update(info.acceptance_probability, warmup_state.da_state)
-        new_warmup_state = StanWarmupState(
-            new_da_state, warmup_state.mm_state, warmup_state.step
-        )
+        new_warmup_state = StanWarmupState(new_da_state, warmup_state.mm_state)
 
         return rng_key, chain_state, new_warmup_state
 
@@ -167,9 +164,7 @@ def stan_second_stage(kernel_generator, is_mass_matrix_diagonal: bool = True):
 
         chain_state, _ = kernel(rng_key, chain_state)
         new_mm_state = mm_update(warmup_state.mm_state, chain_state.position)
-        new_warmup_state = StanWarmupState(
-            warmup_state.da_state, new_mm_state, warmup_state.step
-        )
+        new_warmup_state = StanWarmupState(warmup_state.da_state, new_mm_state)
         return rng_key, chain_state, new_warmup_state
 
     @jax.jit
@@ -188,7 +183,7 @@ def stan_second_stage(kernel_generator, is_mass_matrix_diagonal: bool = True):
 
         da_state = da_init(step_size)
 
-        new_warmup_state = StanWarmupState(da_state, new_mm_state, 0)
+        new_warmup_state = StanWarmupState(da_state, new_mm_state)
 
         return rng_key, chain_state, new_warmup_state
 
