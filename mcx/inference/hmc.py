@@ -36,6 +36,8 @@ def HMC(
         num_warmup_steps: int,
         initial_step_size: float = 0.1,
     ) -> Tuple[HMCParameters, HMCState]:
+        """It would be nice to return the warmup trace here.
+        """
         def generate_kernel(step_size: float, inverse_mass_matrix: np.DeviceArray):
             """May be obtained by partial application of `build_kernel`.
             There is duplication here. Problem is we don't need to raise an
@@ -65,7 +67,7 @@ def HMC(
         step_size, inverse_mass_matrix = jax.vmap(final, in_axes=(0,))(warmup_state)
 
         parameters = HMCParameters(
-            step_size, np.ones(initial_state.position.shape[0]) * num_integration_steps, inverse_mass_matrix,
+            step_size, np.ones(initial_state.position.shape[0], dtype=np.int32) * num_integration_steps, inverse_mass_matrix,
         )
 
         return parameters, state
@@ -77,15 +79,6 @@ def HMC(
 
         potential = logpdf
 
-        # try:
-            # inverse_mass_matrix = parameters.inverse_mass_matrix
-            # num_integration_steps = parameters.num_integration_steps
-            # step_size = parameters.step_size
-        # except AttributeError:
-            # AttributeError(
-                # "The Hamiltonian Monte Carlo algorithm requires the following parameters: mass matrix, inverse mass matrix and step size."
-            # )
-        @jax.jit
         def init_kernel(parameters):
             inverse_mass_matrix = parameters.inverse_mass_matrix
             num_integration_steps = parameters.num_integration_steps
