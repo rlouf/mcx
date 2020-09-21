@@ -179,14 +179,14 @@ class ModelParser(ast.NodeVisitor):
             )
 
     def visit_Expr(self, node: ast.Expr) -> None:
-        if isinstance(node.value, ast.BinOp):
-            self.visit_BinOp(node.value)
+        if isinstance(node.value, ast.Compare):
+            self.visit_Compare(node.value)
 
-    def visit_BinOp(self, node: ast.BinOp) -> None:
-        if isinstance(node.op, ast.MatMult):
+    def visit_Compare(self, node: ast.Compare) -> None:
+        if isinstance(node.ops[0], ast.Is):
             self.visit_RandAssign(node)
 
-    def visit_RandAssign(self, node: ast.BinOp) -> None:
+    def visit_RandAssign(self, node: ast.Compare) -> None:
         """Visit a random variable assignment, and add a new random node to the
         graph.
 
@@ -208,15 +208,15 @@ class ModelParser(ast.NodeVisitor):
                     node.left
                 )
             )
-        if not isinstance(node.right, ast.Call):
+        if not isinstance(node.comparators[0], ast.Call):
             raise SyntaxError(
                 "Statements on the right of the `<~` operator must be distribution initialization, got {}".format(
-                    node.right
+                    node.comparators[0]
                 )
             )
         name = node.left.id
-        distribution = node.right
-        args = self.visit_Call(node.right)
+        distribution = node.comparators[0]
+        args = self.visit_Call(node.comparators[0])
 
         # To allows model composition, whenever a `mcx` model appears at the
         # right-hand-side of a `<~` operator we merge its graph with the current
