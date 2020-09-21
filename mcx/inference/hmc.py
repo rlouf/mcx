@@ -72,7 +72,7 @@ def HMC(
 
         return parameters, state
 
-    def build_kernel(logpdf: Callable):#, parameters: HMCParameters) -> Callable:
+    def build_kernel(logpdf: Callable):
         """Builds the kernel that moves the chain from one point
         to the next.
         """
