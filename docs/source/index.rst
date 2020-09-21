@@ -40,11 +40,7 @@ MCX by example
       return predictions
 
   # Sample from the model posterior distribution using HMC    
-  hmc_kernel = mcx.HMC(
-      step_size=0.01,
-      num_integration_steps=100,
-      inverse_mass_matrix=np.array([1., 1.])
-  )
+  hmc_kernel = mcx.HMC(num_integration_steps=100)
         
   observations = {'x': X, 'predictions': y, 'lmbda': 3.}
   sampler = mcx.sample(rng_key, linear_regression, hmc_kernel, **observations)
@@ -54,7 +50,7 @@ MCX by example
 Features
 ========
 
-* The HMC and empirical HMC algorithms;
+* The HMC and empirical HMC algorithms with Stan warmup;
 * A dozen distributions;
 * Batch sampling;
 * Iterative sampling for more complex workflows;
