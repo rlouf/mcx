@@ -173,12 +173,12 @@ class Parser(ast.NodeVisitor):
         graph.
 
         Random variable assignments are distinguished from deterministic assignments
-        by the use of the `@` operator.
+        by the use of the `<~` operator.
 
         Raises
         ------
         SyntaxError
-            If there is no variable name on the left-hand-side of the `@` operator.
+            If there is no variable name on the left-hand-side of the `<~` operator.
         SyntaxError
             If the right-hand-side is not a function call.
             #TODO: check that the class being initialized is a Distribution instance.
@@ -191,7 +191,7 @@ class Parser(ast.NodeVisitor):
             )
         if not isinstance(node.right, ast.Call):
             raise SyntaxError(
-                "Statements on the right of the `@` operator must be distribution initialization, got {}".format(
+                "Statements on the right of the `<~` operator must be distribution initialization, got {}".format(
                     node.right
                 )
             )
@@ -200,7 +200,7 @@ class Parser(ast.NodeVisitor):
         args = self.visit_Call(node.right)
 
         # To allows model composition, whenever a `mcx` model appears at the
-        # right-hand-side of a `@` operator we merge its graph with the current
+        # right-hand-side of a `<~` operator we merge its graph with the current
         # model's graph
         dist_path = read_object_name(distribution.func)
         dist_obj = eval(dist_path, self.namespace)
@@ -240,8 +240,8 @@ class Parser(ast.NodeVisitor):
                     "Maybe you are trying to initialize a distribution directly, or call a function inside the "
                     "distribution initialization. While this would be a perfectly legitimate move, it is currently "
                     "not supported in mcx. Use an intermediate variable instead: \n\n"
-                    "Do not do `x @ Normal(Normal(0, 1), 1)` or `x @ Normal(my_function(10), 1)`, instead do "
-                    " `y @ Normal(0, 1) & x @ Normal(y, 1)` and `y = my_function(10) & x @ Normal(y, 1)`".format(
+                    "Do not do `x <~ Normal(Normal(0, 1), 1)` or `x <~ Normal(my_function(10), 1)`, instead do "
+                    " `y <~ Normal(0, 1) & x <~ Normal(y, 1)` and `y = my_function(10) & x <~ Normal(y, 1)`".format(
                         astor.code_gen.to_source(arg)
                     )
                 )

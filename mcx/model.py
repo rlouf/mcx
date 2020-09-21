@@ -21,7 +21,7 @@ class model(Distribution):
 
     Models are expressed as functions. The expression of the model within the
     function should be as close to the mathematical expression as possible. The
-    only difference with standard python code is the use of the "@" operator
+    only difference with standard python code is the use of the "<~" operator
     for random variable assignments.
 
     The models are then parsed into an internal graph representation that can
@@ -47,14 +47,15 @@ class model(Distribution):
     >>> import mcx.distributions as dist
     >>>
     >>> def linear_model(X):
-    ...     weights @ dist.Normal(0, 1)
-    ...     sigma @ dist.Exponential(1)
+    ...     weights <~ dist.Normal(0, 1)
+    ...     sigma <~ dist.Exponential(1)
     ...     z = np.dot(X, weights)
-    ...     y @ Normal(z, sigma)
+    ...     y <~ Normal(z, sigma)
     ...     return y
 
-    The symbol `@` is used here does not stand for the matrix multiplication but for
-    the assignment of a random variable. The model can then be instantiated by calling:
+    The symbol `<~` is used here does not stand for the combination of the `<`
+    comparison and `~` invert operators but for the assignment of a random
+    variable. The model can then be instantiated by calling:
 
     >>> model = mcx.model(linear_model)
 
@@ -74,10 +75,10 @@ class model(Distribution):
 
     >>> @mcx.model
     ... def linear_model(X):
-    ...     weights @ dist.Normal(0, 1)
-    ...     sigma @ dist.Exponential(1)
+    ...     weights <~ dist.Normal(0, 1)
+    ...     sigma <~ dist.Exponential(1)
     ...     z = np.dot(X, weights)
-    ...     y @ Normal(z, sigma)
+    ...     y <~ Normal(z, sigma)
     ...     return y
 
     You can directly call the function:
@@ -133,31 +134,31 @@ class model(Distribution):
     ...
     ... @mcx.model
     ... def linear_model(X):
-    ...     weights @ Normal(0, 1)
-    ...     sigma @ HalfNormal(0, 1)
+    ...     weights <~ Normal(0, 1)
+    ...     sigma <~ HalfNormal(0, 1)
     ...     z = mult(X, weights)
-    ...     y @ Normal(z, sigma)
+    ...     y <~ Normal(z, sigma)
     ...     return y
 
     Models also implicitly define a multivariate distribution. Following
     PyMC4's philosophy [2]_, we can use other models as distributions when
-    defining a random variable. More precisely, what is meant by `x @ linear_model(1)`
+    defining a random variable. More precisely, what is meant by `x <~ linear_model(1)`
     is "x is distributed according to :math:`P_{linear_model}(y|weights, sigma, x=1)`:
 
     >>> from my_module import hyperprior
     ...
     ... @mcx.model
     ... def prior(a):
-    ...     s @ hyperprior()
-    ...     p @ dist.Normal(a,a)
+    ...     s <~ hyperprior()
+    ...     p <~ dist.Normal(a,a)
     ...     return p
     ...
     ... @mcx.model
     ... def linear_model(X):
-    ...     weights @ prior(1)
-    ...     sigma @ HalfNormal(0, 1)
+    ...     weights <~ prior(1)
+    ...     sigma <~ HalfNormal(0, 1)
     ...     z = mult(X, weights)
-    ...     y @ Normal(z, sigma)
+    ...     y <~ Normal(z, sigma)
     ...     return y
 
     References
