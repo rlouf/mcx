@@ -125,8 +125,7 @@ class GraphicalModel(nx.DiGraph):
 
     @property
     def random_variables(self):
-        """Returns the random variables.
-        """
+        """Returns the random variables."""
         args = [n for n in self.nodes if isinstance(self.nodes[n]["content"], RandVar)]
         return args
 
@@ -179,8 +178,7 @@ class GraphicalModel(nx.DiGraph):
         self.nodes[name]["content"].is_returned = True
 
     def merge_models(self, var_name, model_graph, args):
-        """Merge a model used in a random variable assignment.
-        """
+        """Merge a model used in a random variable assignment."""
         # The returned node now become a standard node
         name_returned = model_graph.returned_variables[0]
         model_graph.nodes[name_returned]["content"].is_returned = False

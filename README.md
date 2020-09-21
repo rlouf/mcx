@@ -34,7 +34,8 @@ See the [documentation](https://rlouf.github.io/mcx) for more information.
 
 ## Current API
 
-Note that there are still many moving pieces in `mcx` and the API may change slightly. In particular, the choice of `@` for random variable assignement may change. This is valid `mcx` code:
+Note that there are still many moving pieces in `mcx` and the API may change
+slightly. In particular, the choice of `<~` for random variable assignement may change. This is valid `mcx` code:
 
 ```python
 from jax import numpy as np
@@ -46,10 +47,10 @@ y_data = np.array([1.7, 7., 3.1])
 
 @mcx.model
 def linear_regression(x, lmbda=1.):
-    scale @ dist.Exponential(lmbda)
-    coefs @ dist.Normal(np.zeros(np.shape(x)[-1]))
+    scale <~ dist.Exponential(lmbda)
+    coefs <~ dist.Normal(np.zeros(np.shape(x)[-1]))
     y = np.dot(x, coefs)
-    predictions @ dist.Normal(y, scale)
+    predictions <~ dist.Normal(y, scale)
     return predictions
 
 rng_key = jax.random.PRNGKey(0)
@@ -63,11 +64,7 @@ mcx.sample_forward(
 )
 
 # Sample from the posterior distribution using HMC
-kernel = mcx.HMC(
-    step_size=0.01,
-    num_integration_steps=100,
-    inverse_mass_matrix=np.array([1., 1.]),
-)
+kernel = mcx.HMC(num_integration_steps=100)
 
 observations = {'x': x_data, 'predictions': y_data, 'lmbda': 3.}
 sampler = mcx.sample(

@@ -30,7 +30,7 @@ def stan_hmc_warmup(
     num_steps: int,
     is_mass_matrix_diagonal=True,
 ) -> Tuple[HMCState, DualAveragingState, MassMatrixAdaptationState]:
-    """ Warmup scheme for sampling procedures based on euclidean manifold HMC.
+    """Warmup scheme for sampling procedures based on euclidean manifold HMC.
     The schedule and algorithms used match Stan's [1]_ as closely as possible.
 
     Unlike several other libraries, we separate the warmup and sampling phases
@@ -194,7 +194,11 @@ def ehmc_warmup(
         return (new_hmc_state, new_hmc_info), batch_length
 
     keys = jax.random.split(rng_key, num_longest_batch)
-    state, batch_lengths = jax.lax.scan(warmup_update, (initial_state, None), keys,)
+    state, batch_lengths = jax.lax.scan(
+        warmup_update,
+        (initial_state, None),
+        keys,
+    )
     hmc_warmup_state, _ = state
 
     return hmc_warmup_state, batch_lengths

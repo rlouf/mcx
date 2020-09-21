@@ -19,8 +19,7 @@ class sample(object):
     def __init__(
         self, rng_key, model, program, num_warmup_steps=1000, num_chains=4, **kwargs
     ):
-        """ Initialize the sampling runtime.
-        """
+        """Initialize the sampling runtime."""
         self.program = program
         self.num_chains = num_chains
         self.rng_key = rng_key
@@ -143,8 +142,7 @@ class sequential(object):
     def __init__(
         self, rng_key, model, program, num_samples=1000, num_warmup_steps=1000
     ):
-        """ Sequential Markov Chain Monte Carlo sampling.
-        """
+        """Sequential Markov Chain Monte Carlo sampling."""
         self.model = model
         self.program = program
         self.num_samples = num_samples
@@ -216,7 +214,8 @@ class sequential(object):
         rng_keys = jax.random.split(self.rng_key, self.num_samples)
         with tqdm(rng_keys, unit="samples") as progress:
             progress.set_description(
-                "Collecting {:,} samples".format(self.num_samples), refresh=False,
+                "Collecting {:,} samples".format(self.num_samples),
+                refresh=False,
             )
             for key in progress:
                 state = update_chains(state, key)
@@ -233,7 +232,7 @@ class sequential(object):
 
 
 def validate_conditioning_variables(model, **kwargs):
-    """ Check that all variables passed as arguments to the sampler
+    """Check that all variables passed as arguments to the sampler
     are random variables or arguments to the sampler. And converserly
     that all of the model definition's positional arguments are given
     a value.

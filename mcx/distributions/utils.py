@@ -13,9 +13,9 @@ def broadcast_batch_shape(*shapes):
 
         >>> def toy_model():
         ...     sigma = np.array([1, 2, 3])
-        ...     x @ Normal(0, sigma) # shape (n_samples, 3)
-        ...     q @ Normal(1, 1) # shape (n_samples,)
-        ...     y @ Normal(x, q)
+        ...     x <~ Normal(0, sigma) # shape (n_samples, 3)
+        ...     q <~ Normal(1, 1) # shape (n_samples,)
+        ...     y <~ Normal(x, q)
 
     When sampling, the last line will trigger a broadcasting error since
     Numpy's default is to broadcast (n,) to (1,n). To avoid this we explicit

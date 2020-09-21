@@ -53,7 +53,7 @@ def read_object_name(node: ast.AST, name: Optional[List[str]] = None) -> str:
 
 
 def relabel_arguments(value_node: ast.AST, mapping: Dict):
-    """ Walk down the Abstract Syntax Tree of the right-hand-side of the
+    """Walk down the Abstract Syntax Tree of the right-hand-side of the
     assignment to relabel the arguments.
 
     Returns
