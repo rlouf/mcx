@@ -113,13 +113,11 @@ class Distribution(ABC):
         pass
 
     def logpdf_sum(self, data):
-        """Return the logpdf of the distribution over the observations.
-        """
+        """Return the logpdf of the distribution over the observations."""
         return np.sum(self.logpdf(data))
 
     def __str__(self):
-        """User-friendly representation of the probability distribution.
-        """
+        """User-friendly representation of the probability distribution."""
         constraints_str = "\n  ".join(
             [
                 "{0}: {1!s}".format(key, value)

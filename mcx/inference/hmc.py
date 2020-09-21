@@ -59,8 +59,7 @@ def HMC(
         return kernel
 
     def adapt_loglikelihood(logpdf: Callable) -> Callable:
-        """Potential is minus the loglikelihood.
-        """
+        """Potential is minus the loglikelihood."""
 
         def potential(array: np.DeviceArray) -> float:
             return -logpdf(array)
@@ -68,7 +67,7 @@ def HMC(
         return potential
 
     def to_trace(chain: Any, ravel_fn: Callable) -> dict:
-        """ Translate the raw chains to a format that can be understood by and
+        """Translate the raw chains to a format that can be understood by and
         is useful to humans.
         """
 

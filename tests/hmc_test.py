@@ -12,14 +12,16 @@ from mcx import HMC
 
 
 # flake8: noqa: F281
+# fmt: off
 @mcx.model
 def linear_regression(x, lmbda=1.0):
-    sigma @ dist.Exponential(lmbda)
+    sigma <~ dist.Exponential(lmbda)
     coeffs_init = np.ones(x.shape[-1])
-    coeffs @ dist.Normal(coeffs_init, sigma)
+    coeffs <~ dist.Normal(coeffs_init, sigma)
     y = np.dot(x, coeffs)
-    predictions @ dist.Normal(y, sigma)
+    predictions <~ dist.Normal(y, sigma)
     return predictions
+# fmt: on
 
 
 @pytest.mark.sampling
@@ -40,7 +42,11 @@ def test_linear_regression():
 
     # Batch sampler
     sampler = mcx.sample(
-        rng_key, linear_regression, kernel, num_chains=2, **observations,
+        rng_key,
+        linear_regression,
+        kernel,
+        num_chains=2,
+        **observations,
     )
     trace = sampler.run(num_samples=3000)
 
@@ -51,7 +57,11 @@ def test_linear_regression():
 
     # Generator
     samples = mcx.generate(
-        rng_key, linear_regression, kernel, num_chains=2, **observations,
+        rng_key,
+        linear_regression,
+        kernel,
+        num_chains=2,
+        **observations,
     )
     trace = {"coeffs": [], "sigma": []}
     for _ in range(3000):

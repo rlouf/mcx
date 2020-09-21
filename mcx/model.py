@@ -191,8 +191,7 @@ class model(Distribution):
         return numpy.asarray(samples).squeeze()
 
     def __getitem__(self, name: str):
-        """Access the graph by variable name.
-        """
+        """Access the graph by variable name."""
         nodes = self.graph.nodes(data=True)
         return nodes[name]["content"]
 
@@ -243,16 +242,14 @@ class model(Distribution):
         return new_model
 
     def sample(self, *args, sample_shape=(1000,)) -> jax.numpy.DeviceArray:
-        """Return forward samples from the distribution.
-        """
+        """Return forward samples from the distribution."""
         sampler, _, _, _ = core.compile_to_sampler(self.graph, self.namespace)
         _, self.rng_key = jax.random.split(self.rng_key)
         samples = sampler(self.rng_key, sample_shape, *args)
         return samples
 
     def logpdf(self, *args, **kwargs) -> float:
-        """Compute the value of the distribution's logpdf.
-        """
+        """Compute the value of the distribution's logpdf."""
         logpdf, _, _, _ = core.compile_to_logpdf(self.graph, self.namespace)
         return logpdf(*args, **kwargs)
 
@@ -301,14 +298,12 @@ class model(Distribution):
 
     @property
     def random_variables(self):
-        """Return the names of the random variables.
-        """
+        """Return the names of the random variables."""
         return self.graph.random_variables
 
     @property
     def posterior_variables(self):
-        """Return the names of the random variables whose posterior we sample.
-        """
+        """Return the names of the random variables whose posterior we sample."""
         return self.graph.posterior_variables
 
 

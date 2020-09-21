@@ -22,6 +22,5 @@ class Bernoulli(Distribution):
 
     @limit_to_support
     def logpdf(self, x):
-        """ (TODO): Check that x belongs to support, return -infty otherwise
-        """
+        """(TODO): Check that x belongs to support, return -infty otherwise"""
         return xlogy(x, self.p) + xlog1py(1 - x, -self.p)

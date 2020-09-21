@@ -12,8 +12,7 @@ from mcx.inference.integrators import (
 
 
 def HarmonicOscillator(inverse_mass_matrix, k=5, m=1.0):
-    """Potential and Kinetic energy of an harmonic oscillator.
-    """
+    """Potential and Kinetic energy of an harmonic oscillator."""
 
     def potential_energy(x):
         return np.sum(0.5 * k * np.square(x))
@@ -26,8 +25,7 @@ def HarmonicOscillator(inverse_mass_matrix, k=5, m=1.0):
 
 
 def FreeFall(inverse_mass_matrix, g=9.81, m=1.0):
-    """Potential and kinetic energy of a free-falling object.
-    """
+    """Potential and kinetic energy of a free-falling object."""
 
     def potential_energy(h):
         return np.sum(m * g * h)

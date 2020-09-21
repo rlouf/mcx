@@ -93,7 +93,7 @@ def test_logpdf_edge_cases(case):
       success equal to 1 is 1.
     """
     logprob = Binomial(case["p"], case["n"]).logpdf(case["x"])
-    assert logprob == case["expected"]
+    assert logprob == pytest.approx(case["expected"], abs=1e-2)
 
 
 numerical_comparison_cases = [
@@ -146,7 +146,7 @@ def test_sample_shape_scalar_arguments(rng_key, case):
     The trailing `1` in the result shapes stands for the batch size.
     """
     samples = Binomial(0.5, 10).sample(rng_key, case["sample_shape"])
-    samples.shape == case["expected_shape"]
+    assert samples.shape == case["expected_shape"]
 
 
 array_argument_expected_shapes = [

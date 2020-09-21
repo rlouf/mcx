@@ -13,8 +13,7 @@ __all__ = ["HMCState", "HMCInfo", "hmc_init", "hmc_kernel", "rwm_kernel"]
 
 
 class HMCState(NamedTuple):
-    """Describes the state of the HMC algorithm.
-    """
+    """Describes the state of the HMC algorithm."""
 
     position: np.DeviceArray
     log_prob: float
@@ -172,8 +171,7 @@ def hmc_kernel(
 
 
 class RWMState(NamedTuple):
-    """Describes the state of the Random Walk Metropolis algorithm.
-    """
+    """Describes the state of the Random Walk Metropolis algorithm."""
 
     position: np.DeviceArray
     log_prob: float

@@ -111,9 +111,7 @@ class ModelParser(ast.NodeVisitor):
                 )
 
     def visit_model_arguments(self, node: ast.FunctionDef) -> None:
-        """Record the model's name and its arguments.
-
-        """
+        """Record the model's name and its arguments."""
         self.model.graph["name"] = node.name
 
         argument_names: List[str] = []
@@ -292,7 +290,7 @@ class ModelParser(ast.NodeVisitor):
 
 
 def find_variable_arguments(node) -> List[str]:
-    """ Walk down the Abstract Syntax Tree of the right-hand-side of the
+    """Walk down the Abstract Syntax Tree of the right-hand-side of the
     assignment to find the named variables, if any.
 
     Returns
