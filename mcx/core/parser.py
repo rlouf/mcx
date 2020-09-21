@@ -1,5 +1,6 @@
 import ast
 import inspect
+import re
 from typing import Any, Callable, Dict, List, Union
 
 import astor
@@ -9,11 +10,15 @@ from mcx.core.graph import GraphicalModel
 from mcx.core.utils import read_object_name
 
 
-def parse_definition(model: Callable, namespace: Dict):
-    """Build a graph representation of the model from its definition.
+def parse_definition(model: Callable, namespace: Dict) -> GraphicalModel:
+    """Build a graph representation from the model's definition.
 
-    Arguments
-    ---------
+    To simplify the parsing of the Abstract Syntax Tree of the model definition
+    we substitute the combination `<~` of operators for the `is` operator. This
+    choice was inspired by the yaps [1]_ library.
+
+    Parameters
+    ----------
     model
         The function that contains the model's definition.
     namespace
@@ -21,16 +26,25 @@ def parse_definition(model: Callable, namespace: Dict):
 
     Returns
     -------
-    A GraphicalModel object.
+    The internal representation of the model as a graph.
+
+    References
+    ----------
+    .. [1]: yaps, a surface language for Stan with python syntax. Source
+            code available at https://github.com/IBM/yaps. Distributed under
+            the Apache 2.0 Licence.
+
     """
-    src = inspect.getsource(model)
-    tree = ast.parse(src)
-    return Parser(namespace).visit(tree)
+    source = inspect.getsource(model)
+    source = re.sub(r"<~", "is", source, re.X)
+    tree = ast.parse(source)
+    return ModelParser(namespace).visit(tree)
 
 
-class Parser(ast.NodeVisitor):
+class ModelParser(ast.NodeVisitor):
     """Recursively parse the model definition's AST and translate it to a
     graphical model.
+
     """
 
     def __init__(self, namespace):
@@ -57,6 +71,7 @@ class Parser(ast.NodeVisitor):
             If the module's body is empty or contains more than one object.
         SyntaxError
             If the module's body does not contain a funtion definition.
+
         """
         if len(node.body) != 1:
             raise SyntaxError("You must pass a single model definition.")
@@ -65,14 +80,14 @@ class Parser(ast.NodeVisitor):
         if not isinstance(model_fn, ast.FunctionDef):
             raise SyntaxError("The model must be defined inside a function")
 
-        self.visit_Model(model_fn)
+        self.visit_model(model_fn)
         return self.model
 
     #
     # MCX-specfic visitors
     #
 
-    def visit_Model(self, node: ast.FunctionDef) -> None:
+    def visit_model(self, node: ast.FunctionDef) -> None:
         """Visit the function in which the model is defined.
 
         Raises
@@ -80,11 +95,12 @@ class Parser(ast.NodeVisitor):
         SyntaxError
             If the function's body contains unsupported constructs, i.e.
             anything else than an assignment, an expression or return.
+
         """
-        self.visit_ModelDef(node)
+        self.visit_model_arguments(node)
         for stmt in node.body:
             if isinstance(stmt, ast.Assign):
-                self.visit_Deterministic(stmt)
+                self.visit_deterministic(stmt)
             elif isinstance(stmt, ast.Expr):
                 self.visit_Expr(stmt)
             elif isinstance(stmt, ast.Return):
@@ -94,8 +110,9 @@ class Parser(ast.NodeVisitor):
                     "Only variable, random variable assignments and transformations are currently supported"
                 )
 
-    def visit_ModelDef(self, node: ast.FunctionDef) -> None:
+    def visit_model_arguments(self, node: ast.FunctionDef) -> None:
         """Record the model's name and its arguments.
+
         """
         self.model.graph["name"] = node.name
 
@@ -112,7 +129,7 @@ class Parser(ast.NodeVisitor):
         for name, value in zip(argument_names, default_values):
             self.model.add_argument(name, value)
 
-    def visit_Deterministic(self, node: ast.Assign) -> None:
+    def visit_deterministic(self, node: ast.Assign) -> None:
         """Visit and add deterministic variables to the graphical model.
 
         Deterministic expression can be of two kinds:
@@ -132,6 +149,7 @@ class Parser(ast.NodeVisitor):
         SyntaxError
             If this is not a variable assignment.
             #TODO: check that the functions being called are in scope.
+
         """
         if len(node.targets) != 1:
             raise SyntaxError("You can only assign one variable per statement.")
@@ -182,6 +200,7 @@ class Parser(ast.NodeVisitor):
         SyntaxError
             If the right-hand-side is not a function call.
             #TODO: check that the class being initialized is a Distribution instance.
+
         """
         if not isinstance(node.left, ast.Name):
             raise SyntaxError(
@@ -225,6 +244,7 @@ class Parser(ast.NodeVisitor):
         SyntaxError
            If the distribution is initialized with anything different from a constant
            or a previously defined variable.
+
         """
         arguments: List[Union[str, float, int, complex]] = []
         for arg in args:
@@ -255,6 +275,7 @@ class Parser(ast.NodeVisitor):
         ------
         SyntaxError
             If the model does not return any variable.
+
         """
         if isinstance(node.value, ast.Tuple):
             for var in node.value.elts:
@@ -277,6 +298,7 @@ def find_variable_arguments(node) -> List[str]:
     Returns
     -------
     A list of variable names, default to an empty list.
+
     """
     var_names = []
     for node in ast.walk(node.value):
