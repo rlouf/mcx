@@ -218,47 +218,63 @@ def stan_warmup_schedule(
     first_window_size: int = 25,
     final_buffer_size: int = 50,
 ) -> List[Tuple[int, bool]]:
-    """Returns an adaptation warmup schedule.
+    """Return the schedule for Stan's warmup.
 
     The schedule below is intended to be as close as possible to Stan's _[1].
     The warmup period is split into three stages:
 
-    1. An initial fast interval to reach the typical set.
+    1. An initial fast interval to reach the typical set. Only the step size is
+    adapted in this window.
     2. "Slow" parameters that require global information (typically covariance)
-       are estimated in a series of expanding windows with no memory.
-    3. Fast parameters are learned after the adaptation of the slow ones.
+    are estimated in a series of expanding intervals with no memory; the step
+    size and covariance computations are re-initialized at the end of each
+    window. Each window is twice the size of the preceding window.
+    3. A final fast interval during which the step size is adapted using the
+    computed mass matrix.
 
-    See _[1] for a more detailed explanation.
+    The distinction slow/fast comes from the speed at which the algorithms
+    converge to a stable value; in the common case, estimation of covariance
+    requires more steps than dual averaging to give an accurate value. See _[1]
+    for a more detailed explanation.
 
-    The "fast" stage is given the index 0 while the slow "stage" is given the
-    index 1.
+    Fast intervals are given the label 0 and slow intervals the label 1.
+
+    Note
+    ----
+    It feels awkward to return a boolean that indicates whether the current
+    step is the last step of a middle window, but not for other windows. This
+    should probably be changed to "is_window_end" and we should manage the
+    distinction upstream.
 
     Parameters
     ----------
-    num_warmup: int
+    num_steps: int
         The number of warmup steps to perform.
     initial_buffer: int
         The width of the initial fast adaptation interval.
-    first_window: int
-        The width of the first slow adaptation interval. There are 5 such
-        intervals; the width of a window interval is twice the size of the
-        preceding.
-    final_buffer: int
+    first_window_size: int
+        The width of the first slow adaptation interval.
+    final_buffer_size: int
         The width of the final fast adaptation interval.
+
+    Returns
+    -------
+    A list of tuples (window_label, is_middle_window_end).
 
     References
     ----------
     .. [1]: Stan Reference Manual v2.22
             Section 15.2 "HMC Algorithm"
-    """
 
+    """
     schedule = []
 
-    # Handle the situations where the numbrer of warmup steps is smaller than
-    # the sum of the buffers' widths
+    # Give up on mass matrix adaptation when the number of warmup steps is too small.
     if num_steps < 20:
         schedule += [(0, False)] * (num_steps - 1)
     else:
+        # When the number of warmup steps is smaller that the sum of the provided (or default)
+        # window sizes we need to resize the different windows.
         if initial_buffer_size + first_window_size + final_buffer_size > num_steps:
             initial_buffer_size = int(0.15 * num_steps)
             final_buffer_size = int(0.1 * num_steps)
@@ -268,7 +284,8 @@ def stan_warmup_schedule(
         schedule += [(0, False)] * (initial_buffer_size - 1)
         schedule.append((0, False))
 
-        # Second stage: adaptation of slow parameters
+        # Second stage: adaptation of slow parameters in successive windows
+        # doubling in size.
         final_buffer_start = num_steps - final_buffer_size
 
         next_window_size = first_window_size
