@@ -1,8 +1,11 @@
+from typing import Callable, Tuple
+
 import jax
 import jax.numpy as np
 from jax.flatten_util import ravel_pytree
 from tqdm import tqdm
 
+import mcx
 from mcx import sample_forward
 from mcx.core import compile_to_logpdf
 
@@ -17,7 +20,13 @@ __all__ = ["sample", "generate", "sequential"]
 
 class sample(object):
     def __init__(
-        self, rng_key, model, program, num_warmup_steps=1000, num_chains=4, **kwargs
+        self,
+        rng_key: jax.random.PRNGKey,
+        model: mcx.model,
+        program,
+        num_warmup_steps: int = 1000,
+        num_chains: int = 4,
+        **kwargs
     ):
         """Initialize the sampling runtime."""
         self.program = program
@@ -27,7 +36,6 @@ class sample(object):
         init, warmup, build_kernel, to_trace, adapt_loglikelihood = self.program
 
         print("Initialize the sampler\n")
-
         validate_conditioning_variables(model, **kwargs)
         loglikelihood = build_loglikelihood(model, **kwargs)
 
@@ -50,9 +58,13 @@ class sample(object):
         loglikelihood = jax.jit(loglikelihood)
 
         print("Build and compile the inference kernel...")
+        # We would like to be able to JIT-compile the kernel
+        # builder. However there is too much overlapping in HMC's namespace
+        # and it looks like the function might be changing a global state.
+        # TODO: Fix this leakeage to be able to compile the function.
         kernel_builder = build_kernel(loglikelihood)
+        kernel_builder = kernel_builder
 
-        # self.kernel = kernel
         self.kernel_builder = kernel_builder
         self.parameters = parameters
         self.state = state
@@ -81,9 +93,11 @@ class sample(object):
             )
             for key in progress:
                 keys = jax.random.split(key, self.num_chains)
-                new_state, info = jax.vmap(update_chains, in_axes=(0, 0, 0))(keys, self.parameters, state)
-                chain.append((new_state, info))
-        self.state = new_state
+                state, info = jax.vmap(update_chains, in_axes=(0, 0, 0))(
+                    keys, self.parameters, state
+                )
+                chain.append((state, info))
+        self.state = state
 
         trace = self.to_trace(chain, self.unravel_fn)
 
@@ -100,12 +114,10 @@ def generate(rng_key, model, program, num_warmup_steps=1000, num_chains=4, **kwa
 
     init, warmup, build_kernel, to_trace, adapt_loglikelihood = program
 
-    print("Initialize the sampler\n")
-
     validate_conditioning_variables(model, **kwargs)
     loglikelihood = build_loglikelihood(model, **kwargs)
 
-    print("Find initial states...")
+    print("Draw initial states.")
     initial_position, unravel_fn = get_initial_position(
         rng_key, model, num_chains, **kwargs
     )
@@ -115,26 +127,32 @@ def generate(rng_key, model, program, num_warmup_steps=1000, num_chains=4, **kwa
         initial_position, jax.value_and_grad(loglikelihood)
     )
 
-    print("Warmup the chains...")
-    parameters, state = warmup(initial_state, loglikelihood, num_warmup_steps)
+    print("Warmup the chains.")
+    _, rng_key = jax.random.split(rng_key)
+    parameters, state = warmup(rng_key, initial_state, loglikelihood, num_warmup_steps)
 
-    print("Compile the log-likelihood...")
+    print("Compile the log-likelihood.")
     loglikelihood = jax.jit(loglikelihood)
 
-    print("Build and compile the inference kernel...")
-    kernel = build_kernel(loglikelihood, parameters)
-    kernel = jax.jit(kernel)
+    print("Build and compile the inference kernel.")
+    kernel_builder = build_kernel(loglikelihood)
 
-    def run(rng_key, state):
+    @jax.jit
+    def update_chains(rng_key, parameters, state):
+        kernel = kernel_builder(parameters)
+        new_states, info = kernel(rng_key, state)
+        return new_states, info
+
+    def run(rng_key, state, parameters):
         while True:
             _, rng_key = jax.random.split(rng_key)
-
             keys = jax.random.split(rng_key, num_chains)
-            state, info = jax.vmap(kernel)(keys, state)
-
+            state, info = jax.vmap(update_chains, in_axes=(0, 0, 0))(
+                keys, parameters, state
+            )
             yield (state, info)
 
-    return run(rng_key, initial_state)
+    return run(rng_key, initial_state, parameters)
 
 
 # -------------------------------------------------------------------
@@ -218,8 +236,7 @@ class sequential(object):
         rng_keys = jax.random.split(self.rng_key, self.num_samples)
         with tqdm(rng_keys, unit="samples") as progress:
             progress.set_description(
-                "Collecting {:,} samples".format(self.num_samples),
-                refresh=False,
+                "Collecting {:,} samples".format(self.num_samples), refresh=False,
             )
             for key in progress:
                 state = update_chains(state, key)
