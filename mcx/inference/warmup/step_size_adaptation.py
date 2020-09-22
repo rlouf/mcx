@@ -144,8 +144,9 @@ def dual_averaging(
 
 def find_reasonable_step_size(
     rng_key: jax.random.PRNGKey,
-    kernel_generator: Callable[[float], Callable],
+    kernel_generator: Callable[[float, np.DeviceArray], Callable],
     reference_hmc_state: HMCState,
+    inverse_mass_matrix: np.DeviceArray,
     initial_step_size: float = 1.0,
     target_accept: float = 0.65,
 ) -> float:
@@ -182,7 +183,7 @@ def find_reasonable_step_size(
         _, rng_key = jax.random.split(rng_key)
 
         step_size = (2.0 ** direction) * step_size
-        kernel = kernel_generator(step_size)
+        kernel = kernel_generator(step_size, inverse_mass_matrix)
         _, hmc_info = kernel(rng_key, reference_hmc_state)
 
         new_direction = np.where(target_accept < hmc_info.acceptance_probability, 1, -1)
