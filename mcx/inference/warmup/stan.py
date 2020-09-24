@@ -26,7 +26,7 @@ class StanWarmupState(NamedTuple):
 
 
 def stan_hmc_warmup(
-    kernel_generator, num_warmup_steps: int
+    kernel_factory, num_warmup_steps: int
 ) -> Tuple[Callable, Callable, Callable]:
     """Warmup scheme for sampling procedures based on euclidean manifold HMC.
     The schedule and algorithms used match Stan's [1]_ as closely as possible.
@@ -47,9 +47,9 @@ def stan_hmc_warmup(
     3. A last fast adaptation window where only the step size is adapted.
 
     """
-    first_stage_init, first_stage_update = stan_first_stage(kernel_generator)
+    first_stage_init, first_stage_update = stan_first_stage(kernel_factory)
     second_stage_init, second_stage_update, second_stage_final = stan_second_stage(
-        kernel_generator
+        kernel_factory
     )
 
     def init(
@@ -80,7 +80,7 @@ def stan_hmc_warmup(
 
         step_size = np.exp(warmup_state.da_state.log_step_size)
         inverse_mass_matrix = warmup_state.mm_state.inverse_mass_matrix
-        kernel = kernel_generator(step_size, inverse_mass_matrix)
+        kernel = kernel_factory(step_size, inverse_mass_matrix)
 
         chain_state, info = kernel(rng_key, chain_state)
 
@@ -108,15 +108,15 @@ def stan_hmc_warmup(
 
 
 @partial(jax.jit, static_argnums=(0,))
-def stan_first_stage(kernel_generator: Callable) -> Tuple[Callable, Callable]:
+def stan_first_stage(kernel_factory: Callable) -> Tuple[Callable, Callable]:
     """First stage of the Stan warmup. The step size is adapted using
     Nesterov's dual averaging algorithms while the mass matrix stays the same.
 
     Parameters
     ----------
-    kernel_generator
-        A function that takes the step size and the mass matrix as inputs to return
-        a HMC transition kernel.
+    kernel_factory
+        A function that takes the kernel's parameters as an input
+        and returns the corresponding transition kernel.
 
     Returns
     -------
@@ -135,7 +135,7 @@ def stan_first_stage(kernel_generator: Callable) -> Tuple[Callable, Callable]:
     ) -> DualAveragingState:
         step_size = find_reasonable_step_size(
             rng_key,
-            kernel_generator,
+            kernel_factory,
             initial_state,
             inverse_mass_matrix,
             initial_step_size,
@@ -152,7 +152,8 @@ def stan_first_stage(kernel_generator: Callable) -> Tuple[Callable, Callable]:
 
         step_size = np.exp(warmup_state.da_state.log_step_size)
         inverse_mass_matrix = warmup_state.mm_state.inverse_mass_matrix
-        kernel = kernel_generator(step_size, inverse_mass_matrix)
+
+        kernel = kernel_factory(step_size, inverse_mass_matrix)
 
         chain_state, info = kernel(rng_key, chain_state)
 
@@ -166,7 +167,7 @@ def stan_first_stage(kernel_generator: Callable) -> Tuple[Callable, Callable]:
 
 @partial(jax.jit, static_argnums=(0,))
 def stan_second_stage(
-    kernel_generator: Callable, is_mass_matrix_diagonal: bool = True
+    kernel_factory: Callable, is_mass_matrix_diagonal: bool = True
 ) -> Tuple[Callable, Callable, Callable]:
     """Slow stage of the Stan warmup.
 
@@ -176,7 +177,7 @@ def stan_second_stage(
 
     Parameters
     ----------
-    kernel_generator
+    kernel_factory
         A function that takes the step size and the mass matrix as inputs to return
         a HMC transition kernel.
     is_mass_matrix_diagonal
@@ -215,7 +216,7 @@ def stan_second_stage(
 
         step_size = np.exp(warmup_state.da_state.log_step_size)
         inverse_mass_matrix = warmup_state.mm_state.inverse_mass_matrix
-        kernel = kernel_generator(step_size, inverse_mass_matrix)
+        kernel = kernel_factory(step_size, inverse_mass_matrix)
 
         chain_state, _ = kernel(rng_key, chain_state)
         new_mm_state = mm_update(warmup_state.mm_state, chain_state.position)
@@ -241,7 +242,7 @@ def stan_second_stage(
         step_size = np.exp(warmup_state.da_state.log_step_size)
         step_size = find_reasonable_step_size(
             rng_key,
-            kernel_generator,
+            kernel_factory,
             chain_state,
             new_mm_state.inverse_mass_matrix,
             step_size,

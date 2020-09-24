@@ -1,123 +1,151 @@
-from functools import partial
-from typing import Any, Callable, NamedTuple, Tuple
+from typing import Any, Callable, List, NamedTuple, Tuple, Optional
+import warnings
 
 import jax
 from jax import numpy as np
-from tqdm import trange
+from tqdm import tqdm
 
 from mcx.inference.integrators import velocity_verlet, hmc_proposal
-from mcx.inference.kernels import HMCState, hmc_kernel
+from mcx.inference.kernels import HMCState, hmc_kernel, HMCInfo, hmc_init
 from mcx.inference.metrics import gaussian_euclidean_metric
 
 from mcx.inference.warmup import stan_hmc_warmup, stan_warmup_schedule
 
 
 class HMCParameters(NamedTuple):
-    step_size: float
     num_integration_steps: int
-    inverse_mass_matrix: np.DeviceArray
+    step_size: Optional[float]
+    inverse_mass_matrix: Optional[np.DeviceArray]
 
 
-def HMC(
-    step_size: float,
-    num_integration_steps: int,
-    inverse_mass_matrix: np.DeviceArray,
-    integrator: Callable = velocity_verlet,
-    is_mass_matrix_diagonal: bool = False,
-) -> Tuple[Callable, Callable, Callable, Callable, Callable]:
-    def init(position: np.DeviceArray, value_and_grad: Callable) -> HMCState:
-        log_prob, log_prob_grad = value_and_grad(position)
-        return HMCState(position, log_prob, log_prob_grad)
+class HMC:
+    def __init__(
+        self,
+        num_integration_steps: int = 10,
+        step_size: float = None,
+        inverse_mass_matrix: np.DeviceArray = None,
+        is_mass_matrix_diagonal: bool = False,
+        integrator: Callable = velocity_verlet,
+    ):
+        self.needs_warmup = True
+        if step_size is not None and inverse_mass_matrix is None:
+            warnings.warn(
+                "You specified the step size for the HMC algorithm "
+                "but not the mass matrix. MCX is currently unable to "
+                "run the warmup on a single variable and thus will run "
+                "the Stan warmup for both step size and mass matrix. If this is not "
+                "what you want, please instantiate the kernel with both a step size "
+                "and a mass matrix.",
+                UserWarning,
+            )
+        elif step_size is None and inverse_mass_matrix is not None:
+            warnings.warn(
+                "You specified the mass matrix for the HMC algorithm "
+                "but not the step size. MCX is currently unable to "
+                "run the warmup on a single variable and thus will run "
+                "the Stan warmup for both step size and mass matrix. If this is not "
+                "what you want, please instantiate the kernel specifying both the step size "
+                "and the mass matrix.",
+                UserWarning,
+            )
+        elif step_size is not None and inverse_mass_matrix is not None:
+            self.needs_warmup = False
+
+        self.integrator = integrator
+        self.parameters = HMCParameters(
+            num_integration_steps, step_size, inverse_mass_matrix
+        )
+
+    def states(self, positions, loglikelihood):
+        potential = self._to_potential(loglikelihood)
+        states = jax.vmap(hmc_init, in_axes=(0, None))(positions, potential)
+        return states
 
     def warmup(
+        self,
         rng_key: jax.random.PRNGKey,
         initial_state: HMCState,
-        logpdf: Callable,
-        num_warmup_steps: int,
+        loglikelihood: Callable,
+        num_chains,
+        num_warmup_steps: int = 1000,
         initial_step_size: float = 0.1,
-    ) -> Tuple[HMCParameters, HMCState]:
-        """It would be nice to return the warmup trace here.
-        """
-        def generate_kernel(step_size: float, inverse_mass_matrix: np.DeviceArray):
-            """May be obtained by partial application of `build_kernel`.
-            There is duplication here. Problem is we don't need to raise an
-            error when building the kernel here.
-            """
-            momentum_generator, kinetic_energy = gaussian_euclidean_metric(
-                inverse_mass_matrix
+    ) -> Tuple[HMCState, HMCParameters]:
+
+        if not self.needs_warmup:
+            parameters = HMCParameters(
+                np.ones(initial_state.position.shape[0], dtype=np.int32)
+                * self.parameters.num_integration_steps,
+                np.ones(initial_state.position.shape[0]) * self.parameters.step_size,
+                np.array([self.parameters.inverse_mass_matrix for _ in range(initial_state.position.shape[0])]),
             )
-            integrator_step = integrator(logpdf, kinetic_energy)
-            proposal = hmc_proposal(integrator_step, step_size, num_integration_steps)
-            kernel = hmc_kernel(proposal, momentum_generator, kinetic_energy, logpdf)
-            return kernel
+            return initial_state, parameters
 
-        schedule = stan_warmup_schedule(num_warmup_steps)
-        init, update, final = stan_hmc_warmup(generate_kernel, num_warmup_steps)
+        kernel_factory = self.kernel_factory(loglikelihood)
+        hmc_factory = jax.partial(kernel_factory, self.parameters.num_integration_steps)
+        init, update, final = stan_hmc_warmup(hmc_factory, num_warmup_steps)
 
-        rng_keys, state, warmup_state = jax.vmap(init, in_axes=(None, 0, None))(
+        rng_keys, chain_state, warmup_state = jax.vmap(init, in_axes=(None, 0, None))(
             rng_key, initial_state, initial_step_size
         )
 
-        for step in trange(num_warmup_steps):
-            stage, is_middle_window_end = schedule[step]
-            rng_keys, state, warmup_state = jax.vmap(
-                update, in_axes=(0, None, None, 0, 0)
-            )(rng_keys, stage, is_middle_window_end, state, warmup_state)
+        schedule = stan_warmup_schedule(num_warmup_steps)
+        with tqdm(schedule, unit="samples") as progress:
+            progress.set_description(f"Warming up {num_chains} chains for {num_warmup_steps} steps", refresh=False)
+            for interval in progress:
+                stage, is_middle_window_end = interval
+                rng_keys, chain_state, warmup_state = jax.vmap(
+                    update, in_axes=(0, None, None, 0, 0)
+                )(rng_keys, stage, is_middle_window_end, chain_state, warmup_state)
 
         step_size, inverse_mass_matrix = jax.vmap(final, in_axes=(0,))(warmup_state)
+        num_integration_steps = self.parameters.num_integration_steps
 
         parameters = HMCParameters(
-            step_size, np.ones(initial_state.position.shape[0], dtype=np.int32) * num_integration_steps, inverse_mass_matrix,
+            np.ones(initial_state.position.shape[0], dtype=np.int32)
+            * num_integration_steps,
+            step_size,
+            inverse_mass_matrix,
         )
 
-        return parameters, state
+        return chain_state, parameters
 
-    def build_kernel(logpdf: Callable):
-        """Builds the kernel that moves the chain from one point
-        to the next.
-        """
+    def kernel_factory(self, loglikelihood: Callable) -> Callable:
+        potential = self._to_potential(loglikelihood)
 
-        potential = logpdf
-
-        def init_kernel(parameters):
-            inverse_mass_matrix = parameters.inverse_mass_matrix
-            num_integration_steps = parameters.num_integration_steps
-            step_size = parameters.step_size
+        def build_kernel(num_integration_steps, step_size, inverse_mass_matrix):
             momentum_generator, kinetic_energy = gaussian_euclidean_metric(
                 inverse_mass_matrix,
             )
-            integrator_step = integrator(potential, kinetic_energy)
+            integrator_step = self.integrator(potential, kinetic_energy)
             proposal = hmc_proposal(integrator_step, step_size, num_integration_steps)
             kernel = hmc_kernel(proposal, momentum_generator, kinetic_energy, potential)
             return kernel
-        
-        return init_kernel
 
-    def adapt_loglikelihood(logpdf: Callable) -> Callable:
-        """Potential is minus the loglikelihood."""
+        return build_kernel
 
-        def potential(array: np.DeviceArray) -> float:
-            return -logpdf(array)
-
-        return potential
-
-    def to_trace(chain: Any, ravel_fn: Callable) -> dict:
+    def make_trace(self, chain: np.DeviceArray, ravel_fn: Callable) -> np.DeviceArray:
         """Translate the raw chains to a format that can be understood by and
-        is useful to humans.
+        is useful to humans. Will enventually transform it to a Trace object.
         """
-
         trace = {}
 
+        # maybe we should ravel the chain in the sampling part?
         def ravel_chain(chain):
             return jax.vmap(ravel_fn, in_axes=(0,))(chain)
 
+        # Positionned were ravelled before sampling to be able to make computations
+        # on flat arrays in the backend. We now need to bring their to
+        # their original shape before adding to the trace.
         positions_array = np.stack([state.position for state, _ in chain], axis=1)
         trace["posterior"] = jax.vmap(ravel_chain, in_axes=(0,))(positions_array)
 
+        # log-likelihood can be interesting
         trace["log_likelihood"] = np.stack(
             [state.log_prob for state, _ in chain], axis=1
         )
 
+        # We store information that may be needed for diagnostics in the
+        # "info" section of the chain
         trace["info"] = {}
         trace["info"]["is_divergent"] = np.stack(
             [info.is_divergent for _, info in chain], axis=1
@@ -128,4 +156,13 @@ def HMC(
 
         return trace
 
-    return init, warmup, build_kernel, to_trace, adapt_loglikelihood
+    def _to_potential(self, loglikelihood: Callable) -> Callable:
+        """The potential in the Hamiltonian Monte Carlo algorithm is equal to
+        minus the log-likelihood.
+
+        """
+
+        def potential(array: np.DeviceArray) -> float:
+            return -loglikelihood(array)
+
+        return potential
