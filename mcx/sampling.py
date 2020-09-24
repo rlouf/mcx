@@ -29,32 +29,23 @@ class sample(object):
         **kwargs
     ):
         """Initialize the sampling runtime."""
-        self.program = program
-        self.num_chains = num_chains
-        self.rng_key = rng_key
 
-        init, warmup, build_kernel, to_trace, adapt_loglikelihood = self.program
-
-        print("Initialize the sampler\n")
         validate_conditioning_variables(model, **kwargs)
         loglikelihood = build_loglikelihood(model, **kwargs)
 
         print("Find initial states...")
-        initial_position, unravel_fn = get_initial_position(
+        initial_positions, unravel_fn = get_initial_position(
             rng_key, model, num_chains, **kwargs
         )
         loglikelihood = flatten_loglikelihood(loglikelihood, unravel_fn)
-        loglikelihood = adapt_loglikelihood(loglikelihood)
-        initial_state = jax.vmap(init, in_axes=(0, None))(
-            initial_position, jax.value_and_grad(loglikelihood)
-        )
+        initial_states = program.states(initial_positions, loglikelihood)
 
-        print("Warmup the chains...")
-        parameters, state = warmup(
-            rng_key, initial_state, loglikelihood, num_warmup_steps
+        state, parameters = program.warmup(
+            rng_key, initial_states, loglikelihood, num_chains, num_warmup_steps
         )
 
         print("Compile the log-likelihood...")
+        # is that needed or is the loglikelihood already jit_compiled?
         loglikelihood = jax.jit(loglikelihood)
 
         print("Build and compile the inference kernel...")
@@ -62,46 +53,65 @@ class sample(object):
         # builder. However there is too much overlapping in HMC's namespace
         # and it looks like the function might be changing a global state.
         # TODO: Fix this leakeage to be able to compile the function.
-        kernel_builder = build_kernel(loglikelihood)
-        kernel_builder = kernel_builder
+        kernel_factory = program.kernel_factory(loglikelihood)
+        kernel_factory = jax.jit(kernel_factory, static_argnums=(0, 1, 2))
 
-        self.kernel_builder = kernel_builder
+        self.rng_key = rng_key
+        self.num_chains = num_chains
+        self.program = program
+        self.kernel_factory = kernel_factory
         self.parameters = parameters
         self.state = state
-        self.to_trace = to_trace
         self.unravel_fn = unravel_fn
 
-    def run(self, num_samples=1000):
+    def run(self, num_samples=1000, progress_bar=False):
         _, self.rng_key = jax.random.split(self.rng_key)
+        rng_keys = jax.random.split(self.rng_key, num_samples)
+        state = self.state
 
         @jax.jit
-        def update_chains(rng_key, parameters, state):
-            kernel = self.kernel_builder(parameters)
-            new_states, info = kernel(rng_key, state)
-            return new_states, info
+        def update_chains(rng_key, parameters, chain_state):
+            kernel = self.kernel_factory(*parameters)
+            new_chain_state, info = kernel(rng_key, chain_state)
+            return new_chain_state, info
 
-        state = self.state
-        chain = []
+        if progress_bar:
 
-        rng_keys = jax.random.split(self.rng_key, num_samples)
-        with tqdm(rng_keys, unit="samples") as progress:
-            progress.set_description(
-                "Collecting {:,} samples across {:,} chains".format(
-                    num_samples, self.num_chains
-                ),
-                refresh=False,
-            )
-            for key in progress:
+            chain = []
+            with tqdm(rng_keys, unit="samples") as progress:
+                progress.set_description(
+                    "Collecting {:,} samples across {:,} chains".format(
+                        num_samples, self.num_chains
+                    ),
+                    refresh=False,
+                )
+                for key in progress:
+                    keys = jax.random.split(key, self.num_chains)
+                    state, info = jax.vmap(update_chains, in_axes=(0, 0, 0))(
+                        keys, self.parameters, state
+                    )
+                    chain.append((state, info))
+        else:
+
+            def update_scan(carry, key):
+                state, parameters = carry
                 keys = jax.random.split(key, self.num_chains)
                 state, info = jax.vmap(update_chains, in_axes=(0, 0, 0))(
-                    keys, self.parameters, state
+                    keys, parameters, state
                 )
-                chain.append((state, info))
+                return (state, parameters), (state, info)
+
+            last_state, chain = jax.lax.scan(update_scan, (state, self.parameters), rng_keys)
+        
+        # chain
+        # with progress bar is of format [(state, info) ,(state, info), (state, info)]
+        # with scan [all_states, all_infos]
+        # I believe second format is easier to unpack later and should be preferred
+
         self.state = state
+        # trace = self.program.make_trace(chain, self.unravel_fn)
 
-        trace = self.to_trace(chain, self.unravel_fn)
-
-        return trace
+        return chain
 
 
 # -------------------------------------------------------------------
