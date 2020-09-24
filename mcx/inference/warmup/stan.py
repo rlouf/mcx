@@ -107,7 +107,6 @@ def stan_hmc_warmup(
     return init, update, final
 
 
-@partial(jax.jit, static_argnums=(0,))
 def stan_first_stage(kernel_factory: Callable) -> Tuple[Callable, Callable]:
     """First stage of the Stan warmup. The step size is adapted using
     Nesterov's dual averaging algorithms while the mass matrix stays the same.
@@ -165,7 +164,6 @@ def stan_first_stage(kernel_factory: Callable) -> Tuple[Callable, Callable]:
     return init, update
 
 
-@partial(jax.jit, static_argnums=(0,))
 def stan_second_stage(
     kernel_factory: Callable, is_mass_matrix_diagonal: bool = True
 ) -> Tuple[Callable, Callable, Callable]:
