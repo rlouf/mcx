@@ -6,7 +6,7 @@ from jax import numpy as np
 from tqdm import tqdm
 
 from mcx.inference.integrators import velocity_verlet, hmc_proposal
-from mcx.inference.kernels import HMCState, hmc_kernel, HMCInfo, hmc_init
+from mcx.inference.kernels import HMCState, hmc_kernel, hmc_init
 from mcx.inference.metrics import gaussian_euclidean_metric
 
 from mcx.inference.warmup import stan_hmc_warmup, stan_warmup_schedule
@@ -58,7 +58,8 @@ class HMC:
 
     def states(self, positions, loglikelihood):
         potential = self._to_potential(loglikelihood)
-        states = jax.vmap(hmc_init, in_axes=(0, None))(positions, potential)
+        potential_val_and_grad = jax.value_and_grad(potential)
+        states = jax.vmap(hmc_init, in_axes=(0, None))(positions, potential_val_and_grad)
         return states
 
     def warmup(
@@ -89,6 +90,20 @@ class HMC:
         )
 
         schedule = stan_warmup_schedule(num_warmup_steps)
+        """
+        def update_chain(state, interval):
+            stage, is_middle_window_end = interval
+            rng_key, chain_state, warmup_state = state
+            _, rng_key = jax.random.split(rng_key)
+            keys = jax.random.split(rng_key, num_chains)
+            chain_state, warmup_state = jax.vmap(update)(keys, chain_state, stage, is_middle_window_end, chain_state, warmup_state)
+
+            return (rng_key, chain_state, warmup_state), (chain_state, warmup_state)
+
+        last_state, chain = jax.lax.scan(update_chain, (chain_state, warmup_state), schedule)
+        print(chain)
+        """
+
         with tqdm(schedule, unit="samples") as progress:
             progress.set_description(f"Warming up {num_chains} chains for {num_warmup_steps} steps", refresh=False)
             for interval in progress:

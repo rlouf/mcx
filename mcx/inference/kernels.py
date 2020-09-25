@@ -1,5 +1,6 @@
 """Sampling kernels.
 """
+from functools import partial
 from typing import Callable, NamedTuple, Tuple
 
 import jax
@@ -32,11 +33,12 @@ class HMCInfo(NamedTuple):
     proposal: Proposal
 
 
-def hmc_init(position: np.DeviceArray, logpdf: Callable) -> HMCState:
+@partial(jax.jit, static_argnums=(1,))
+def hmc_init(position: np.DeviceArray, potential_value_and_grad: Callable) -> HMCState:
     """Compute the initial state of the HMC algorithm from the initial position
     and the log-likelihood.
     """
-    log_prob, log_prob_grad = jax.value_and_grad(logpdf)(position)
+    log_prob, log_prob_grad = potential_value_and_grad(position)
     return HMCState(position, log_prob, log_prob_grad)
 
 
