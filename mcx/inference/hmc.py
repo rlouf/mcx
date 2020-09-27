@@ -59,7 +59,9 @@ class HMC:
     def states(self, positions, loglikelihood):
         potential = self._to_potential(loglikelihood)
         potential_val_and_grad = jax.value_and_grad(potential)
-        states = jax.vmap(hmc_init, in_axes=(0, None))(positions, potential_val_and_grad)
+        states = jax.vmap(hmc_init, in_axes=(0, None))(
+            positions, potential_val_and_grad
+        )
         return states
 
     def warmup(
@@ -77,7 +79,12 @@ class HMC:
                 np.ones(initial_state.position.shape[0], dtype=np.int32)
                 * self.parameters.num_integration_steps,
                 np.ones(initial_state.position.shape[0]) * self.parameters.step_size,
-                np.array([self.parameters.inverse_mass_matrix for _ in range(initial_state.position.shape[0])]),
+                np.array(
+                    [
+                        self.parameters.inverse_mass_matrix
+                        for _ in range(initial_state.position.shape[0])
+                    ]
+                ),
             )
             return initial_state, parameters
 
@@ -85,30 +92,43 @@ class HMC:
         hmc_factory = jax.partial(kernel_factory, self.parameters.num_integration_steps)
         init, update, final = stan_hmc_warmup(hmc_factory, num_warmup_steps)
 
-        rng_keys, chain_state, warmup_state = jax.vmap(init, in_axes=(None, 0, None))(
-            rng_key, initial_state, initial_step_size
+        rng_keys = jax.random.split(rng_key, num_chains)
+        chain_state, warmup_state = jax.vmap(init, in_axes=(0, 0, None))(
+            rng_keys, initial_state, initial_step_size
         )
 
         schedule = stan_warmup_schedule(num_warmup_steps)
-        """
-        def update_chain(state, interval):
-            stage, is_middle_window_end = interval
-            rng_key, chain_state, warmup_state = state
-            _, rng_key = jax.random.split(rng_key)
-            keys = jax.random.split(rng_key, num_chains)
-            chain_state, warmup_state = jax.vmap(update)(keys, chain_state, stage, is_middle_window_end, chain_state, warmup_state)
 
-            return (rng_key, chain_state, warmup_state), (chain_state, warmup_state)
+        # We can use fori_loop to run the warmup
+        # @jax.jit
+        # def update_chain(carry, rng_key):
+        # chain_state, warmup_state, interval = carry
+        # stage, is_middle_window_end = interval
 
-        last_state, chain = jax.lax.scan(update_chain, (chain_state, warmup_state), schedule)
-        print(chain)
-        """
+        # keys = jax.random.split(rng_key, num_chains)
+        # chain_state, warmup_state = jax.vmap(update)(
+        # keys,
+        # chain_state,
+        # stage,
+        # is_middle_window_end,
+        # chain_state,
+        # warmup_state,
+        # )
+
+        # return (chain_state, warmup_state), (chain_state, warmup_state)
+
+        # last_state, _ = jax.lax.scan(update_chain, (chain_state, warmup_state, schedule), rng_keys)
 
         with tqdm(schedule, unit="samples") as progress:
-            progress.set_description(f"Warming up {num_chains} chains for {num_warmup_steps} steps", refresh=False)
+            progress.set_description(
+                f"Warming up {num_chains} chains for {num_warmup_steps} steps",
+                refresh=False,
+            )
             for interval in progress:
+                _, rng_key = jax.random.split(rng_key)
+                rng_keys = jax.random.split(rng_key, num_chains)
                 stage, is_middle_window_end = interval
-                rng_keys, chain_state, warmup_state = jax.vmap(
+                chain_state, warmup_state = jax.vmap(
                     update, in_axes=(0, None, None, 0, 0)
                 )(rng_keys, stage, is_middle_window_end, chain_state, warmup_state)
 
