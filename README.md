@@ -67,7 +67,7 @@ mcx.sample_forward(
 kernel = mcx.HMC(num_integration_steps=100)
 
 observations = {'x': x_data, 'predictions': y_data, 'lmbda': 3.}
-sampler = mcx.sample(
+sampler = mcx.sampler(
     rng_key,
     linear_regression,
     kernel,

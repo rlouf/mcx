@@ -10,15 +10,15 @@ from mcx import sample_forward
 from mcx.core import compile_to_logpdf
 
 
-__all__ = ["sample", "generate", "sequential"]
+__all__ = ["sampler", "generate", "sequential"]
 
 
 # -------------------------------------------------------------------
-#                 == THE SAMPLING EXECUTION MODEL ==
+#                 == THE BATCH SAMPLING RUNTIME ==
 # -------------------------------------------------------------------
 
 
-class sample(object):
+class sampler(object):
     def __init__(
         self,
         rng_key: jax.random.PRNGKey,
