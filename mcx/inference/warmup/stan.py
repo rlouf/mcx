@@ -54,7 +54,7 @@ def stan_hmc_warmup(
 
     def init(
         rng_key: jax.random.PRNGKey, initial_state: HMCState, initial_step_size: int
-    ) -> Tuple[jax.random.PRNGKey, HMCState, StanWarmupState]:
+    ) -> Tuple[HMCState, StanWarmupState]:
         mm_state = second_stage_init(initial_state)
         da_state = first_stage_init(
             rng_key,
@@ -65,7 +65,7 @@ def stan_hmc_warmup(
 
         warmup_state = StanWarmupState(da_state, mm_state)
 
-        return rng_key, initial_state, warmup_state
+        return initial_state, warmup_state
 
     @jax.jit
     def update(
@@ -74,30 +74,28 @@ def stan_hmc_warmup(
         is_middle_window_end: bool,
         chain_state: HMCState,
         warmup_state: StanWarmupState,
-    ) -> Tuple[jax.random.PRNGKey, HMCState, StanWarmupState]:
+    ) -> Tuple[HMCState, StanWarmupState]:
         """Only update the step size at first."""
-        _, rng_key = jax.random.split(rng_key)
-
         step_size = np.exp(warmup_state.da_state.log_step_size)
         inverse_mass_matrix = warmup_state.mm_state.inverse_mass_matrix
         kernel = kernel_factory(step_size, inverse_mass_matrix)
 
         chain_state, info = kernel(rng_key, chain_state)
 
-        rng_key, chain_state, warmup_state = jax.lax.switch(
+        chain_state, warmup_state = jax.lax.switch(
             stage,
             (first_stage_update, second_stage_update),
             (rng_key, chain_state, warmup_state),
         )
 
-        rng_key, chain_state, warmup_state = jax.lax.cond(
+        chain_state, warmup_state = jax.lax.cond(
             is_middle_window_end,
             second_stage_final,
-            lambda x: x,
+            lambda x: (x[1], x[2]),
             (rng_key, chain_state, warmup_state),
         )
 
-        return rng_key, chain_state, warmup_state
+        return chain_state, warmup_state
 
     def final(warmup_state: StanWarmupState) -> Tuple[float, np.DeviceArray]:
         step_size = np.exp(warmup_state.da_state.log_step_size)
@@ -145,10 +143,8 @@ def stan_first_stage(kernel_factory: Callable) -> Tuple[Callable, Callable]:
     @jax.jit
     def update(
         state: Tuple[jax.random.PRNGKey, HMCState, StanWarmupState]
-    ) -> Tuple[jax.random.PRNGKey, HMCState, StanWarmupState]:
+    ) -> Tuple[HMCState, StanWarmupState]:
         rng_key, chain_state, warmup_state = state
-        _, rng_key = jax.random.split(rng_key)
-
         step_size = np.exp(warmup_state.da_state.log_step_size)
         inverse_mass_matrix = warmup_state.mm_state.inverse_mass_matrix
 
@@ -159,7 +155,7 @@ def stan_first_stage(kernel_factory: Callable) -> Tuple[Callable, Callable]:
         new_da_state = da_update(info.acceptance_probability, warmup_state.da_state)
         new_warmup_state = StanWarmupState(new_da_state, warmup_state.mm_state)
 
-        return rng_key, chain_state, new_warmup_state
+        return chain_state, new_warmup_state
 
     return init, update
 
@@ -201,7 +197,7 @@ def stan_second_stage(
     @jax.jit
     def update(
         state: Tuple[jax.random.PRNGKey, HMCState, StanWarmupState]
-    ) -> Tuple[jax.random.PRNGKey, HMCState, StanWarmupState]:
+    ) -> Tuple[HMCState, StanWarmupState]:
         """Update the chain and mass matrix adapation states within a window.
 
         The kernel does not change during this phase: it is built from the
@@ -220,12 +216,12 @@ def stan_second_stage(
         new_mm_state = mm_update(warmup_state.mm_state, chain_state.position)
         new_warmup_state = StanWarmupState(warmup_state.da_state, new_mm_state)
 
-        return rng_key, chain_state, new_warmup_state
+        return chain_state, new_warmup_state
 
     @jax.jit
     def final(
         state: Tuple[jax.random.PRNGKey, HMCState, StanWarmupState]
-    ) -> Tuple[jax.random.PRNGKey, HMCState, StanWarmupState]:
+    ) -> Tuple[HMCState, StanWarmupState]:
         """Update the adaptation parameters at the end of a slow window.
 
         The mass matrix is computed from the adaptation algorithm's state and
@@ -249,7 +245,7 @@ def stan_second_stage(
 
         new_warmup_state = StanWarmupState(da_state, new_mm_state)
 
-        return rng_key, chain_state, new_warmup_state
+        return chain_state, new_warmup_state
 
     return init, update, final
 
