@@ -28,12 +28,11 @@ class sample(object):
         num_chains: int = 4,
         **kwargs
     ):
-        """Initialize the sampling runtime."""
 
         validate_conditioning_variables(model, **kwargs)
         loglikelihood = build_loglikelihood(model, **kwargs)
 
-        print("Find initial states...")
+        print("Find the initial states...")
         initial_positions, unravel_fn = get_initial_position(
             rng_key, model, num_chains, **kwargs
         )
@@ -69,12 +68,20 @@ class sample(object):
         rng_keys = jax.random.split(self.rng_key, num_samples)
         state = self.state
 
+        print(f"Draw {num_samples} samples across {self.num_chains} chains")
+
         @jax.jit
         def update_chains(rng_key, parameters, chain_state):
             kernel = self.kernel_factory(*parameters)
             new_chain_state, info = kernel(rng_key, chain_state)
             return new_chain_state, info
 
+        # The progress bar is an important indicator for exploratory analysis,
+        # while lax.scan is optimal for production environments where speed is
+        # needed (an no one is there to look at the progress bar).  Note that
+        # for small sample sizes lax.scan is not dramatically faster normal
+        # iteration and lax. You thus are not losing much by using it for
+        # initial exploration.
         if progress_bar:
 
             chain = []
@@ -102,7 +109,7 @@ class sample(object):
                 return (state, parameters), (state, info)
 
             last_state, chain = jax.lax.scan(update_scan, (state, self.parameters), rng_keys)
-        
+
         # chain
         # with progress bar is of format [(state, info) ,(state, info), (state, info)]
         # with scan [all_states, all_infos]
