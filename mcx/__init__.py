@@ -1,6 +1,6 @@
 from mcx.model import model
 from mcx.model import sample_forward, seed
-from mcx.sampling import sample, generate, sequential
+from mcx.sampling import sampler, generate, sequential
 from mcx.inference.hmc import HMC
 
 __all__ = [
@@ -8,7 +8,7 @@ __all__ = [
     "seed",
     "sample_forward",
     "HMC",
-    "sample",
+    "sampler",
     "generate",
     "sequential",
 ]
