@@ -253,8 +253,8 @@ def stan_second_stage(
 def stan_warmup_schedule(
     num_steps: int,
     initial_buffer_size: int = 75,
-    first_window_size: int = 25,
     final_buffer_size: int = 50,
+    first_window_size: int = 25,
 ) -> List[Tuple[int, bool]]:
     """Return the schedule for Stan's warmup.
 
