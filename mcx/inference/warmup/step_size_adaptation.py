@@ -1,9 +1,4 @@
-"""Adaptive algorithms for Markov Chain Monte Carlo.
-
-This is a collection of re-usable adaptive schemes for monte carlo algorithms.
-The algorithms are used during the warm-up phase of the inference and are
-decorrelated from any particular algorithm (dynamic HMC's adaptive choice of
-path length is not included, for instance).
+"""Adaptive algorithms for the step size in the Hamiltonian Monte Carlo sampling algorithms family.
 
 The Stan Manual [1]_ is a very good reference on automatic tuning of
 parameters used in Hamiltonian Monte Carlo.
@@ -11,6 +6,7 @@ parameters used in Hamiltonian Monte Carlo.
 .. [1]: "HMC Algorithm Parameters", Stan Manual
         https://mc-stan.org/docs/2_20/reference-manual/hmc-algorithm-parameters.html
 """
+from functools import partial
 from typing import Callable, NamedTuple, Tuple
 
 import jax
@@ -142,6 +138,29 @@ def dual_averaging(
 #      == FIND REASONABLE INITIAL VALUE ==
 # --------------------------------------------
 
+
+class ReasonableStepSizeState(NamedTuple):
+    """State of the search for a reasonable first step size.
+
+    rng_key
+        Key used by JAX's random number generator.
+    direction: {-1, 1}
+        Determines whether the step size should be increased or decreased during the
+        previous step search. If direction = 1 it will be increased, otherwise decreased.
+    previous_direction
+        The previous direction. It is necessary to carry it because the choice of step
+        size is made at the end of the search update.
+    step_size
+        The current step size in the search.
+    """
+
+    rng_key: jax.random.PRNGKey
+    direction: int
+    previous_direction: int
+    step_size: float
+
+
+@partial(jax.jit, static_argnums=(1,))
 def find_reasonable_step_size(
     rng_key: jax.random.PRNGKey,
     kernel_generator: Callable[[float, np.DeviceArray], Callable],
@@ -160,9 +179,21 @@ def find_reasonable_step_size(
 
     Parameters
     ----------
+    rng_key
+       Key used by JAX's random number generator.
     kernel_generator
         A function that takes a step size as an input and returns the corresponding
         sampling kernel.
+    reference_hmc_state
+        The location (HMC state) where this first step size must be found. This function
+        never advances the chain.
+    inverse_mass_matrix
+        The inverse mass matrix relative to which the step size must be found.
+    initial_step_size
+        The first step size used to start the search.
+    target_accept
+        Once that value of the acceptance probability is reached we estimate
+        that we have found a "reasonable" first step size.
 
     Returns
     -------
@@ -178,7 +209,8 @@ def find_reasonable_step_size(
     fp_limit = np.finfo(jax.lax.dtype(initial_step_size))
 
     @jax.jit
-    def _update(search_state: Tuple) -> Tuple:
+    def _update(search_state: ReasonableStepSizeState) -> ReasonableStepSizeState:
+        """Perform one step of the step size search."""
         rng_key, direction, _, step_size = search_state
         _, rng_key = jax.random.split(rng_key)
 
@@ -187,10 +219,10 @@ def find_reasonable_step_size(
         _, hmc_info = kernel(rng_key, reference_hmc_state)
 
         new_direction = np.where(target_accept < hmc_info.acceptance_probability, 1, -1)
-        return (rng_key, new_direction, direction, step_size)
+        return ReasonableStepSizeState(rng_key, new_direction, direction, step_size)
 
     @jax.jit
-    def _do_continue(search_state: Tuple) -> bool:
+    def _do_continue(search_state: ReasonableStepSizeState) -> bool:
         """Decides whether the search should continue.
 
         The search stops when it crosses the `target_accept` threshold, i.e.
@@ -207,6 +239,6 @@ def find_reasonable_step_size(
         return is_step_size_not_extreme & has_acceptance_rate_not_crossed_threshold
 
     _, _, _, step_size = jax.lax.while_loop(
-        _do_continue, _update, (rng_key, 0, 0, initial_step_size)
+        _do_continue, _update, ReasonableStepSizeState(rng_key, 0, 0, initial_step_size)
     )
     return step_size
