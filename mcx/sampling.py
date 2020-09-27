@@ -26,6 +26,7 @@ class sampler(object):
         program,
         num_warmup_steps: int = 1000,
         num_chains: int = 4,
+        progress_bar=True,
         **kwargs
     ):
 
@@ -40,7 +41,7 @@ class sampler(object):
         initial_states = program.states(initial_positions, loglikelihood)
 
         state, parameters = program.warmup(
-            rng_key, initial_states, loglikelihood, num_chains, num_warmup_steps
+            rng_key, initial_states, loglikelihood, num_chains, num_warmup_steps, progress_bar
         )
 
         print("Compile the log-likelihood...")
