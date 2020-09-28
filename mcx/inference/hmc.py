@@ -69,12 +69,14 @@ class HMC:
         self,
         rng_key: jax.random.PRNGKey,
         initial_state: HMCState,
-        loglikelihood: Callable,
+        kernel_factory: Callable,
         num_chains,
         num_warmup_steps: int = 1000,
         progress_bar=True,
         initial_step_size: float = 0.1,
     ) -> Tuple[HMCState, HMCParameters]:
+        """I don't like having a ton of warmup logic in here.
+        """
 
         if not self.needs_warmup:
             parameters = HMCParameters(
@@ -90,7 +92,7 @@ class HMC:
             )
             return initial_state, parameters
 
-        kernel_factory = self.kernel_factory(loglikelihood)
+        # kernel_factory = self.kernel_factory(loglikelihood)
         hmc_factory = jax.partial(kernel_factory, self.parameters.num_integration_steps)
         init, update, final = stan_hmc_warmup(hmc_factory, num_warmup_steps, self.is_mass_matrix_diagonal)
 
@@ -143,8 +145,6 @@ class HMC:
 
         step_size, inverse_mass_matrix = jax.vmap(final, in_axes=(0,))(warmup_state)
         num_integration_steps = self.parameters.num_integration_steps
-
-        print(step_size, num_integration_steps)
 
         parameters = HMCParameters(
             np.ones(initial_state.position.shape[0], dtype=np.int32)
