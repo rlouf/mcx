@@ -4,7 +4,10 @@ from typing import NamedTuple
 
 import jax.numpy as np
 
-from mcx.inference.warmup.mass_matrix_adaptation import WelfordAlgorithmState, welford_algorithm
+from mcx.inference.warmup.mass_matrix_adaptation import (
+    WelfordAlgorithmState,
+    welford_algorithm,
+)
 
 
 class GelmanRubinState(NamedTuple):
