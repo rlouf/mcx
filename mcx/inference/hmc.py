@@ -94,7 +94,7 @@ class HMC:
 
         # kernel_factory = self.kernel_factory(loglikelihood)
         hmc_factory = jax.partial(kernel_factory, self.parameters.num_integration_steps)
-        init, update, final = stan_hmc_warmup(hmc_factory, num_warmup_steps, self.is_mass_matrix_diagonal)
+        init, update, final = stan_hmc_warmup(hmc_factory, self.is_mass_matrix_diagonal)
 
         rng_keys = jax.random.split(rng_key, num_chains)
         chain_state, warmup_state = jax.vmap(init, in_axes=(0, 0, None))(
