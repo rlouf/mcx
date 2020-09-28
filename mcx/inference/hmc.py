@@ -1,4 +1,4 @@
-from typing import Any, Callable, List, NamedTuple, Tuple, Optional
+from typing import Callable, NamedTuple, Tuple, Optional
 import warnings
 
 import jax
