@@ -473,8 +473,9 @@ def get_initial_position(rng_key, model, num_chains, **kwargs):
         [np.ravel(samples[s]) for s in sorted(initial_positions.keys())], axis=1
     )
 
+    # np.atleast_1d is necessary to handle single chains
     sample_position_dict = {
-        parameter: values[0] for parameter, values in initial_positions.items()
+        parameter: np.atleast_1d(values)[0] for parameter, values in initial_positions.items()
     }
     _, unravel_fn = ravel_pytree(sample_position_dict)
 
