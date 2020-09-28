@@ -10,7 +10,7 @@ from functools import partial
 from typing import Callable, NamedTuple, Tuple
 
 import jax
-from jax import numpy as np
+import jax.numpy as np
 
 from mcx.inference.kernels import HMCState
 
@@ -27,9 +27,27 @@ __all__ = [
 
 
 class DualAveragingState(NamedTuple):
+    """State carried through the dual averaging procedure.
+
+    log_step_size
+        The logarithm of the current value of the step size.
+    log_step_size_avg
+        The time-weighted average of the values that the logarithm of the step size
+        has taken so far.
+    step
+        The current iteration step.
+    avg_err
+        The time average of the value of the quantity :math:`H_t`, the difference between
+        the target acceptance rate and the current acceptance rate.
+    mu
+        Arbitrary point the values of log_step_size are shrunk towards. Chose to be
+        :math:`\\log(10 \\epsilon_0)` where :math:`\\epsilon_0` is chosen in this context
+        to be the step size given by the `find_reasonable_step_size` procedure.
+    """
+
     log_step_size: float
     log_step_size_avg: float
-    t: int
+    step: int
     avg_error: float
     mu: float
 
@@ -62,13 +80,13 @@ def dual_averaging(
 
     See reference [2]_ (section 3.2.1) for a detailed discussion.
 
-    Arguments
-    ---------
-    t0: float > 0
+    Parameters
+    ----------
+    t0: float >= 0
         Free parameter that stabilizes the initial iterations of the algorithm.
         Large values may slow down convergence. Introduced in [2]_ with a default
         value of 10.
-    gamma: float
+    gamma
         Controls the speed of convergence of the scheme. The authors of [2]_ recommend
         a value of 0.05.
     kappa: float in ]0.5, 1]
@@ -78,9 +96,9 @@ def dual_averaging(
 
     Returns
     -------
-    init:
+    init
         A function that initializes the state of the dual averaging scheme.
-    update: function
+    update
         A function that updates the state of the dual averaging scheme.
 
     References
@@ -96,40 +114,40 @@ def dual_averaging(
     def init(inital_step_size: float) -> DualAveragingState:
         """Initialize the state of the dual averaging scheme.
 
-        The current state of the dual averaging scheme consists, following [2]_,
-        of the following quantities:
-
-        - avg_error: The current time-average value of :math:`H_t` defined above;
-        - log_step: The logarithm of the current step size;
-        - avg_log_step: The logarithm of the current time-weighted average of the step size.
-
         The parameter :math:`\\mu` is set to :math:`\\log(10 \\epsilon_1)`
         where :math:`\\epsilon_1` is the initial value of the step size.
         """
         mu: float = np.log(10 * inital_step_size)
-        t = t0
+        step = 1
         avg_error: float = 0.0
         log_step_size: float = 0.0
         log_step_size_avg: float = 0.0
-        return DualAveragingState(log_step_size, log_step_size_avg, t, avg_error, mu)
+        return DualAveragingState(log_step_size, log_step_size_avg, step, avg_error, mu)
 
     @jax.jit
     def update(p_accept: float, state: DualAveragingState) -> DualAveragingState:
-        """Update the state of the Dual Averaging adaptive scheme.
+        """Update the state of the Dual Averaging adaptive algorithm.
 
-        Arguments:
+        Parameters
         ----------
         p_accept: float in [0, 1]
             The current metropolis acceptance rate.
-        state: tuple
-            The current state of the dual averaging scheme.
+        state:
+            The current state of the dual averaging algorithm.
+
+        Returns
+        -------
+        The updated state of the dual averaging algorithm.
         """
-        log_step, avg_log_step, t, avg_error, mu = state
-        eta_t = t ** (-kappa)
-        avg_error = (1 - (1 / t)) * avg_error + (target - p_accept) / t
-        log_step_size = mu - (np.sqrt(t) / gamma) * avg_error
+        log_step, avg_log_step, step, avg_error, mu = state
+        reg_step = step + t0
+        eta_t = step ** (-kappa)
+        avg_error = (1 - (1 / (reg_step))) * avg_error + (target - p_accept) / reg_step
+        log_step_size = mu - (np.sqrt(step) / gamma) * avg_error
         log_step_size_avg = eta_t * log_step + (1 - eta_t) * avg_log_step
-        return DualAveragingState(log_step_size, log_step_size_avg, t, avg_error, mu)
+        return DualAveragingState(
+            log_step_size, log_step_size_avg, step + 1, avg_error, mu
+        )
 
     return init, update
 
@@ -140,7 +158,7 @@ def dual_averaging(
 
 
 class ReasonableStepSizeState(NamedTuple):
-    """State of the search for a reasonable first step size.
+    """State carried through the search for a reasonable first step size.
 
     rng_key
         Key used by JAX's random number generator.
@@ -192,8 +210,8 @@ def find_reasonable_step_size(
     initial_step_size
         The first step size used to start the search.
     target_accept
-        Once that value of the acceptance probability is reached we estimate
-        that we have found a "reasonable" first step size.
+        Once that value of the metropolis acceptance probability is reached we
+        estimate that we have found a "reasonable" first step size.
 
     Returns
     -------
