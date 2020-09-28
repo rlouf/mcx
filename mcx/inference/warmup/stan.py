@@ -1,5 +1,4 @@
 """Implementation of the Stan warmup for the HMC family of sampling algorithms."""
-from functools import partial
 from typing import Callable, List, NamedTuple, Tuple
 
 import jax
@@ -26,7 +25,7 @@ class StanWarmupState(NamedTuple):
 
 
 def stan_hmc_warmup(
-    kernel_factory, num_warmup_steps: int
+    kernel_factory, num_warmup_steps: int, is_mass_matrix_diagonal: bool = True
 ) -> Tuple[Callable, Callable, Callable]:
     """Warmup scheme for sampling procedures based on euclidean manifold HMC.
     The schedule and algorithms used match Stan's [1]_ as closely as possible.
@@ -49,7 +48,7 @@ def stan_hmc_warmup(
     """
     first_stage_init, first_stage_update = stan_first_stage(kernel_factory)
     second_stage_init, second_stage_update, second_stage_final = stan_second_stage(
-        kernel_factory
+        kernel_factory, is_mass_matrix_diagonal
     )
 
     def init(
@@ -57,10 +56,7 @@ def stan_hmc_warmup(
     ) -> Tuple[HMCState, StanWarmupState]:
         mm_state = second_stage_init(initial_state)
         da_state = first_stage_init(
-            rng_key,
-            mm_state.inverse_mass_matrix,
-            initial_state,
-            initial_step_size,
+            rng_key, mm_state.inverse_mass_matrix, initial_state, initial_step_size,
         )
 
         warmup_state = StanWarmupState(da_state, mm_state)
