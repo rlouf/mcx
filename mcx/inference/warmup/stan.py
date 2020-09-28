@@ -54,10 +54,17 @@ def stan_hmc_warmup(
     def init(
         rng_key: jax.random.PRNGKey, initial_state: HMCState, initial_step_size: int
     ) -> Tuple[HMCState, StanWarmupState]:
+
         mm_state = second_stage_init(initial_state)
-        da_state = first_stage_init(
-            rng_key, mm_state.inverse_mass_matrix, initial_state, initial_step_size,
+
+        step_size = find_reasonable_step_size(
+            rng_key,
+            kernel_factory,
+            initial_state,
+            mm_state.inverse_mass_matrix,
+            initial_step_size,
         )
+        da_state = first_stage_init(step_size)
 
         warmup_state = StanWarmupState(da_state, mm_state)
 
@@ -71,14 +78,15 @@ def stan_hmc_warmup(
         chain_state: HMCState,
         warmup_state: StanWarmupState,
     ) -> Tuple[HMCState, StanWarmupState]:
-        """Only update the step size at first."""
+        """Only update the step size at first.
+        """
         step_size = np.exp(warmup_state.da_state.log_step_size)
         inverse_mass_matrix = warmup_state.mm_state.inverse_mass_matrix
-        kernel = kernel_factory(step_size, inverse_mass_matrix)
 
+        kernel = kernel_factory(step_size, inverse_mass_matrix)
         chain_state, info = kernel(rng_key, chain_state)
 
-        chain_state, warmup_state = jax.lax.switch(
+        jax.lax.switch(
             stage,
             (first_stage_update, second_stage_update),
             (rng_key, chain_state, warmup_state),
@@ -120,20 +128,8 @@ def stan_first_stage(kernel_factory: Callable) -> Tuple[Callable, Callable]:
     """
     da_init, da_update = dual_averaging()
 
-    def init(
-        rng_key: jax.random.PRNGKey,
-        inverse_mass_matrix: np.DeviceArray,
-        initial_state: HMCState,
-        initial_step_size: float,
-    ) -> DualAveragingState:
-        step_size = find_reasonable_step_size(
-            rng_key,
-            kernel_factory,
-            initial_state,
-            inverse_mass_matrix,
-            initial_step_size,
-        )
-        da_state = da_init(step_size)
+    def init(initial_step_size: float) -> DualAveragingState:
+        da_state = da_init(initial_step_size)
         return da_state
 
     @jax.jit
@@ -182,7 +178,7 @@ def stan_second_stage(
 
     """
     mm_init, mm_update, mm_final = mass_matrix_adaptation(is_mass_matrix_diagonal)
-    da_init, _ = dual_averaging()
+    _, da_update = dual_averaging()
 
     def init(chain_state: HMCState) -> MassMatrixAdaptationState:
         """Initialize the mass matrix adaptation algorithm."""
@@ -194,23 +190,23 @@ def stan_second_stage(
     def update(
         state: Tuple[jax.random.PRNGKey, HMCState, StanWarmupState]
     ) -> Tuple[HMCState, StanWarmupState]:
-        """Update the chain and mass matrix adapation states within a window.
+        """Move the warmup by one state when in a slow adaptation interval.
 
-        The kernel does not change during this phase: it is built from the
-        step size and mass matrix values computed at the end of the previous
-        window.
+        Mass matrix adaptation and dual averaging states are both
+        adapted in slow adaptation intervals, as indicated in Stan's
+        reference manual.
 
         """
         rng_key, chain_state, warmup_state = state
-        _, rng_key = jax.random.split(rng_key)
 
         step_size = np.exp(warmup_state.da_state.log_step_size)
         inverse_mass_matrix = warmup_state.mm_state.inverse_mass_matrix
         kernel = kernel_factory(step_size, inverse_mass_matrix)
 
-        chain_state, _ = kernel(rng_key, chain_state)
+        chain_state, info = kernel(rng_key, chain_state)
+        new_da_state = da_update(info.acceptance_probability, warmup_state.da_state)
         new_mm_state = mm_update(warmup_state.mm_state, chain_state.position)
-        new_warmup_state = StanWarmupState(warmup_state.da_state, new_mm_state)
+        new_warmup_state = StanWarmupState(new_da_state, new_mm_state)
 
         return chain_state, new_warmup_state
 
@@ -218,28 +214,15 @@ def stan_second_stage(
     def final(
         state: Tuple[jax.random.PRNGKey, HMCState, StanWarmupState]
     ) -> Tuple[HMCState, StanWarmupState]:
-        """Update the adaptation parameters at the end of a slow window.
+        """Update the parameters at the end of a slow adaptation window.
 
-        The mass matrix is computed from the adaptation algorithm's state and
-        the step size is re-initialized to account for the new mass matrix's
-        values.
+        This consists essentially in computing the mass matrix from the current
+        state of the mass matrix algorithm.
 
         """
         rng_key, chain_state, warmup_state = state
-
         new_mm_state = mm_final(warmup_state.mm_state)
-
-        step_size = np.exp(warmup_state.da_state.log_step_size)
-        step_size = find_reasonable_step_size(
-            rng_key,
-            kernel_factory,
-            chain_state,
-            new_mm_state.inverse_mass_matrix,
-            step_size,
-        )
-        da_state = da_init(step_size)
-
-        new_warmup_state = StanWarmupState(da_state, new_mm_state)
+        new_warmup_state = StanWarmupState(warmup_state.da_state, new_mm_state)
 
         return chain_state, new_warmup_state
 
