@@ -107,7 +107,10 @@ def mass_matrix_adaptation(
         return MassMatrixAdaptationState(inverse_mass_matrix, wc_state)
 
     def final(state: MassMatrixAdaptationState) -> MassMatrixAdaptationState:
-        """Compute the inverse mass matrix from the current state.
+        """Final iteration of the mass matrix adaptation.
+
+        In this step we compute the mass matrix from the covariance matrix computed
+        by the Welford algorithm, and re-initialize the later.
         """
         _, wc_state = state
         covariance, count, mean = wc_final(wc_state)
