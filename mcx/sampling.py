@@ -163,7 +163,7 @@ class sampler(object):
         self,
         num_samples: int = 1000,
         num_warmup_steps: int = 1000,
-        progress_bar: bool = False,
+        progress_bar: bool = True,
         **warmup_kwargs,
     ) -> np.DeviceArray:
         """Run the posterior inference.
@@ -250,9 +250,9 @@ class sampler(object):
         # I believe second format is easier to unpack later and should be preferred
 
         self.state = state
-        # trace = self.program.make_trace(chain, self.unravel_fn)
+        trace = self.program.make_trace(chain, self.unravel_fn)
 
-        return chain
+        return trace
 
 
 # -------------------------------------------------------------------
