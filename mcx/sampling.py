@@ -1,5 +1,3 @@
-from typing import Callable, Tuple
-
 import jax
 import jax.numpy as np
 from jax.flatten_util import ravel_pytree
