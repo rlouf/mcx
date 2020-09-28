@@ -4,6 +4,7 @@ import jax
 import jax.numpy as np
 from jax.flatten_util import ravel_pytree
 from tqdm import tqdm
+import warnings
 
 import mcx
 from mcx import sample_forward
@@ -19,57 +20,190 @@ __all__ = ["sampler", "generate", "sequential"]
 
 
 class sampler(object):
+    """The batch sampling runtime.
+
+    This runtime is encountered in every probabilistic programming library
+    (PPL). It allows the user to fetch a pre-defined number of samples from a
+    model's posterior distribution.
+
+    While this is undoubtedly the fastest way to obtain samples, it comes at a
+    cost in mosts PPLs: to obtain more samples one needs to re-run the inference
+    entirely. In MCX the runtime keeps track of the chains' current state so
+    that it is possible to get more samples:
+
+    ```python
+    trace = sampler.run()  # gives an initial 1,000 samples
+    longer_trace = sample.run(5_000)
+
+    final_trace = trace + longer_trace
+    ```
+
+    """
     def __init__(
         self,
         rng_key: jax.random.PRNGKey,
         model: mcx.model,
         program,
-        num_warmup_steps: int = 1000,
         num_chains: int = 4,
-        progress_bar=True,
-        **kwargs
+        **observations,
     ):
+        """Initialize the batch sampling runtime.
 
-        validate_conditioning_variables(model, **kwargs)
-        loglikelihood = build_loglikelihood(model, **kwargs)
+        The runtime is initialized in 4 steps:
 
-        print("Find the initial states...")
+        1. Validate the observations that are passed to the model. In
+        particular, make sure that all variables defined as input to the
+        generative model are provided as well as its output.
+        2. Build and compile the loglikelihood from the model's logpdf and the
+        observations. This can take some time for large datasets.
+        4. Flatten the loglikelihood so the inference algorithms only need to
+        deal with flat arrays.
+        5. Get initial positions from the program.
+        6. Get a function that returns a kernel given its parameters from the
+        program.
+
+        Parameters
+        ----------
+        rng_key
+            The key passed to JAX's random number generator. The runtime is
+            in charge of splitting the key as it is being used.
+        model
+            The model whose posterior we want to sample.
+        program
+            The program that will be used to sampler the posterior.
+        num_chains
+            The number of chains that will be used concurrently for sampling.
+        observations
+            The variables we condition on and their values.
+
+        Returns
+        -------
+        A sampler object.
+
+        """
+        print("sampler: build the loglikelihood")
+        validate_conditioning_variables(model, **observations)
+        loglikelihood = build_loglikelihood(model, **observations)
+
+        print("sampler: find the initial states")
         initial_positions, unravel_fn = get_initial_position(
-            rng_key, model, num_chains, **kwargs
+            rng_key, model, num_chains, **observations
         )
         loglikelihood = flatten_loglikelihood(loglikelihood, unravel_fn)
-        initial_states = program.states(initial_positions, loglikelihood)
+        initial_state = program.states(initial_positions, loglikelihood)
 
-        state, parameters = program.warmup(
-            rng_key, initial_states, loglikelihood, num_chains, num_warmup_steps, progress_bar
-        )
-
-        print("Compile the log-likelihood...")
-        # is that needed or is the loglikelihood already jit_compiled?
-        loglikelihood = jax.jit(loglikelihood)
-
-        print("Build and compile the inference kernel...")
-        # We would like to be able to JIT-compile the kernel
-        # builder. However there is too much overlapping in HMC's namespace
-        # and it looks like the function might be changing a global state.
-        # TODO: Fix this leakeage to be able to compile the function.
+        print("sampler: build and compile the inference kernel")
         kernel_factory = program.kernel_factory(loglikelihood)
         kernel_factory = jax.jit(kernel_factory, static_argnums=(0, 1, 2))
 
+        self.is_warmed_up = False
         self.rng_key = rng_key
         self.num_chains = num_chains
         self.program = program
         self.kernel_factory = kernel_factory
-        self.parameters = parameters
-        self.state = state
+        self.initial_state = initial_state
+        self.state = initial_state
         self.unravel_fn = unravel_fn
 
-    def run(self, num_samples=1000, progress_bar=False):
+    def warmup(self, num_warmup_steps: int = 1000, progress_bar: bool = True, **kwargs):
+        """Warmup the sampler.
+
+        Warmup is necessary to get values for the program's parameters that are
+        adapted to the geometry of the posterior distribution. While run will
+        automatically run the warmup if it hasn't been done before, this method
+        gives access to the trace for the warmup phase and the values of the
+        parameters for diagnostics.
+
+        Parameters
+        ----------
+        num_warmup_steps
+            The number of warmup_steps to perform.
+        progress_bar
+            If True the progress of the warmup will be displayed. Otherwise it
+            will use `lax.scan` to iterate (which is potentially faster).
+        kwargs
+            Parameters to pass to the program's warmup.
+
+        Returns
+        -------
+        chain
+            The trace of the warmup phase.
+        parameters
+            The value of parameters that will be used in the sampling phase.
+
+        """
+        if self.is_warmed_up:
+            warnings.warn(
+                "You are trying to warmup a sampler that has already "
+                "been warmed up. MCX will re-launch the warmup from the "
+                "sampler's initial position. If your use case requires "
+                "a different behavior please raise an issue on "
+                "https://github.com/rlouf/mcx.",
+                UserWarning,
+            )
+            self.state = self.initial_state
+
+        print(
+            f"sampler: warmup {self.num_chains:,} chains for {num_warmup_steps:,} iterations"
+        )
+        chain_state, parameters = self.program.warmup(
+            self.rng_key,
+            self.state,
+            self.kernel_factory,
+            self.num_chains,
+            num_warmup_steps,
+            progress_bar,
+            **kwargs,
+        )
+        self.state = chain_state
+        self.parameters = parameters
+        self.is_warmed_up = True
+        return chain_state, parameters
+
+    def run(
+        self,
+        num_samples: int = 1000,
+        num_warmup_steps: int = 1000,
+        progress_bar: bool = False,
+        **warmup_kwargs,
+    ) -> np.DeviceArray:
+        """Run the posterior inference.
+
+        For convenience we automatically run the warmup if it hasn't been run
+        independently previously. Samples taken during the warmup phase are
+        discarded by default. To keep them you can run:
+
+        Parameters
+        ----------
+        num_samples
+            The number of samples to take from the posterior distribution.
+        num_warmup_steps
+            The number of warmup_steps to perform.
+        progress_bar
+            If True the progress of the warmup and samplig will be displayed.
+            Otherwise it will use `lax.scan` to iterate (which is potentially
+            faster).
+        warmup_kwargs
+            Parameters to pass to the program's warmup.
+
+        Returns
+        -------
+        trace
+            A Trace object that contains the chains, some information about
+            the inference process (e.g. divergences for programs in the
+            HMC family).
+
+        """
+        if not self.is_warmed_up:
+            self.warmup(num_warmup_steps, progress_bar, **warmup_kwargs)
+
         _, self.rng_key = jax.random.split(self.rng_key)
         rng_keys = jax.random.split(self.rng_key, num_samples)
         state = self.state
 
-        print(f"Draw {num_samples} samples across {self.num_chains} chains")
+        print(
+            f"sampler: draw {num_samples:,} samples from {self.num_chains:,} chains"
+        )
 
         @jax.jit
         def update_chains(rng_key, parameters, chain_state):
@@ -109,7 +243,9 @@ class sampler(object):
                 )
                 return (state, parameters), (state, info)
 
-            last_state, chain = jax.lax.scan(update_scan, (state, self.parameters), rng_keys)
+            last_state, chain = jax.lax.scan(
+                update_scan, (state, self.parameters), rng_keys
+            )
 
         # chain
         # with progress bar is of format [(state, info) ,(state, info), (state, info)]
