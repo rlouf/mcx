@@ -45,7 +45,9 @@ class RandVar(object):
             op=ast.Add(),
             value=ast.Call(
                 func=ast.Attribute(
-                    value=self.distribution, attr="logpdf_sum", ctx=ast.Load(),
+                    value=self.distribution,
+                    attr="logpdf_sum",
+                    ctx=ast.Load(),
                 ),
                 args=[ast.Name(id=self.name, ctx=ast.Load())],
                 keywords=[],
@@ -59,7 +61,9 @@ class RandVar(object):
             targets=[ast.Name(id=self.name, ctx=ast.Store())],
             value=ast.Call(
                 func=ast.Attribute(
-                    value=self.distribution, attr="forward", ctx=ast.Load(),
+                    value=self.distribution,
+                    attr="forward",
+                    ctx=ast.Load(),
                 ),
                 args=args,
                 keywords=[],
@@ -69,7 +73,10 @@ class RandVar(object):
 
 class Var(object):
     def __init__(
-        self, name: str, value: Union[ast.Constant, ast.Num], is_returned: bool,
+        self,
+        name: str,
+        value: Union[ast.Constant, ast.Num],
+        is_returned: bool,
     ):
         self.name = name
         self.value = value

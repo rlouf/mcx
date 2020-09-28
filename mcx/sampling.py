@@ -389,7 +389,8 @@ class sequential(object):
         rng_keys = jax.random.split(self.rng_key, self.num_samples)
         with tqdm(rng_keys, unit="samples") as progress:
             progress.set_description(
-                "Collecting {:,} samples".format(self.num_samples), refresh=False,
+                "Collecting {:,} samples".format(self.num_samples),
+                refresh=False,
             )
             for key in progress:
                 state = update_chains(state, key)
