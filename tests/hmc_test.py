@@ -41,7 +41,7 @@ def test_linear_regression():
     rng_key = jax.random.PRNGKey(2)
 
     # Batch sampler
-    sampler = mcx.sample(
+    sampler = mcx.sampler(
         rng_key,
         linear_regression,
         kernel,
@@ -54,24 +54,3 @@ def test_linear_regression():
     mean_scale = onp.asarray(np.mean(trace["posterior"]["sigma"][:, 1000:], axis=1))
     assert mean_coeffs == pytest.approx(3, 1e-1)
     assert mean_scale == pytest.approx(1, 1e-1)
-
-    # Generator
-    samples = mcx.generate(
-        rng_key,
-        linear_regression,
-        kernel,
-        num_chains=2,
-        **observations,
-    )
-    trace = {"coeffs": [], "sigma": []}
-    for _ in range(3000):
-        sample = next(samples)
-        trace["coeffs"].append(sample[0].position[:, 0])
-        trace["sigma"].append(sample[0].position[:, 1])
-
-    coeffs = np.stack(trace["coeffs"], axis=1)
-    sigma = np.stack(trace["sigma"], axis=1)
-    mean_coeffs = onp.asarray(np.mean(coeffs[:, 1000:], axis=1))
-    mean_sigma = onp.asarray(np.mean(sigma[:, 1000:], axis=1))
-    assert mean_coeffs == pytest.approx(3, 1e-1)
-    assert mean_sigma == pytest.approx(1, 1e-1)

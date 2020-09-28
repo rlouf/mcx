@@ -16,7 +16,7 @@ def test_find_reasonable_step_size():
     inv_mass_matrix = np.array([1.0])
 
     init_position = np.array([3.0])
-    init_state = hmc_init(init_position, potential_fn)
+    init_state = hmc_init(init_position, jax.value_and_grad(potential_fn))
 
     def kernel_generator(step_size, inv_mass_matrix):
         momentum_generator, kinetic_energy = gaussian_euclidean_metric(inv_mass_matrix)
