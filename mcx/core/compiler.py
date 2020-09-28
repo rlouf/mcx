@@ -179,12 +179,7 @@ def compile_to_sampler(graph, namespace) -> Artifact:
         if not isinstance(node, mcx.core.graph.Var)
     ]
 
-    returned = ast.Return(
-        value=ast.Tuple(
-            elts=returned_vars,
-            ctx=ast.Load(),
-        )
-    )
+    returned = ast.Return(value=ast.Tuple(elts=returned_vars, ctx=ast.Load(),))
     body.append(returned)
 
     sampler_ast = ast.Module(
@@ -274,12 +269,7 @@ def compile_to_forward_sampler(graph, namespace, jit=False) -> Artifact:
     if len(returned_vars) == 1:
         returned = ast.Return(returned_vars[0])
     else:
-        returned = ast.Return(
-            value=ast.Tuple(
-                elts=returned_vars,
-                ctx=ast.Load(),
-            )
-        )
+        returned = ast.Return(value=ast.Tuple(elts=returned_vars, ctx=ast.Load(),))
     body.append(returned)
     sampler_ast = ast.Module(
         body=[

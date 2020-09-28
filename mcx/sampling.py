@@ -39,6 +39,7 @@ class sampler(object):
     ```
 
     """
+
     def __init__(
         self,
         rng_key: jax.random.PRNGKey,
@@ -201,9 +202,7 @@ class sampler(object):
         rng_keys = jax.random.split(self.rng_key, num_samples)
         state = self.state
 
-        print(
-            f"sampler: draw {num_samples:,} samples from {self.num_chains:,} chains"
-        )
+        print(f"sampler: draw {num_samples:,} samples from {self.num_chains:,} chains")
 
         @jax.jit
         def update_chains(rng_key, parameters, chain_state):
@@ -263,7 +262,9 @@ class sampler(object):
 # -------------------------------------------------------------------
 
 
-def iterative_sampler(rng_key, model, program, num_warmup_steps=1000, num_chains=4, **kwargs):
+def iterative_sampler(
+    rng_key, model, program, num_warmup_steps=1000, num_chains=4, **kwargs
+):
     """ The generator runtime """
 
     init, warmup, build_kernel, to_trace, adapt_loglikelihood = program
@@ -475,7 +476,8 @@ def get_initial_position(rng_key, model, num_chains, **kwargs):
 
     # np.atleast_1d is necessary to handle single chains
     sample_position_dict = {
-        parameter: np.atleast_1d(values)[0] for parameter, values in initial_positions.items()
+        parameter: np.atleast_1d(values)[0]
+        for parameter, values in initial_positions.items()
     }
     _, unravel_fn = ravel_pytree(sample_position_dict)
 
