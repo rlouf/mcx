@@ -25,7 +25,7 @@ class StanWarmupState(NamedTuple):
 
 
 def stan_hmc_warmup(
-    kernel_factory, num_warmup_steps: int, is_mass_matrix_diagonal: bool = True
+    kernel_factory, is_mass_matrix_diagonal: bool = True
 ) -> Tuple[Callable, Callable, Callable]:
     """Warmup scheme for sampling procedures based on euclidean manifold HMC.
     The schedule and algorithms used match Stan's [1]_ as closely as possible.
@@ -45,6 +45,38 @@ def stan_hmc_warmup(
     size is re-initialized to a "reasonable" value.
     3. A last fast adaptation window where only the step size is adapted.
 
+    Schematically:
+
+    ```
+    +---------+---+------+------------+------------------------+------+
+    |  fast   | s | slow |   slow     |        slow            | fast |
+    +---------+---+------+------------+------------------------+------+
+    1         2   3      3            3                        3
+    ```
+
+    Step (1) consists in find a "reasonable" first step size that is used to
+    initialize the dual averaging scheme. In (2) we initialize the mass matrix
+    to the matrix. In (3) we compute the mass matrix to use in the kernel and
+    re-initialize the mass matrix adaptation. The step size is still adapated
+    in slow adaptation windows, and is not re-initialized between windows.
+
+    Parameters
+    ----------
+    kernel_factory
+        A function which returns a transition kernel given a step size and a
+        mass matrix.
+    is_mass_matrix_diagonal
+        Create and adapt a diagonal mass matrix if True, a dense matrix otherwise.
+
+    Returns
+    -------
+    init
+        Function that initializes the warmup.
+    update
+        Function that moves the warmup one step.
+    final
+        Function that returns the step size and mass matrix given a warmup state.
+
     """
     first_stage_init, first_stage_update = stan_first_stage(kernel_factory)
     second_stage_init, second_stage_update, second_stage_final = stan_second_stage(
@@ -54,7 +86,13 @@ def stan_hmc_warmup(
     def init(
         rng_key: jax.random.PRNGKey, initial_state: HMCState, initial_step_size: int
     ) -> Tuple[HMCState, StanWarmupState]:
+        """Initialize the warmup.
 
+        To initialize the Stan warmup we create an identity mass matrix and use
+        the `find_reasonable_step_size` procedure to initialize the dual
+        averaging algorithm.
+
+        """
         mm_state = second_stage_init(initial_state)
 
         step_size = find_reasonable_step_size(
@@ -78,12 +116,37 @@ def stan_hmc_warmup(
         chain_state: HMCState,
         warmup_state: StanWarmupState,
     ) -> Tuple[HMCState, StanWarmupState]:
-        """Only update the step size at first.
-        """
-        step_size = np.exp(warmup_state.da_state.log_step_size)
-        inverse_mass_matrix = warmup_state.mm_state.inverse_mass_matrix
+        """Move the warmup by one step.
 
+        We first create a new kernel with the current values of the step size
+        and mass matrix and move the chain one step. Then, depending on the
+        stage passed as an argument we execute either the fast or slow interval
+        update. Finally we execute the final update of the slow interval depending
+        on whether we are at the end of the window.
+
+        Parameters
+        ----------
+        rng_key
+            The key used in JAX's random number generator.
+        stage
+            The current stage of the warmup. 0 for the fast interval, 1 for the
+            slow interval.
+        is_middle_window_end
+            True if this step is the last of a slow adaptation interval.
+        chain_state
+            Current state of the chain.
+        warmup
+            Current warmup state.
+
+        Returns
+        -------
+        The updated states of the chain and the warmup.
+
+        """
+        step_size = np.exp(warmup_state.da_state.log_step_size_avg)
+        inverse_mass_matrix = warmup_state.mm_state.inverse_mass_matrix
         kernel = kernel_factory(step_size, inverse_mass_matrix)
+
         chain_state, info = kernel(rng_key, chain_state)
 
         jax.lax.switch(
@@ -102,6 +165,7 @@ def stan_hmc_warmup(
         return chain_state, warmup_state
 
     def final(warmup_state: StanWarmupState) -> Tuple[float, np.DeviceArray]:
+        """Return the step size and mass matrix."""
         step_size = np.exp(warmup_state.da_state.log_step_size)
         inverse_mass_matrix = warmup_state.mm_state.inverse_mass_matrix
         return step_size, inverse_mass_matrix
