@@ -11,7 +11,7 @@ from mcx import sample_forward
 from mcx.core import compile_to_logpdf
 
 
-__all__ = ["sampler", "generate", "sequential"]
+__all__ = ["sampler", "iterative_sampler", "sequential"]
 
 
 # -------------------------------------------------------------------
@@ -259,11 +259,11 @@ class sampler(object):
 
 
 # -------------------------------------------------------------------
-#                 == THE GENERATOR EXECUTION MODEL ==
+#                 == THE ITERATIVE SAMPLING RUNTIME ==
 # -------------------------------------------------------------------
 
 
-def generate(rng_key, model, program, num_warmup_steps=1000, num_chains=4, **kwargs):
+def iterative_sampler(rng_key, model, program, num_warmup_steps=1000, num_chains=4, **kwargs):
     """ The generator runtime """
 
     init, warmup, build_kernel, to_trace, adapt_loglikelihood = program
