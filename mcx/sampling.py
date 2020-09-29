@@ -104,7 +104,7 @@ class sampler(object):
         self.state = initial_state
         self.unravel_fn = unravel_fn
 
-    def warmup(self, num_warmup_steps: int = 1000, progress_bar: bool = True, **kwargs):
+    def warmup(self, num_warmup_steps: int = 1000, accelerate: bool = False, **kwargs):
         """Warmup the sampler.
 
         Warmup is necessary to get values for the program's parameters that are
@@ -151,7 +151,7 @@ class sampler(object):
             self.kernel_factory,
             self.num_chains,
             num_warmup_steps,
-            progress_bar,
+            accelerate,
             **kwargs,
         )
         self.state = chain_state
@@ -163,7 +163,7 @@ class sampler(object):
         self,
         num_samples: int = 1000,
         num_warmup_steps: int = 1000,
-        progress_bar: bool = True,
+        accelerate: bool = False,
         **warmup_kwargs,
     ) -> np.DeviceArray:
         """Run the posterior inference.
@@ -178,8 +178,8 @@ class sampler(object):
             The number of samples to take from the posterior distribution.
         num_warmup_steps
             The number of warmup_steps to perform.
-        progress_bar
-            If True the progress of the warmup and samplig will be displayed.
+        accelerate
+            If False the progress of the warmup and samplig will be displayed.
             Otherwise it will use `lax.scan` to iterate (which is potentially
             faster).
         warmup_kwargs
@@ -194,7 +194,7 @@ class sampler(object):
 
         """
         if not self.is_warmed_up:
-            self.warmup(num_warmup_steps, progress_bar, **warmup_kwargs)
+            self.warmup(num_warmup_steps, accelerate, **warmup_kwargs)
 
         _, self.rng_key = jax.random.split(self.rng_key)
         rng_keys = jax.random.split(self.rng_key, num_samples)
@@ -214,7 +214,22 @@ class sampler(object):
         # for small sample sizes lax.scan is not dramatically faster normal
         # iteration and lax. You thus are not losing much by using it for
         # initial exploration.
-        if progress_bar:
+        if accelerate:
+
+            @jax.jit
+            def update_scan(carry, key):
+                state, parameters = carry
+                keys = jax.random.split(key, self.num_chains)
+                state, info = jax.vmap(update_chains, in_axes=(0, 0, 0))(
+                    keys, parameters, state
+                )
+                return (state, parameters), (state, info)
+
+            last_state, chain = jax.lax.scan(
+                update_scan, (state, self.parameters), rng_keys
+            )
+
+        else:
 
             chain = []
             with tqdm(rng_keys, unit="samples") as progress:
@@ -230,19 +245,6 @@ class sampler(object):
                         keys, self.parameters, state
                     )
                     chain.append((state, info))
-        else:
-
-            def update_scan(carry, key):
-                state, parameters = carry
-                keys = jax.random.split(key, self.num_chains)
-                state, info = jax.vmap(update_chains, in_axes=(0, 0, 0))(
-                    keys, parameters, state
-                )
-                return (state, parameters), (state, info)
-
-            last_state, chain = jax.lax.scan(
-                update_scan, (state, self.parameters), rng_keys
-            )
 
         # chain
         # with progress bar is of format [(state, info) ,(state, info), (state, info)]
@@ -389,7 +391,8 @@ class sequential(object):
         rng_keys = jax.random.split(self.rng_key, self.num_samples)
         with tqdm(rng_keys, unit="samples") as progress:
             progress.set_description(
-                "Collecting {:,} samples".format(self.num_samples), refresh=False,
+                "Collecting {:,} samples".format(self.num_samples),
+                refresh=False,
             )
             for key in progress:
                 state = update_chains(state, key)

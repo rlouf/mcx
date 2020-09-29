@@ -72,7 +72,7 @@ class HMC:
         kernel_factory: Callable,
         num_chains,
         num_warmup_steps: int = 1000,
-        progress_bar=True,
+        accelerate=False,
         initial_step_size: float = 0.1,
     ) -> Tuple[HMCState, HMCParameters]:
         """I don't like having a ton of warmup logic in here."""
@@ -102,7 +102,33 @@ class HMC:
 
         schedule = np.array(stan_warmup_schedule(num_warmup_steps))
 
-        if progress_bar:
+        if accelerate:
+
+            @jax.jit
+            def update_chain(carry, interval):
+                rng_key, chain_state, warmup_state = carry
+                stage, is_middle_window_end = interval
+
+                _, rng_key = jax.random.split(rng_key)
+                keys = jax.random.split(rng_key, num_chains)
+                chain_state, warmup_state = jax.vmap(
+                    update, in_axes=(0, None, None, 0, 0)
+                )(
+                    keys,
+                    stage,
+                    is_middle_window_end,
+                    chain_state,
+                    warmup_state,
+                )
+
+                return (rng_key, chain_state, warmup_state), (chain_state, warmup_state)
+
+            last_state, _ = jax.lax.scan(
+                update_chain, (rng_key, chain_state, warmup_state), schedule
+            )
+            _, chain_state, warmup_state = last_state
+
+        else:
 
             chain = []
             with tqdm(schedule, unit="samples") as progress:
@@ -122,26 +148,6 @@ class HMC:
             chain_state, warmup_state = chain[
                 -1
             ]  # not using it now, but to give lax.scan a fair comparison
-
-        else:
-
-            @jax.jit
-            def update_chain(carry, interval):
-                rng_key, chain_state, warmup_state = carry
-                stage, is_middle_window_end = interval
-
-                _, rng_key = jax.random.split(rng_key)
-                keys = jax.random.split(rng_key, num_chains)
-                chain_state, warmup_state = jax.vmap(
-                    update, in_axes=(0, None, None, 0, 0)
-                )(keys, stage, is_middle_window_end, chain_state, warmup_state,)
-
-                return (rng_key, chain_state, warmup_state), (chain_state, warmup_state)
-
-            last_state, _ = jax.lax.scan(
-                update_chain, (rng_key, chain_state, warmup_state), schedule
-            )
-            _, chain_state, warmup_state = last_state
 
         step_size, inverse_mass_matrix = jax.vmap(final, in_axes=(0,))(warmup_state)
         num_integration_steps = self.parameters.num_integration_steps

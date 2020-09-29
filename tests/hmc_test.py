@@ -27,7 +27,6 @@ def linear_regression(x, lmbda=1.0):
 @pytest.mark.sampling
 @pytest.mark.slow
 def test_linear_regression():
-
     x_data = onp.random.normal(0, 5, size=1000).reshape(-1, 1)
     y_data = 3 * x_data + onp.random.normal(size=x_data.shape)
 
