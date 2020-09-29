@@ -1,11 +1,10 @@
 import ast
-from typing import List
+from typing import Dict, List
 
 import astor
 import networkx as nx
 
 from mcx.core.nodes import Argument, RandVar, Transformation, Var
-from mcx.core.utils import relabel_arguments
 
 
 class GraphicalModel(nx.DiGraph):
@@ -237,3 +236,29 @@ class GraphicalModel(nx.DiGraph):
         # argument's. It is important to keep it this way to keep
         # the name hierarchy.
         return nx.compose(model_graph, self)
+
+
+def relabel_arguments(value_node: ast.AST, mapping: Dict):
+    """Walk down the Abstract Syntax Tree of the right-hand-side of the
+    assignment to relabel the arguments.
+
+    Returns
+    -------
+    A list of variable names, default to an empty list.
+    """
+    for node in ast.walk(value_node):
+        if isinstance(node, ast.BinOp):
+            if isinstance(node.left, ast.Name):
+                var_name = node.left.id
+                if var_name in mapping:
+                    node.left.id = mapping[var_name]
+            if isinstance(node.right, ast.Name):
+                var_name = node.right.id
+                if var_name in mapping:
+                    node.right.id = mapping[var_name]
+        elif isinstance(node, ast.Call):
+            for arg in node.args:
+                if isinstance(arg, ast.Name):
+                    var_name = arg.id
+                    if var_name in mapping:
+                        arg.id = mapping[var_name]

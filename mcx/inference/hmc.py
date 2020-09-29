@@ -134,13 +134,7 @@ class HMC:
                 keys = jax.random.split(rng_key, num_chains)
                 chain_state, warmup_state = jax.vmap(
                     update, in_axes=(0, None, None, 0, 0)
-                )(
-                    keys,
-                    stage,
-                    is_middle_window_end,
-                    chain_state,
-                    warmup_state,
-                )
+                )(keys, stage, is_middle_window_end, chain_state, warmup_state,)
 
                 return (rng_key, chain_state, warmup_state), (chain_state, warmup_state)
 

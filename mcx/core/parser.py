@@ -1,13 +1,12 @@
 import ast
 import inspect
 import re
-from typing import Any, Callable, Dict, List, Union
+from typing import Any, Callable, Dict, List, Optional, Union
 
 import astor
 
 import mcx
 from mcx.core.graph import GraphicalModel
-from mcx.core.utils import read_object_name
 
 
 def parse_definition(model: Callable, namespace: Dict) -> GraphicalModel:
@@ -310,3 +309,53 @@ def find_variable_arguments(node) -> List[str]:
                 if isinstance(arg, ast.Name):
                     var_names.append(arg.id)
     return var_names
+
+
+def read_object_name(node: ast.AST, name: Optional[List[str]] = None) -> str:
+    """Parse the object's (class or function) name from the right-hand size of an
+    assignement nameession.
+
+    The parsing is done recursively to recover the full import path of the
+    imported names. This step is only an operation on strings: we do not check
+    whether the names are indeed present in the namespace.
+
+    Args:
+        node: The right-hand-side of the assignment node.
+        name: The parts of the name that have been parsed.
+
+    Returns:
+        The full path to the object on the right-hand-side of the assignment.
+
+    Raises:
+        ValueError: If the next node in the recursion is neither a variable
+            (ast.Name) nor and attribute.
+
+    Examples:
+        When the name is imported directly:
+
+        >>> read_object_name(ast.Name(id='Exponential'))
+        Exponential
+
+        When it is imported from a submodule. Here for `mcmx.distributions.Normal`
+
+        >>> read_object_name(
+        ...     ast.Attribute(value=ast.Attribute(value=ast.Name(id='mcmx'), attr='distributions'), attr='Normal')
+        ... )
+        mcmx.distributions.Normal
+    """
+    if not name:
+        name = []
+
+    if isinstance(node, ast.Name):
+        name.insert(0, node.id)
+        return ".".join(name)
+    elif isinstance(node, ast.Attribute):
+        name.insert(0, node.attr)
+        new_node = node.value
+        return read_object_name(new_node, name)
+    else:
+        raise ValueError(
+            "Error while getting the right-hand-side object's name: expected `ast.Name` or `ast.Attribute`, got {}".format(
+                node
+            )
+        )
