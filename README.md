@@ -6,13 +6,6 @@
  XLA-rated Bayesian inference
 </h3>
 
-<p align="center">
-  <a href="https://github.com/rlouf/mcx/actions?query=workflow%3Atest"><img src="https://github.com/rlouf/mcx/workflows/build/badge.svg?branch=master"></a>
-  <a href="https://github.com/rlouf/mcx/actions?query=workflow%3Alint"><img src="https://github.com/rlouf/mcx/workflows/lint/badge.svg?branch=master"></a>
-  <a href="https://github.com/psf/black"><img src="https://img.shields.io/badge/code%20style-black-000000.svg"></a>
-</p>
-
-
 MCX is a probabilistic programing library with a laser-focus on sampling
 methods. MCX transforms the model definitions to generate logpdf or sampling
 functions. These functions are JIT-compiled with JAX; they support batching and
@@ -78,19 +71,11 @@ trace = sampler.run()
 
 ## Currently implemented
 
-* Parsing simple model definitions and compilation to `logpdf` or prior sampler;
-* Sampling from the model's prior definition, prior predictive sampling;
-* Bernoulli, Beta, Binomial, Categorical, Discrete Uniform, Log-Normal, Normal,
-  Poisson, Uniform distributions;
-* Sampling with Hamiltonian Monte Carlo;
-* Batch, iterative and sequential sampling runtimes;
-* core warmup logic for HMC and empirical HMC;
-* Random Walk Metropolis kernel;
-* 4 symplectic integrators (velocity Verlet, McLachlan, Yoshida, Four stages)
-
 See [this issue](https://github.com/rlouf/mcx/issues/1) for an updated roadmap for v0.1.
 
-You can follow discussions about the API for neural network layers in [this Pull Request](https://github.com/rlouf/mcx/pull/16). You are welcome to contribute to the discussion.
+You can follow discussions about the API for neural network layers in [this Pull
+Request](https://github.com/rlouf/mcx/pull/16). You are welcome to contribute to
+the discussion.
 
 ## Iterative sampling
 
