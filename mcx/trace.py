@@ -1,18 +1,27 @@
-class Trace:
+from arviz import InferenceData
+
+
+__all__ = ["Trace"]
+
+
+class Trace(InferenceData):
     """Trace contains the data generated during inference: samples,
     divergences, values of diagnostics, etc.
+
+    The class is a thin wrapper around ArviZ's InferenceData, it is an
+    interface between the chains produced by the samplers and ArviZ.
     """
 
-    def __init__(self):
+    def __init__(self, prior=None, posterior=None, posterior_predictive=None):
+        """Extract the informations that we want to save to the trace and initializes.
+        """
+        thing = None
         self.posterior = None
         self.posterior_predictive = None
         self.sample_stats = None
         self.log_likelihood = None
         self.posterior_predictive = None
-        pass
-
-    @classmethod
-    def from_dict(cls, dictionary) -> "Trace":
+        super().__init__(thing)
         pass
 
     def to_dict(self) -> dict:

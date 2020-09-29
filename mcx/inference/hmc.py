@@ -1,10 +1,12 @@
-from typing import Callable, NamedTuple, Tuple, Optional
+from typing import Callable, List, NamedTuple, Tuple, Optional
 import warnings
 
 import jax
 from jax import numpy as np
 from tqdm import tqdm
+import xdarray as xr
 
+from mcx.trace import Trace
 from mcx.inference.integrators import velocity_verlet, hmc_proposal
 from mcx.inference.kernels import HMCState, hmc_kernel, hmc_init
 from mcx.inference.metrics import gaussian_euclidean_metric
@@ -175,15 +177,30 @@ class HMC:
 
         return build_kernel
 
-    def make_trace(self, chain: np.DeviceArray, ravel_fn: Callable) -> np.DeviceArray:
+    def make_trace(
+        self, chain: List, ravel_fn: Callable, chain_type="posterior"
+    ) -> np.DeviceArray:
         """Translate the raw chains to a format that can be understood by and
-        is useful to humans. Will enventually transform it to a Trace object.
+        is useful to humans. Will eventually transform it to a Trace object.
+
+        Parameters
+        ----------
+        chain
+            A list
         """
         trace = {}
 
         # maybe we should ravel the chain in the sampling part?
         def ravel_chain(chain):
             return jax.vmap(ravel_fn, in_axes=(0,))(chain)
+
+        posterior = xr.Dataset(
+            {
+                "scale": (["chain", "draw", "a_dim"], trace["scale"]),
+                "coeff": (["chain", "draw", "a_dim"], trace["scale"]),
+            },
+            coords={"chain": (),"draw": (), "a_dim": ()},
+        )
 
         # Positionned were ravelled before sampling to be able to make computations
         # on flat arrays in the backend. We now need to bring their to
@@ -206,7 +223,29 @@ class HMC:
             [info.is_accepted for _, info in chain], axis=1
         )
 
-        return trace
+        """
+        Needs to be a xr.Dataset with:
+
+        data = (
+            {
+                "scale": (["chain", "draw", "a_dim"], np.random.normal(size=(4, 100, 3))),
+                "coeff": (["chain", "draw"], np.random.normal(size=(4, 100))),
+            },
+        )
+        coords = {
+            "chain": (["chain"], np.arange(4)),
+            "draw": (["draw"], np.arange(100)),
+            "a_dim": (["a_dim"], ["x", "y", "z"]),
+        }
+
+        idata = az.InferenceData(posterior=dataset, prior=dataset)
+
+        we can have: prior, posterior_predictive, posterior, log_likelihood, sample_stats
+        and warmup_posterior, warmup_log_likelihood, warmup_sample_stats
+        
+        """
+
+        return posterior
 
     def _to_potential(self, loglikelihood: Callable) -> Callable:
         """The potential in the Hamiltonian Monte Carlo algorithm is equal to
