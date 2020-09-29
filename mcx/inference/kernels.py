@@ -13,6 +13,11 @@ from mcx.inference.metrics import KineticEnergy, MomentumGenerator
 __all__ = ["HMCState", "HMCInfo", "hmc_init", "hmc_kernel", "rwm_kernel"]
 
 
+# ----------------------------------------
+#      == Hamiltonian Monte Carlo ==
+# ----------------------------------------
+
+
 class HMCState(NamedTuple):
     """Describes the state of the HMC algorithm."""
 

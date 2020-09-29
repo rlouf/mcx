@@ -33,9 +33,9 @@ Proposer = Callable[[jax.random.PRNGKey, Proposal], Proposal]
 Integrator = Callable[[IntegratorState, float], IntegratorState]
 
 
-#
-# Proposals
-#
+# ---------------------------
+#      == Proposals  ==
+# ---------------------------
 
 
 def hmc_proposal(
@@ -92,9 +92,9 @@ def empirical_hmc_proposal(
     return propose
 
 
-#
-# Integrators
-#
+# --------------------------------------
+#      == Euclidean integrators  ==
+# --------------------------------------
 
 
 def velocity_verlet(potential_fn: Callable, kinetic_energy_fn: Callable) -> Integrator:
