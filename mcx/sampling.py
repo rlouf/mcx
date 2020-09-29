@@ -9,7 +9,7 @@ from mcx import sample_forward
 from mcx.core import compile_to_logpdf
 
 
-__all__ = ["sampler", "iterative_sampler", "sequential"]
+__all__ = ["batch_sampler", "iterative_sampler", "sequential_sampler"]
 
 
 # -------------------------------------------------------------------
@@ -17,7 +17,7 @@ __all__ = ["sampler", "iterative_sampler", "sequential"]
 # -------------------------------------------------------------------
 
 
-class sampler(object):
+class batch_sampler(object):
     """The batch sampling runtime.
 
     This runtime is encountered in every probabilistic programming library
@@ -311,11 +311,11 @@ def iterative_sampler(
 
 
 # -------------------------------------------------------------------
-#               == THE SEQUENTIAL EXECUTION MODEL ==
+#               == THE SEQUENTIAL SAMPLING RUNTIME ==
 # -------------------------------------------------------------------
 
 
-class sequential(object):
+class sequential_sampler(object):
     def __init__(
         self, rng_key, model, program, num_samples=1000, num_warmup_steps=1000
     ):

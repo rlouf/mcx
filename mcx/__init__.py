@@ -1,7 +1,9 @@
 from mcx.model import model
 from mcx.model import sample_forward
-from mcx.sampling import sampler, iterative_sampler, sequential
+from mcx.sampling import batch_sampler, iterative_sampler, sequential_sampler
 from mcx.inference.hmc import HMC
+
+sampler = batch_sampler
 
 __all__ = [
     "model",
@@ -10,5 +12,5 @@ __all__ = [
     "HMC",
     "sampler",
     "iterative_sampler",
-    "sequential",
+    "sequential_sampler",
 ]
