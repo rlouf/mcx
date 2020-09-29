@@ -1,0 +1,193 @@
+
+<!DOCTYPE html>
+
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MCX: XLA-rated Bayesian inference &#8212; mcx  documentation</title>
+    <link rel="stylesheet" href="_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    <script id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+    <script src="_static/jquery.js"></script>
+    <script src="_static/underscore.js"></script>
+    <script src="_static/doctools.js"></script>
+    <script src="_static/language_data.js"></script>
+    <script async="async" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.7/latest.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Build models in MCX" href="build_model.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <div class="section" id="mcx-xla-rated-bayesian-inference">
+<h1>MCX: XLA-rated Bayesian inference<a class="headerlink" href="#mcx-xla-rated-bayesian-inference" title="Permalink to this headline">¶</a></h1>
+<p><strong>Intuitive modeling language</strong>
+MCX is a bayesian modeling language and inference library built on top of
+JAX. Expressing a generative model in MCX is as simple as being able to
+write it down on a piece of paper and having some basic knowledge of Numpy.</p>
+<p><strong>Performant inference</strong>
+MCX natively supports batching on GPU for faster inference and sequential
+inference for bayesian updating.</p>
+<p><strong>The best of usability and modularity</strong>
+MCX reconciles modularity with usability. It does offer “turn key” algorithms
+for users who just want something that works. But it also allows users to
+compose their own inference kernel from multiple parts.</p>
+<div class="section" id="mcx-by-example">
+<h2>MCX by example<a class="headerlink" href="#mcx-by-example" title="Permalink to this headline">¶</a></h2>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">jax</span>
+<span class="kn">from</span> <span class="nn">jax</span> <span class="kn">import</span> <span class="n">numpy</span> <span class="k">as</span> <span class="n">np</span>
+<span class="kn">import</span> <span class="nn">mcx</span>
+<span class="kn">import</span> <span class="nn">mcx.distributions</span> <span class="k">as</span> <span class="nn">dist</span>
+
+
+<span class="n">rng_key</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">PRNGKey</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+<span class="n">X</span><span class="p">,</span> <span class="n">y</span> <span class="o">=</span> <span class="n">observations</span><span class="p">()</span>
+
+<span class="nd">@mcx</span><span class="o">.</span><span class="n">model</span>
+<span class="k">def</span> <span class="nf">linear_regression</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">lmbda</span><span class="o">=</span><span class="mf">1.</span><span class="p">):</span>
+    <span class="n">scale</span> <span class="o">&lt;~</span> <span class="n">dist</span><span class="o">.</span><span class="n">Exponential</span><span class="p">(</span><span class="n">lmbda</span><span class="p">)</span>
+    <span class="n">coefs</span> <span class="o">&lt;~</span> <span class="n">dist</span><span class="o">.</span><span class="n">Normal</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">shape</span><span class="p">(</span><span class="n">x</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">]))</span>
+    <span class="n">y</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">coefs</span><span class="p">)</span>
+    <span class="n">predictions</span> <span class="o">&lt;~</span> <span class="n">dist</span><span class="o">.</span><span class="n">Normal</span><span class="p">(</span><span class="n">y</span><span class="p">,</span> <span class="n">scale</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">predictions</span>
+
+<span class="c1"># Sample from the model posterior distribution using HMC</span>
+<span class="n">hmc_kernel</span> <span class="o">=</span> <span class="n">mcx</span><span class="o">.</span><span class="n">HMC</span><span class="p">(</span><span class="n">num_integration_steps</span><span class="o">=</span><span class="mi">100</span><span class="p">)</span>
+
+<span class="n">observations</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;x&#39;</span><span class="p">:</span> <span class="n">X</span><span class="p">,</span> <span class="s1">&#39;predictions&#39;</span><span class="p">:</span> <span class="n">y</span><span class="p">,</span> <span class="s1">&#39;lmbda&#39;</span><span class="p">:</span> <span class="mf">3.</span><span class="p">}</span>
+<span class="n">sampler</span> <span class="o">=</span> <span class="n">mcx</span><span class="o">.</span><span class="n">sample</span><span class="p">(</span><span class="n">rng_key</span><span class="p">,</span> <span class="n">linear_regression</span><span class="p">,</span> <span class="n">hmc_kernel</span><span class="p">,</span> <span class="o">**</span><span class="n">observations</span><span class="p">)</span>
+<span class="n">trace</span> <span class="o">=</span> <span class="n">sampler</span><span class="o">.</span><span class="n">run</span><span class="p">()</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="features">
+<h2>Features<a class="headerlink" href="#features" title="Permalink to this headline">¶</a></h2>
+<ul class="simple">
+<li><p>The HMC and empirical HMC algorithms with Stan warmup;</p></li>
+<li><p>A dozen distributions;</p></li>
+<li><p>Batch sampling;</p></li>
+<li><p>Iterative sampling for more complex workflows;</p></li>
+<li><p>Sequential inference for bayesian updating;</p></li>
+<li><p>Sample millions of chains in parallel;</p></li>
+<li><p>Fast inference on GPU.</p></li>
+</ul>
+</div>
+<div class="section" id="from-practice-to-research">
+<h2>From practice to research<a class="headerlink" href="#from-practice-to-research" title="Permalink to this headline">¶</a></h2>
+<p>MCX is highly flexible and can be seen as the combination of two decoupled
+libraries:</p>
+<ol class="arabic simple">
+<li><p><em>A probabilistic modeling language</em>; MCX models can be exported as a forward
+sampling function and a log-probability density functions which may be used
+with custom inference algorithms.</p></li>
+<li><p><em>An inference library</em>; MCX’s inference module is purposefully designed as a
+collection of loosely coupled elements. Advanced users are free to compose
+these elements in any way they see fit. It is not necessary to use the
+modeling language to build the log-probability density function, any python
+function will do.</p></li>
+</ol>
+<p>MCX tries to strike the right balance between customizability (for researchers)
+and sane defaults for people who want the benefits of inference without having
+to dig in the literature.</p>
+</div>
+<div class="section" id="quickstart">
+<h2>Quickstart<a class="headerlink" href="#quickstart" title="Permalink to this headline">¶</a></h2>
+<div class="toctree-wrapper compound">
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="build_model.html">Build models in MCX</a></li>
+</ul>
+</div>
+</div>
+</div>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="#">mcx</a></h1>
+
+
+
+<p class="blurb">MCX (pronounced /miks'/) is a python probabilistic programming library based on source code transformation.</p>
+
+
+
+
+<p>
+<iframe src="https://ghbtns.com/github-btn.html?user=rlouf&repo=mcx&type=star&count=False&size=large&v=2"
+  allowtransparency="true" frameborder="0" scrolling="0" width="200px" height="35px"></iframe>
+</p>
+
+
+
+
+
+<h3>Navigation</h3>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="build_model.html">Build models in MCX</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="#">Documentation overview</a><ul>
+      <li>Next: <a href="build_model.html" title="next chapter">Build models in MCX</a></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>$('#searchbox').show(0);</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2020, Rémi Louf.
+      
+      |
+      <a href="_sources/index.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+    <a href="https://github.com/rlouf/mcx" class="github">
+        <img style="position: absolute; top: 0; right: 0; border: 0;" src="https://s3.amazonaws.com/github/ribbons/forkme_right_darkblue_121621.png" alt="Fork me on GitHub"  class="github"/>
+    </a>
+    
+
+    
+  </body>
+</html>
