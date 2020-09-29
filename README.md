@@ -7,7 +7,7 @@
 </h3>
 
 <p align="center">
-  <a href="https://github.com/rlouf/mcx/actions?query=workflow%3Abuild"><img src="https://github.com/rlouf/mcx/workflows/build/badge.svg?branch=master"></a>
+  <a href="https://github.com/rlouf/mcx/actions?query=workflow%3Atest"><img src="https://github.com/rlouf/mcx/workflows/build/badge.svg?branch=master"></a>
   <a href="https://github.com/rlouf/mcx/actions?query=workflow%3Alint"><img src="https://github.com/rlouf/mcx/workflows/lint/badge.svg?branch=master"></a>
   <a href="https://github.com/psf/black"><img src="https://img.shields.io/badge/code%20style-black-000000.svg"></a>
 </p>
