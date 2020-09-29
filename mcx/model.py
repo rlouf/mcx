@@ -31,13 +31,12 @@ class model(Distribution):
 
     The graph can be inspected and modified at runtime.
 
-    Arguments
-    ---------
+    Parameters
+    ----------
     model: A function that contains `mcx` model definition.
 
     Examples
     --------
-
     Let us define a linear model in 1 dimension. In `mcx`, models are expressed
     in their generative form, that is a function that transforms some
     (optional) input---data, parameters---and returns the result:

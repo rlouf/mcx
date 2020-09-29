@@ -67,8 +67,8 @@ class Distribution(ABC):
     ) -> jax.numpy.DeviceArray:
         """Obtain samples from the distribution.
 
-        Arguments
-        ---------
+        Parameters
+        ----------
         rng_key: jax.random.PRNGKey
             The pseudo random number generator key to use to draw samples.
         sample_shape: Tuple[int]
@@ -100,8 +100,8 @@ class Distribution(ABC):
         Unlike PyTorch or Numpyro, the value's legal status is not checked
         dynamically but at compile time.
 
-        Arguments
-        ---------
+        Parameters
+        ----------
         x: jax.numpy.DeviceArray, shape (n_points,)
             The point(s) at which to evaluate the log probability density function.
 

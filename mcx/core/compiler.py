@@ -21,8 +21,8 @@ class Artifact(NamedTuple):
 def compile_to_logpdf(graph: GraphicalModel, namespace: Dict) -> Artifact:
     """Compile a graphical model into a log-probability density function.
 
-    Arguments
-    ---------
+    Parameters
+    ----------
     model:
         A probabilistic graphical model.
     namespace:

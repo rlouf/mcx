@@ -78,8 +78,8 @@ def hmc_kernel(
     This implementation is very general and should accomodate most variations
     on the method.
 
-    Arguments
-    ---------
+    Parameters
+    ----------
     proposal_generator:
         The function used to propose a new state for the chain. For vanilla HMC this
         function integrates the trajectory over many steps, but gets more involved
@@ -119,8 +119,8 @@ def hmc_kernel(
     ) -> Tuple[HMCState, HMCInfo]:
         """Moves the chain by one step using the Hamiltonian dynamics.
 
-        Arguments
-        ---------
+        Parameters
+        ----------
         rng_key:
            The pseudo-random number generator key used to generate random numbers.
         state:
@@ -197,8 +197,8 @@ class RWMInfo(NamedTuple):
 def rwm_kernel(logpdf: Callable, proposal_generator: Callable) -> Callable:
     """Creates a Random Walk Metropolis transition kernel.
 
-    Arguments
-    ---------
+    Parameters
+    ----------
     logpdf:
         Returns the log-probability of the model given a position.
     proposal_generator:
@@ -215,8 +215,8 @@ def rwm_kernel(logpdf: Callable, proposal_generator: Callable) -> Callable:
     ) -> Tuple[RWMState, RWMInfo]:
         """Moves the chain by one step using the Random Walk Metropolis algorithm.
 
-        Arguments
-        ---------
+        Parameters
+        ----------
         rng_key:
            The pseudo-random number generator key used to generate random numbers.
         state:
