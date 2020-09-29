@@ -1,27 +1,30 @@
-name: lint
+name: Check formatting
 
 on: [push, pull_request]
 
 jobs:
-  build:
+  lint:
     runs-on: ubuntu-latest
-    name: flake8-black-mypy
     steps:
-    - uses: actions/checkout@v1
-    - name: Set up Python 3.8
-      uses: actions/setup-python@v1
-      with:
-        python-version: 3.8
-    - name: Lint with flake8
-      run: |
-        pip install flake8
-        # stop the build if there are Python syntax errors or undefined names
-        flake8 mcx tests --count --ignore=E501,E203,E731,W503 --show-source --statistics
-    - name: Check formatting with black
-      run: |
-        pip install black
-        black --check mcx tests
-    - name: Check types with mypy
-      run: |
-        pip install mypy
-        mypy mcx tests
+      - name: Checkout
+         uses: actions/checkout@v1
+
+      - name: Set up Python 3.7
+        uses: actions/setup-python@v1
+        with:
+          python-version: 3.7
+
+      - name: Check PEP8 compliance with flake8
+        run: |
+          pip install flake8
+          flake8 mcx tests --count --ignore=E501,E203,E731,W503 --show-source --statistics
+
+      - name: Check formatting with black
+        run: |
+          pip install black
+          black --check mcx tests
+
+      - name: Check types with mypy
+        run: |
+          pip install mypy
+          mypy mcx tests
