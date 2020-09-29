@@ -1,40 +1,70 @@
+from typing import Iterator, Tuple
+import warnings
+
 import jax
 import jax.numpy as np
 from jax.flatten_util import ravel_pytree
 from tqdm import tqdm
-import warnings
 
 import mcx
 from mcx import sample_forward
 from mcx.core import compile_to_logpdf
 
 
-__all__ = ["batch_sampler", "iterative_sampler", "sequential_sampler"]
+__all__ = ["sampler", "sequential_sampler"]
 
 
 # -------------------------------------------------------------------
-#                 == THE BATCH SAMPLING RUNTIME ==
+#                 == THE LINEAR SAMPLING RUNTIME ==
 # -------------------------------------------------------------------
 
 
-class batch_sampler(object):
-    """The batch sampling runtime.
+class sampler(object):
+    """The linear sampling runtime.
 
     This runtime is encountered in every probabilistic programming library
-    (PPL). It allows the user to fetch a pre-defined number of samples from a
-    model's posterior distribution.
+    (PPL). It allows the user to fetch a pre-defined number of samples from the
+    model's posterior distribution. The output is one or several chains that
+    contain the successive samples from the posterior.
 
     While this is undoubtedly the fastest way to obtain samples, it comes at a
     cost in mosts PPLs: to obtain more samples one needs to re-run the inference
     entirely. In MCX the runtime keeps track of the chains' current state so
     that it is possible to get more samples:
 
-    ```python
-    trace = sampler.run()  # gives an initial 1,000 samples
-    longer_trace = sample.run(5_000)
+        >>> trace = sampler.run()  # gives an initial 1,000 samples
+        ... longer_trace = sample.run(5_000)
+        ... final_trace = trace + longer_trace
 
-    final_trace = trace + longer_trace
-    ```
+    This runtime comes with two execution model: batch and iterative sampling.
+    In the batch model, the one most PPL users are used to, we can fetch a set
+    number of samples:
+
+        >>> trace = sampler.run(1_000)
+
+    Executing sampling this way returns a Trace object that contains both the
+    samples and additional information about the sampling process. The iterative
+    model allows you to fetch samples in a for loop:
+
+        >>> for sample in samples:
+        ...     do_something(sample)
+
+    This returns a pair (chain state, sampling info) at each iteration. You can
+    take advantage of this execution model for example for dynamic stopping or
+    logging samples to be used in, say, tensorboard. No need for any callback
+    logic.
+
+    Called with its default values, the `run` method will be as fast as getting
+    samples iteratively. We can however make it sensibly faster by calling
+
+       >>> trace = sampler.run(1_000, accelerate=True)
+
+    Behind the scene MCX replaces the for loop used internally (so it can
+    display a progress bar) by JAX's `lax.scan`. The difference is most obvious
+    for large models and number of samples.
+
+    Finally, note that since the runtime keeps track of the last state it is possible
+    to switch between the different execution models during sampling.
 
     """
 
@@ -103,6 +133,78 @@ class batch_sampler(object):
         self.initial_state = initial_state
         self.state = initial_state
         self.unravel_fn = unravel_fn
+
+    def __iter__(self) -> Iterator:
+        """Make the sampler behave like an iterable and an iterator.
+
+        By making the sampler an iterable we can make it return samples
+        in a for loop or in a list comprehensioon:
+
+            >>> # Beware, these will loop indefinitely
+            ... for sample in sampler:
+            ...     print(sample)
+            ...
+            ... samples = [sample for sample in samples]
+
+
+        If the sampler has not been warmed up before using it as an iterable
+        it will warm up with a default of 1,000 steps. To use a different number
+        of steps (say 100) and different warmup options, call the `warmup` method
+        first:
+
+            >>> sampler.warmup(100, accelerate=True)
+            ... for sample in sampler:
+            ...     print(sample)
+
+        Note
+        ----
+        `update_chains` will be JIT-compiled every time the iterator is
+        initialized. Just watch for the overhead with big models.
+
+        Returns
+        -------
+        The current instance of the sampler as an iterable.
+
+        """
+        default_warmup_steps = 1_000
+        if not self.is_warmed_up:
+            _ = self.warmup(default_warmup_steps, accelerate=False)
+
+        @jax.jit
+        def update_chains(rng_key, parameters, state):
+            kernel = self.kernel_factory(*parameters)
+            new_states, info = kernel(rng_key, state)
+            return new_states, info
+
+        def run(rng_key, state, parameters):
+            while True:
+                _, rng_key = jax.random.split(rng_key)
+                keys = jax.random.split(rng_key, self.num_chains)
+                state, info = jax.vmap(update_chains, in_axes=(0, 0, 0))(
+                    keys, parameters, state
+                )
+                yield (state, info)
+
+        self.sample_generator = run(self.rng_key, self.state, self.parameters)
+
+        return self
+
+    def __next__(self) -> Tuple:
+        """Yield the next state of the chain.
+
+        This method allows the sampler to behave as an iterator:
+
+            >>> iter(sampler)
+            ... sample = next(sampler)
+
+        Returns
+        -------
+        A tuple that contains the next sample from the chain and the
+        corresponding sampling information.
+
+        """
+        self.state, info = next(self.sample_generator)
+        return self.state, info
 
     def warmup(self, num_warmup_steps: int = 1000, accelerate: bool = False, **kwargs):
         """Warmup the sampler.
@@ -250,64 +352,10 @@ class batch_sampler(object):
         # with progress bar is of format [(state, info) ,(state, info), (state, info)]
         # with scan [all_states, all_infos]
         # I believe second format is easier to unpack later and should be preferred
-
         self.state = state
         trace = self.program.make_trace(chain, self.unravel_fn)
 
         return trace
-
-
-# -------------------------------------------------------------------
-#                 == THE ITERATIVE SAMPLING RUNTIME ==
-# -------------------------------------------------------------------
-
-
-def iterative_sampler(
-    rng_key, model, program, num_warmup_steps=1000, num_chains=4, **kwargs
-):
-    """ The generator runtime """
-
-    init, warmup, build_kernel, to_trace, adapt_loglikelihood = program
-
-    validate_conditioning_variables(model, **kwargs)
-    loglikelihood = build_loglikelihood(model, **kwargs)
-
-    print("Draw initial states.")
-    initial_position, unravel_fn = get_initial_position(
-        rng_key, model, num_chains, **kwargs
-    )
-    loglikelihood = flatten_loglikelihood(loglikelihood, unravel_fn)
-    loglikelihood = adapt_loglikelihood(loglikelihood)
-    initial_state = jax.vmap(init, in_axes=(0, None))(
-        initial_position, jax.value_and_grad(loglikelihood)
-    )
-
-    print("Warmup the chains.")
-    _, rng_key = jax.random.split(rng_key)
-    parameters, state = warmup(rng_key, initial_state, loglikelihood, num_warmup_steps)
-
-    print("Compile the log-likelihood.")
-    loglikelihood = jax.jit(loglikelihood)
-
-    print("Build and compile the inference kernel.")
-    kernel_builder = build_kernel(loglikelihood)
-
-    @jax.jit
-    def update_chains(rng_key, parameters, state):
-        kernel = kernel_builder(parameters)
-        new_states, info = kernel(rng_key, state)
-        return new_states, info
-
-    def run(rng_key, state, parameters):
-        while True:
-            _, rng_key = jax.random.split(rng_key)
-            keys = jax.random.split(rng_key, num_chains)
-            state, info = jax.vmap(update_chains, in_axes=(0, 0, 0))(
-                keys, parameters, state
-            )
-            yield (state, info)
-
-    return run(rng_key, initial_state, parameters)
 
 
 # -------------------------------------------------------------------
