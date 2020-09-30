@@ -5,9 +5,9 @@ from jax import numpy as np
 from jax import random
 from jax.scipy.special import gammaln, xlog1py, xlogy
 
-from . import constraints
-from .distribution import Distribution
-from .utils import broadcast_batch_shape, limit_to_support
+from mcx.distributions import constraints
+from mcx.distributions.distribution import Distribution
+from mcx.distributions.shapes import broadcast_batch_shape
 
 
 class Binomial(Distribution):
@@ -29,7 +29,7 @@ class Binomial(Distribution):
         n_max = np.max(self.n).item()
         return _random_binomial(rng_key, self.p, self.n, n_max, shape)
 
-    @limit_to_support
+    @constraints.limit_to_support
     def logpdf(self, k):
         k = np.floor(k)
         unnormalized = xlogy(k, self.p) + xlog1py(self.n - k, -self.p)

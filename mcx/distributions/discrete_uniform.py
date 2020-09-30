@@ -1,9 +1,9 @@
 from jax import numpy as np
 from jax import random
 
-from . import constraints
-from .distribution import Distribution
-from .utils import broadcast_batch_shape, limit_to_support
+from mcx.distributions import constraints
+from mcx.distributions.distribution import Distribution
+from mcx.distributions.shapes import broadcast_batch_shape
 
 
 class DiscreteUniform(Distribution):
@@ -23,6 +23,6 @@ class DiscreteUniform(Distribution):
         shape = sample_shape + self.batch_shape + self.event_shape
         return random.randint(rng_key, shape, self.lower, self.upper)
 
-    @limit_to_support
+    @constraints.limit_to_support
     def logpdf(self, x):
         return -np.log(self.upper - self.lower + 1)

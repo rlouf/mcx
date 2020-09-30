@@ -1,9 +1,9 @@
 from jax import numpy as np
 from jax import random
 
-from . import constraints
-from .distribution import Distribution
-from .utils import broadcast_batch_shape, limit_to_support
+from mcx.distributions import constraints
+from mcx.distributions.distribution import Distribution
+from mcx.distributions.shapes import broadcast_batch_shape
 
 
 class LogNormal(Distribution):
@@ -20,7 +20,7 @@ class LogNormal(Distribution):
         shape = sample_shape + self.batch_shape + self.event_shape
         return np.exp(self.sigma * random.normal(rng_key, shape) + self.mu)
 
-    @limit_to_support
+    @constraints.limit_to_support
     def logpdf(self, x):
         return -((np.log(x) - self.mu) ** 2 / (2 * self.sigma ** 2)) - np.log(
             self.sigma * x * np.sqrt(2 * np.pi)

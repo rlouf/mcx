@@ -2,9 +2,9 @@ from jax import numpy as np
 from jax import random
 from jax.scipy.special import xlog1py, xlogy
 
-from . import constraints
-from .distribution import Distribution
-from .utils import broadcast_batch_shape, limit_to_support
+from mcx.distributions import constraints
+from mcx.distributions.distribution import Distribution
+from mcx.distributions.shapes import broadcast_batch_shape
 
 
 class Bernoulli(Distribution):
@@ -20,7 +20,6 @@ class Bernoulli(Distribution):
         shape = sample_shape + self.batch_shape + self.event_shape
         return random.bernoulli(rng_key, self.p, shape=shape)
 
-    @limit_to_support
+    @constraints.limit_to_support
     def logpdf(self, x):
-        """(TODO): Check that x belongs to support, return -infty otherwise"""
         return xlogy(x, self.p) + xlog1py(1 - x, -self.p)

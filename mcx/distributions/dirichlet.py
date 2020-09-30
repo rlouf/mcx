@@ -1,9 +1,8 @@
 import jax
 from jax import random
 
-from . import constraints
-from .distribution import Distribution
-from .utils import limit_to_support
+from mcx.distributions import constraints
+from mcx.distributions.distribution import Distribution
 
 
 class Dirichlet(Distribution):
@@ -20,7 +19,7 @@ class Dirichlet(Distribution):
         shape = sample_shape + self.batch_shape + self.event_shape
         return random.dirichlet(rng_key, self.alpha, shape)
 
-    @limit_to_support
+    @constraints.limit_to_support
     def logpdf(self, x):
         log_x = jax.nn.log_softmax(x, axis=0)
         unnormalized = jax.numpy.sum((self.alpha - 1) * log_x)

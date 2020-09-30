@@ -28,6 +28,7 @@ from abc import ABC, abstractmethod
 from jax import numpy as np
 
 __all__ = [
+    "limit_to_support",
     "boolean",
     "closed_interval",
     "interval",
@@ -40,6 +41,30 @@ __all__ = [
     "simplex",
     "strictly_positive",
 ]
+
+
+# Sourced from numpyro.distributions.utils.py
+# Copyright Contributors to the NumPyro project.
+# SPDX-License-Identifier: Apache-2.0
+def limit_to_support(logpdf):
+    """Decorator that enforces the distrbution's support by returning `-np.inf`
+    if the value passed to the logpdf is out of support.
+
+    """
+
+    def wrapper(self, *args):
+        log_prob = logpdf(self, *args)
+        value = args[0]
+        mask = self.support(value)
+        log_prob = np.where(mask, log_prob, -np.inf)
+        return log_prob
+
+    return wrapper
+
+
+# ---------------------------------------------------------
+#                  == CONSTRAINTS ==
+# ---------------------------------------------------------
 
 
 class Constraint(ABC):

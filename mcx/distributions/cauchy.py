@@ -1,9 +1,9 @@
 from jax import numpy as np
 from jax import random
 
-from . import constraints
-from .distribution import Distribution
-from .utils import broadcast_batch_shape, limit_to_support
+from mcx.distributions import constraints
+from mcx.distributions.distribution import Distribution
+from mcx.distributions.shapes import broadcast_batch_shape
 
 
 class Cauchy(Distribution):
@@ -24,7 +24,7 @@ class Cauchy(Distribution):
         std_sample = random.cauchy(rng_key, shape)
         return self.loc + self.scale * std_sample
 
-    @limit_to_support
+    @constraints.limit_to_support
     def logpdf(self, x):
         numerator = 2 * np.log(self.scale)
         denominator = -np.log(np.pow(x - self.loc, 2) + np.pow(self.scale, 2))

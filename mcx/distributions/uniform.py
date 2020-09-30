@@ -1,9 +1,9 @@
 from jax import numpy as np
 from jax import random
 
-from . import constraints
-from .distribution import Distribution
-from .utils import broadcast_batch_shape, limit_to_support
+from mcx.distributions import constraints
+from mcx.distributions.distribution import Distribution
+from mcx.distributions.shapes import broadcast_batch_shape
 
 
 class Uniform(Distribution):
@@ -22,6 +22,6 @@ class Uniform(Distribution):
         u = random.uniform(rng_key, shape)
         return u * (self.upper - self.lower) + self.lower
 
-    @limit_to_support
+    @constraints.limit_to_support
     def logpdf(self, x):
         return np.log(1.0 / (self.upper - self.lower))

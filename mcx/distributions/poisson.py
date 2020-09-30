@@ -6,9 +6,9 @@ from jax import numpy as np
 from jax import random
 from jax.scipy.special import xlogy
 
-from . import constraints
-from .distribution import Distribution
-from .utils import broadcast_batch_shape, limit_to_support
+from mcx.distributions import constraints
+from mcx.distributions.distribution import Distribution
+from mcx.distributions.shapes import broadcast_batch_shape
 
 
 class Poisson(Distribution):
@@ -24,7 +24,7 @@ class Poisson(Distribution):
         shape = sample_shape + self.batch_shape + self.event_shape
         return _random_poisson(rng_key, self.lmbda, shape)
 
-    @limit_to_support
+    @constraints.limit_to_support
     def logpdf(self, x):
         x = x * 1.0
         return lax.add(

@@ -2,9 +2,9 @@ from jax import numpy as np
 from jax import random
 from jax.scipy import stats
 
-from . import constraints
-from .distribution import Distribution
-from .utils import broadcast_batch_shape, limit_to_support
+from mcx.distributions import constraints
+from mcx.distributions.distribution import Distribution
+from mcx.distributions.shapes import broadcast_batch_shape
 
 
 class Beta(Distribution):
@@ -24,6 +24,6 @@ class Beta(Distribution):
         shape = sample_shape + self.batch_shape + self.event_shape
         return random.beta(rng_key, self.a, self.b, shape=shape)
 
-    @limit_to_support
+    @constraints.limit_to_support
     def logpdf(self, x):
         return stats.beta.logpdf(x, self.a, self.b)

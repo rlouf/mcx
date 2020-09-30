@@ -2,9 +2,9 @@ from jax import lax, random
 from jax import numpy as np
 from jax.scipy import stats
 
-from . import constraints
-from .distribution import Distribution
-from .utils import broadcast_batch_shape, limit_to_support
+from mcx.distributions import constraints
+from mcx.distributions.distribution import Distribution
+from mcx.distributions.shapes import broadcast_batch_shape
 
 
 class Exponential(Distribution):
@@ -20,7 +20,7 @@ class Exponential(Distribution):
         shape = sample_shape + self.event_shape + self.batch_shape
         return random.exponential(rng_key, shape=shape) / self.lmbda
 
-    @limit_to_support
+    @constraints.limit_to_support
     def logpdf(self, x):
         scale = lax.div(1.0, self.lmbda)
         return stats.expon.logpdf(x, loc=0.0, scale=scale)
