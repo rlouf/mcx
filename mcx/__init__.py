@@ -1,6 +1,7 @@
 from mcx.model import model
 from mcx.model import sample_forward
 from mcx.sampling import sampler, sequential_sampler
+from mcx.inference.hmc import HMC
 from mcx.trace import Trace
 
 __all__ = [
@@ -8,5 +9,6 @@ __all__ = [
     "sample_forward",
     "sampler",
     "sequential_sampler",
+    "HMC",
     "Trace",
 ]

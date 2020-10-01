@@ -1,14 +1,13 @@
-from typing import Callable, List, NamedTuple, Tuple, Optional
+from datetime import datetime
+from typing import Callable, NamedTuple, Tuple, Optional
 import warnings
 
 import jax
 from jax import numpy as np
 from tqdm import tqdm
-import xdarray as xr
 
-from mcx.trace import Trace
 from mcx.inference.integrators import velocity_verlet, hmc_proposal
-from mcx.inference.kernels import HMCState, hmc_kernel, hmc_init
+from mcx.inference.kernels import HMCInfo, HMCState, hmc_kernel, hmc_init
 from mcx.inference.metrics import gaussian_euclidean_metric
 
 from mcx.inference.warmup import stan_hmc_warmup, stan_warmup_schedule
@@ -106,6 +105,12 @@ class HMC:
 
         if accelerate:
 
+            print(
+                f"sampler: warmup {num_chains:,} chains for {num_warmup_steps:,} iterations.",
+                end=" ",
+            )
+            start = datetime.now()
+
             @jax.jit
             def update_chain(carry, interval):
                 rng_key, chain_state, warmup_state = carry
@@ -129,6 +134,8 @@ class HMC:
                 update_chain, (rng_key, chain_state, warmup_state), schedule
             )
             _, chain_state, warmup_state = last_state
+
+            print(f"Done in {(datetime.now()-start).total_seconds():.1f} seconds.")
 
         else:
 
@@ -178,74 +185,40 @@ class HMC:
         return build_kernel
 
     def make_trace(
-        self, chain: List, ravel_fn: Callable, chain_type="posterior"
+        self,
+        chain: Tuple[HMCState, HMCInfo],
+        ravel_fn: Callable,
     ) -> np.DeviceArray:
-        """Translate the raw chains to a format that can be understood by and
-        is useful to humans. Will eventually transform it to a Trace object.
+        """Translate the raw chain into a Trace object.
 
         Parameters
         ----------
         chain
-            A list
+            A tuple that contains the HMC sampler's states and additional information
+            on the sampling process.
+
+        Returns
+        -------
+        A trace that contains the model's posterior samples and relevant
+        sampling information.
+
         """
-        trace = {}
+        state, info = chain
 
-        # maybe we should ravel the chain in the sampling part?
-        def ravel_chain(chain):
-            return jax.vmap(ravel_fn, in_axes=(0,))(chain)
-
-        posterior = xr.Dataset(
-            {
-                "scale": (["chain", "draw", "a_dim"], trace["scale"]),
-                "coeff": (["chain", "draw", "a_dim"], trace["scale"]),
-            },
-            coords={"chain": (),"draw": (), "a_dim": ()},
-        )
-
-        # Positionned were ravelled before sampling to be able to make computations
+        # We ravelled positions before sampling to be able to make computations
         # on flat arrays in the backend. We now need to bring their to
         # their original shape before adding to the trace.
-        positions_array = np.stack([state.position for state, _ in chain], axis=1)
-        trace["posterior"] = jax.vmap(ravel_chain, in_axes=(0,))(positions_array)
+        ravel_chain = jax.vmap(ravel_fn, in_axes=(0,))
 
-        # log-likelihood can be interesting
-        trace["log_likelihood"] = np.stack(
-            [state.log_prob for state, _ in chain], axis=1
-        )
+        trace = {}
+        trace["posterior"] = jax.vmap(ravel_chain, in_axes=(1,))(state.position)
+        trace["log_likelihood"] = state.log_prob
 
-        # We store information that may be needed for diagnostics in the
-        # "info" section of the chain
         trace["info"] = {}
-        trace["info"]["is_divergent"] = np.stack(
-            [info.is_divergent for _, info in chain], axis=1
-        )
-        trace["info"]["is_accepted"] = np.stack(
-            [info.is_accepted for _, info in chain], axis=1
-        )
+        trace["info"]["is_divergent"] = info.is_divergent
+        trace["info"]["is_accepted"] = info.is_accepted
 
-        """
-        Needs to be a xr.Dataset with:
-
-        data = (
-            {
-                "scale": (["chain", "draw", "a_dim"], np.random.normal(size=(4, 100, 3))),
-                "coeff": (["chain", "draw"], np.random.normal(size=(4, 100))),
-            },
-        )
-        coords = {
-            "chain": (["chain"], np.arange(4)),
-            "draw": (["draw"], np.arange(100)),
-            "a_dim": (["a_dim"], ["x", "y", "z"]),
-        }
-
-        idata = az.InferenceData(posterior=dataset, prior=dataset)
-
-        we can have: prior, posterior_predictive, posterior, log_likelihood, sample_stats
-        and warmup_posterior, warmup_log_likelihood, warmup_sample_stats
-        
-        """
-
-        return posterior
+        return trace
 
     def _to_potential(self, loglikelihood: Callable) -> Callable:
         """The potential in the Hamiltonian Monte Carlo algorithm is equal to

@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Iterator, Tuple
 import warnings
 
@@ -244,9 +245,6 @@ class sampler(object):
             )
             self.state = self.initial_state
 
-        print(
-            f"sampler: warmup {self.num_chains:,} chains for {num_warmup_steps:,} iterations"
-        )
         chain_state, parameters = self.program.warmup(
             self.rng_key,
             self.state,
@@ -302,8 +300,6 @@ class sampler(object):
         rng_keys = jax.random.split(self.rng_key, num_samples)
         state = self.state
 
-        print(f"sampler: draw {num_samples:,} samples from {self.num_chains:,} chains")
-
         @jax.jit
         def update_chains(rng_key, parameters, chain_state):
             kernel = self.kernel_factory(*parameters)
@@ -318,6 +314,12 @@ class sampler(object):
         # initial exploration.
         if accelerate:
 
+            print(
+                f"sampler: draw {num_samples:,} samples from {self.num_chains:,} chains.",
+                end=" ",
+            )
+            start = datetime.now()
+
             @jax.jit
             def update_scan(carry, key):
                 state, parameters = carry
@@ -330,6 +332,8 @@ class sampler(object):
             last_state, chain = jax.lax.scan(
                 update_scan, (state, self.parameters), rng_keys
             )
+
+            print(f"Done in {(datetime.now()-start).total_seconds():.1f} seconds.")
 
         else:
 
@@ -348,10 +352,17 @@ class sampler(object):
                     )
                     chain.append((state, info))
 
-        # chain
-        # with progress bar is of format [(state, info) ,(state, info), (state, info)]
-        # with scan [all_states, all_infos]
-        # I believe second format is easier to unpack later and should be preferred
+            # While lax.scan returns a tuple (State, Info, etc.) where each
+            # member of each tuple contains the informations for all chains,
+            # all steps, the for loop returns a list of tuples where each tuple
+            # contains the information for a single step. Since the former format
+            # is more convenient to later create the trace we pack the latter.
+
+            # TODO: benchmark against stacking at every iteration, instead of
+            # effectively appending twice.
+            stack = lambda y, *ys: np.stack((y, *ys))
+            chain = jax.tree_multimap(stack, *chain)
+
         self.state = state
         trace = self.program.make_trace(chain, self.unravel_fn)
 

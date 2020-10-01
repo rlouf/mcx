@@ -13,8 +13,7 @@ class Trace(InferenceData):
     """
 
     def __init__(self, prior=None, posterior=None, posterior_predictive=None):
-        """Extract the informations that we want to save to the trace and initializes.
-        """
+        """Extract the informations that we want to save to the trace and initializes."""
         thing = None
         self.posterior = None
         self.posterior_predictive = None
