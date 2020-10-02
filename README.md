@@ -70,7 +70,7 @@ You are more than welcome to contribute to these discussions, or suggest
 potential future directions.
 
 
-## Batch sampling
+## Linear sampling
 
 Like most PPL, MCX implements a batch sampling runtime:
 
@@ -96,8 +96,7 @@ You can extract more samples from the chain after a run and combine the
 two traces:
 
 ```python
-new_posterior = sampler.run()
-final_posterior = posterior + new_posterior 
+posterior += sampler.run()
 ```
 
 By default MCX will sample using a python `for` loop and display a progress bar.
