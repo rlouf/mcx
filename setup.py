@@ -13,7 +13,7 @@ setuptools.setup(
     packages=["mcx"],
     python_requires=">=3.5",
     install_requires=[
-        "arviz",
+        "arviz==0.10.0",
         "astor",
         "jax==0.1.77",
         "jaxlib",
