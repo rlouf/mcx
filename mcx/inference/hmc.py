@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Callable, NamedTuple, Tuple, Optional
+from typing import Callable, Dict, NamedTuple, Tuple, Optional
 import warnings
 
 import jax
@@ -9,7 +9,6 @@ from tqdm import tqdm
 from mcx.inference.integrators import velocity_verlet, hmc_proposal
 from mcx.inference.kernels import HMCInfo, HMCState, hmc_kernel, hmc_init
 from mcx.inference.metrics import gaussian_euclidean_metric
-
 from mcx.inference.warmup import stan_hmc_warmup, stan_warmup_schedule
 
 
@@ -187,8 +186,8 @@ class HMC:
     def make_trace(
         self,
         chain: Tuple[HMCState, HMCInfo],
-        ravel_fn: Callable,
-    ) -> np.DeviceArray:
+        unravel_fn: Callable,
+    ) -> Dict:
         """Translate the raw chain into a Trace object.
 
         Parameters
@@ -208,17 +207,10 @@ class HMC:
         # We ravelled positions before sampling to be able to make computations
         # on flat arrays in the backend. We now need to bring their to
         # their original shape before adding to the trace.
-        ravel_chain = jax.vmap(ravel_fn, in_axes=(0,))
+        unravel_chain = jax.vmap(unravel_fn, in_axes=(0,))
+        samples = jax.vmap(unravel_chain, in_axes=(1,))(state.position)
 
-        trace = {}
-        trace["posterior"] = jax.vmap(ravel_chain, in_axes=(1,))(state.position)
-        trace["log_likelihood"] = state.log_prob
-
-        trace["info"] = {}
-        trace["info"]["is_divergent"] = info.is_divergent
-        trace["info"]["is_accepted"] = info.is_accepted
-
-        return trace
+        return samples
 
     def _to_potential(self, loglikelihood: Callable) -> Callable:
         """The potential in the Hamiltonian Monte Carlo algorithm is equal to

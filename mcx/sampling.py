@@ -1,6 +1,5 @@
 from datetime import datetime
 from typing import Iterator, Tuple
-import warnings
 
 import jax
 import jax.numpy as np
@@ -10,6 +9,7 @@ from tqdm import tqdm
 import mcx
 from mcx import sample_forward
 from mcx.core import compile_to_logpdf
+from mcx.trace import Trace
 
 
 __all__ = ["sampler", "sequential_sampler"]
@@ -129,6 +129,7 @@ class sampler(object):
         self.is_warmed_up = False
         self.rng_key = rng_key
         self.num_chains = num_chains
+        self.model = model
         self.program = program
         self.kernel_factory = kernel_factory
         self.initial_state = initial_state
@@ -234,16 +235,16 @@ class sampler(object):
             The value of parameters that will be used in the sampling phase.
 
         """
-        if self.is_warmed_up:
-            warnings.warn(
-                "You are trying to warmup a sampler that has already "
-                "been warmed up. MCX will re-launch the warmup from the "
-                "sampler's initial position. If your use case requires "
-                "a different behavior please raise an issue on "
-                "https://github.com/rlouf/mcx.",
-                UserWarning,
-            )
-            self.state = self.initial_state
+        # if self.is_warmed_up:
+        # warnings.warn(
+        # "You are trying to warmup a sampler that has already "
+        # "been warmed up. MCX will re-launch the warmup from the "
+        # "sampler's initial position. If your use case requires "
+        # "a different behavior please raise an issue on "
+        # "https://github.com/rlouf/mcx.",
+        # UserWarning,
+        # )
+        # self.state = self.initial_state
 
         chain_state, parameters = self.program.warmup(
             self.rng_key,
@@ -333,6 +334,8 @@ class sampler(object):
                 update_scan, (state, self.parameters), rng_keys
             )
 
+            self.state = last_state[0]
+
             print(f"Done in {(datetime.now()-start).total_seconds():.1f} seconds.")
 
         else:
@@ -352,6 +355,8 @@ class sampler(object):
                     )
                     chain.append((state, info))
 
+            self.state = chain[-1][0]
+
             # While lax.scan returns a tuple (State, Info, etc.) where each
             # member of each tuple contains the informations for all chains,
             # all steps, the for loop returns a list of tuples where each tuple
@@ -363,8 +368,8 @@ class sampler(object):
             stack = lambda y, *ys: np.stack((y, *ys))
             chain = jax.tree_multimap(stack, *chain)
 
-        self.state = state
-        trace = self.program.make_trace(chain, self.unravel_fn)
+        samples = self.program.make_trace(chain=chain, unravel_fn=self.unravel_fn)
+        trace = Trace(samples=samples)
 
         return trace
 

@@ -1,4 +1,7 @@
+from typing import Dict
+import mcx
 from arviz import InferenceData
+from arviz.data.base import dict_to_dataset
 
 
 __all__ = ["Trace"]
@@ -12,28 +15,19 @@ class Trace(InferenceData):
     interface between the chains produced by the samplers and ArviZ.
     """
 
-    def __init__(self, prior=None, posterior=None, posterior_predictive=None):
-        """Extract the informations that we want to save to the trace and initializes."""
-        thing = None
-        self.posterior = None
-        self.posterior_predictive = None
-        self.sample_stats = None
-        self.log_likelihood = None
-        self.posterior_predictive = None
-        super().__init__(thing)
-        pass
+    def __init__(self, *, samples: Dict = None, coords=None, dims=None):
+        """Build a Trace object from MCX data.
 
-    def to_dict(self) -> dict:
-        """Returns the trace in a dictionary format that ArviZ can understand.
-        The resulting dict can be persisted on disk in the json and yaml format
-        to be loaded later.
+        Parameters
+        ----------
+        posterior
+            Posterior samples from a model. The dictionary maps the variables
+            names to their posterior samples with shape (n_chains, num_samples, var_shape).
         """
-        return {
-            "posterior": self.posterior,
-            "posterior_predictive": self.posterior_predictive,
-            "sample_stats": self.sample_stats,
-            "log_likelihood": self.log_likelihood,
-        }
+        samples_dataset = dict_to_dataset(
+            data=samples, library=mcx, coords=coords, dims=dims
+        )
+        super().__init__(posterior=samples_dataset)
 
     def append(self, data):
         """Append a trace or new elements to the current trace. This is useful
