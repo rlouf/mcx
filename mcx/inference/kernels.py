@@ -22,8 +22,8 @@ class HMCState(NamedTuple):
     """Describes the state of the HMC algorithm."""
 
     position: np.DeviceArray
-    log_prob: float
-    log_prob_grad: float
+    potential_energy: float
+    potential_energy_grad: float
 
 
 class HMCInfo(NamedTuple):
@@ -43,8 +43,8 @@ def hmc_init(position: np.DeviceArray, potential_value_and_grad: Callable) -> HM
     """Compute the initial state of the HMC algorithm from the initial position
     and the log-likelihood.
     """
-    log_prob, log_prob_grad = potential_value_and_grad(position)
-    return HMCState(position, log_prob, log_prob_grad)
+    potential_energy, potential_energy_grad = potential_value_and_grad(position)
+    return HMCState(position, potential_energy, potential_energy_grad)
 
 
 def hmc_kernel(
@@ -133,19 +133,19 @@ def hmc_kernel(
         """
         key_momentum, key_integrator, key_accept = jax.random.split(rng_key, 3)
 
-        position, log_prob, log_prob_grad = state
+        position, potential_energy, potential_energy_grad = state
         momentum = momentum_generator(key_momentum)
-        energy = log_prob + kinetic_energy(momentum)
+        energy = potential_energy + kinetic_energy(momentum)
 
         proposal = proposal_generator(
-            key_integrator, Proposal(position, momentum, log_prob_grad)
+            key_integrator, Proposal(position, momentum, potential_energy_grad)
         )
-        new_position, new_momentum, new_log_prob_grad = proposal
+        new_position, new_momentum, new_potential_energy_grad = proposal
 
         flipped_momentum = -1.0 * new_momentum  # to make the transition reversible
-        new_log_prob = potential(new_position)
-        new_energy = new_log_prob + kinetic_energy(flipped_momentum)
-        new_state = HMCState(new_position, new_log_prob, new_log_prob_grad)
+        new_potential_energy = potential(new_position)
+        new_energy = new_potential_energy + kinetic_energy(flipped_momentum)
+        new_state = HMCState(new_position, new_potential_energy, new_potential_energy_grad)
 
         delta_energy = energy - new_energy
         delta_energy = np.where(np.isnan(delta_energy), -np.inf, delta_energy)
