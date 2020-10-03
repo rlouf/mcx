@@ -368,8 +368,10 @@ class sampler(object):
             stack = lambda y, *ys: np.stack((y, *ys))
             chain = jax.tree_multimap(stack, *chain)
 
-        samples = self.program.make_trace(chain=chain, unravel_fn=self.unravel_fn)
-        trace = Trace(samples=samples)
+        # having thought about it, maybe here we'd only want to unravel everything
+        # that needs to be unravelled. Same for the iterative sampling.
+        posterior = self.program.make_trace(chain=chain, unravel_fn=self.unravel_fn)
+        trace = Trace(posterior=posterior)
 
         return trace
 

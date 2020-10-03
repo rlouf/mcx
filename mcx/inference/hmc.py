@@ -119,13 +119,7 @@ class HMC:
                 keys = jax.random.split(rng_key, num_chains)
                 chain_state, warmup_state = jax.vmap(
                     update, in_axes=(0, None, None, 0, 0)
-                )(
-                    keys,
-                    stage,
-                    is_middle_window_end,
-                    chain_state,
-                    warmup_state,
-                )
+                )(keys, stage, is_middle_window_end, chain_state, warmup_state,)
 
                 return (rng_key, chain_state, warmup_state), (chain_state, warmup_state)
 
@@ -184,9 +178,7 @@ class HMC:
         return build_kernel
 
     def make_trace(
-        self,
-        chain: Tuple[HMCState, HMCInfo],
-        unravel_fn: Callable,
+        self, chain: Tuple[HMCState, HMCInfo], unravel_fn: Callable,
     ) -> Dict:
         """Translate the raw chain into a Trace object.
 
@@ -209,8 +201,19 @@ class HMC:
         # their original shape before adding to the trace.
         unravel_chain = jax.vmap(unravel_fn, in_axes=(0,))
         samples = jax.vmap(unravel_chain, in_axes=(1,))(state.position)
+        
+        potential_energy = state.potential_energy.T
+        acceptance_probability = info.acceptance_probability.T
+        is_divergent = info.is_divergent.T
+        energy = info.energy.T
 
-        return samples
+        return {
+            "samples": samples,
+            "potential_energy": potential_energy,
+            "acceptance_probability": acceptance_probability,
+            "is_divergent": is_divergent,
+            "energy": energy,
+        }
 
     def _to_potential(self, loglikelihood: Callable) -> Callable:
         """The potential in the Hamiltonian Monte Carlo algorithm is equal to

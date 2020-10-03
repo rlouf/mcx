@@ -15,7 +15,7 @@ class Trace(InferenceData):
     interface between the chains produced by the samplers and ArviZ.
     """
 
-    def __init__(self, *, samples: Dict = None, coords=None, dims=None):
+    def __init__(self, *, posterior: Dict = None, coords=None, dims=None):
         """Build a Trace object from MCX data.
 
         Parameters
@@ -25,9 +25,20 @@ class Trace(InferenceData):
             names to their posterior samples with shape (n_chains, num_samples, var_shape).
         """
         samples_dataset = dict_to_dataset(
-            data=samples, library=mcx, coords=coords, dims=dims
+            data=posterior["samples"], library=mcx, coords=coords, dims=dims
         )
-        super().__init__(posterior=samples_dataset)
+
+        sample_stats_dict = {
+            "lp": posterior["potential_energy"],
+            "mean_tree_accept": posterior["acceptance_probability"],
+            "diverging": posterior["is_divergent"],
+            "energy": posterior["energy"],
+        }
+        samples_stats_dataser = dict_to_dataset(
+            data=sample_stats_dict, library=mcx, coords=coords, dims=dims
+        )
+
+        super().__init__(posterior=samples_dataset, sample_stats=samples_stats_dataser)
 
     def append(self, data):
         """Append a trace or new elements to the current trace. This is useful

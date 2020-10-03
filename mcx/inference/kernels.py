@@ -30,7 +30,8 @@ class HMCInfo(NamedTuple):
     """Additional information on the current HMC step that can be useful for
     debugging or diagnostics.
     """
-
+    
+    energy: float
     proposed_state: HMCState
     acceptance_probability: float
     is_accepted: bool
@@ -44,7 +45,7 @@ def hmc_init(position: np.DeviceArray, potential_value_and_grad: Callable) -> HM
     and the log-likelihood.
     """
     potential_energy, potential_energy_grad = potential_value_and_grad(position)
-    return HMCState(position, potential_energy, potential_energy_grad)
+    return HMCState(position, potential_energy, potential_energy, potential_energy_grad)
 
 
 def hmc_kernel(
@@ -155,11 +156,11 @@ def hmc_kernel(
         do_accept = jax.random.bernoulli(key_accept, p_accept)
         accept_state = (
             new_state,
-            HMCInfo(new_state, p_accept, True, is_divergent, proposal),
+            HMCInfo(energy, new_state, p_accept, True, is_divergent, proposal),
         )
         reject_state = (
             state,
-            HMCInfo(new_state, p_accept, False, is_divergent, proposal),
+            HMCInfo(energy, new_state, p_accept, False, is_divergent, proposal),
         )
         return jax.lax.cond(
             do_accept,
