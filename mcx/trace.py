@@ -30,7 +30,7 @@ class Trace(InferenceData):
 
         sample_stats_dict = {
             "lp": posterior["potential_energy"],
-            "mean_tree_accept": posterior["acceptance_probability"],
+            "acceptance_probability": posterior["acceptance_probability"],
             "diverging": posterior["is_divergent"],
             "energy": posterior["energy"],
         }
