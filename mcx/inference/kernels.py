@@ -6,7 +6,7 @@ from typing import Callable, NamedTuple, Tuple
 import jax
 import jax.numpy as np
 
-from mcx.inference.integrators import Proposal, Proposer
+from mcx.inference.integrators import ProposalState, ProposalInfo, Proposer
 from mcx.inference.metrics import KineticEnergy, MomentumGenerator
 
 
@@ -30,13 +30,14 @@ class HMCInfo(NamedTuple):
     """Additional information on the current HMC step that can be useful for
     debugging or diagnostics.
     """
-    
-    energy: float
+
     proposed_state: HMCState
     acceptance_probability: float
     is_accepted: bool
     is_divergent: bool
-    proposal: Proposal
+    energy: float
+    proposal: ProposalState
+    proposal_info: ProposalInfo
 
 
 @partial(jax.jit, static_argnums=(1,))
@@ -45,7 +46,7 @@ def hmc_init(position: np.DeviceArray, potential_value_and_grad: Callable) -> HM
     and the log-likelihood.
     """
     potential_energy, potential_energy_grad = potential_value_and_grad(position)
-    return HMCState(position, potential_energy, potential_energy, potential_energy_grad)
+    return HMCState(position, potential_energy, potential_energy_grad)
 
 
 def hmc_kernel(
@@ -138,15 +139,17 @@ def hmc_kernel(
         momentum = momentum_generator(key_momentum)
         energy = potential_energy + kinetic_energy(momentum)
 
-        proposal = proposal_generator(
-            key_integrator, Proposal(position, momentum, potential_energy_grad)
+        proposal, proposal_info = proposal_generator(
+            key_integrator, ProposalState(position, momentum, potential_energy_grad)
         )
         new_position, new_momentum, new_potential_energy_grad = proposal
 
         flipped_momentum = -1.0 * new_momentum  # to make the transition reversible
         new_potential_energy = potential(new_position)
         new_energy = new_potential_energy + kinetic_energy(flipped_momentum)
-        new_state = HMCState(new_position, new_potential_energy, new_potential_energy_grad)
+        new_state = HMCState(
+            new_position, new_potential_energy, new_potential_energy_grad
+        )
 
         delta_energy = energy - new_energy
         delta_energy = np.where(np.isnan(delta_energy), -np.inf, delta_energy)
@@ -156,11 +159,27 @@ def hmc_kernel(
         do_accept = jax.random.bernoulli(key_accept, p_accept)
         accept_state = (
             new_state,
-            HMCInfo(energy, new_state, p_accept, True, is_divergent, proposal),
+            HMCInfo(
+                new_state,
+                p_accept,
+                True,
+                is_divergent,
+                new_energy,
+                proposal,
+                proposal_info,
+            ),
         )
         reject_state = (
             state,
-            HMCInfo(energy, new_state, p_accept, False, is_divergent, proposal),
+            HMCInfo(
+                new_state,
+                p_accept,
+                False,
+                is_divergent,
+                energy,
+                proposal,
+                proposal_info,
+            ),
         )
         return jax.lax.cond(
             do_accept,
