@@ -335,6 +335,10 @@ class sampler(object):
             )
 
             self.state = last_state[0]
+            samples, sampling_info = self.program.make_trace(
+                chain=chain, ravel_fn=self.unravel_fn
+            )
+            trace = Trace(samples=samples, sampling_info=sampling_info)
 
             print(f"Done in {(datetime.now()-start).total_seconds():.1f} seconds.")
 
@@ -368,10 +372,13 @@ class sampler(object):
             stack = lambda y, *ys: np.stack((y, *ys))
             chain = jax.tree_multimap(stack, *chain)
 
-        # having thought about it, maybe here we'd only want to unravel everything
-        # that needs to be unravelled. Same for the iterative sampling.
-        posterior = self.program.make_trace(chain=chain, unravel_fn=self.unravel_fn)
-        trace = Trace(posterior=posterior)
+            # It is inconvenient to have to repeat the Trace creation, but it is
+            # the only way I could see to get an accurate estimate of the real
+            # time it takes to samples with `lax.scan`.
+            samples, sampling_info = self.program.make_trace(
+                chain=chain, ravel_fn=self.unravel_fn
+            )
+            trace = Trace(samples=samples, sampling_info=sampling_info)
 
         return trace
 
@@ -457,8 +464,7 @@ class sequential_sampler(object):
         rng_keys = jax.random.split(self.rng_key, self.num_samples)
         with tqdm(rng_keys, unit="samples") as progress:
             progress.set_description(
-                "Collecting {:,} samples".format(self.num_samples),
-                refresh=False,
+                "Collecting {:,} samples".format(self.num_samples), refresh=False,
             )
             for key in progress:
                 state = update_chains(state, key)

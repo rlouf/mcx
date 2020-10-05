@@ -177,9 +177,7 @@ class HMC:
 
         return build_kernel
 
-    def make_trace(
-        self, chain: Tuple[HMCState, HMCInfo], unravel_fn: Callable,
-    ) -> Dict:
+    def make_trace(self, chain: Tuple[HMCState, HMCInfo], ravel_fn: Callable,) -> Dict:
         """Translate the raw chain into a Trace object.
 
         Parameters
@@ -196,24 +194,22 @@ class HMC:
         """
         state, info = chain
 
-        # We ravelled positions before sampling to be able to make computations
-        # on flat arrays in the backend. We now need to bring their to
-        # their original shape before adding to the trace.
-        unravel_chain = jax.vmap(unravel_fn, in_axes=(0,))
-        samples = jax.vmap(unravel_chain, in_axes=(1,))(state.position)
-        
-        potential_energy = state.potential_energy.T
-        acceptance_probability = info.acceptance_probability.T
-        is_divergent = info.is_divergent.T
-        energy = info.energy.T
+        # We unravelled positions before sampling to be able to make
+        # computations on flat arrays in the backend. We now need to bring
+        # their to their original shape before adding to the trace.
+        ravel_chain = jax.vmap(ravel_fn, in_axes=(0,))
+        samples = jax.vmap(ravel_chain, in_axes=(1,))(state.position)
 
-        return {
-            "samples": samples,
-            "potential_energy": potential_energy,
-            "acceptance_probability": acceptance_probability,
-            "is_divergent": is_divergent,
-            "energy": energy,
+        sampling_info = {
+            "potential_energy": state.potential_energy.T,
+            "acceptance_probability": info.acceptance_probability.T,
+            "is_divergent": info.is_divergent.T,
+            "energy": info.energy.T,
+            "step_size": info.proposal_info.step_size.T,
+            "num_integration_steps": info.proposal_info.num_integration_steps.T,
         }
+
+        return samples, sampling_info
 
     def _to_potential(self, loglikelihood: Callable) -> Callable:
         """The potential in the Hamiltonian Monte Carlo algorithm is equal to
