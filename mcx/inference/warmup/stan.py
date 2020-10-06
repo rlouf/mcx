@@ -143,7 +143,7 @@ def stan_hmc_warmup(
         The updated states of the chain and the warmup.
 
         """
-        step_size = np.exp(warmup_state.da_state.log_step_size_avg)
+        step_size = np.exp(warmup_state.da_state.log_step_size)
         inverse_mass_matrix = warmup_state.mm_state.inverse_mass_matrix
         kernel = kernel_factory(step_size, inverse_mass_matrix)
 
@@ -166,7 +166,7 @@ def stan_hmc_warmup(
 
     def final(warmup_state: StanWarmupState) -> Tuple[float, np.DeviceArray]:
         """Return the step size and mass matrix."""
-        step_size = np.exp(warmup_state.da_state.log_step_size)
+        step_size = np.exp(warmup_state.da_state.log_step_size_avg)
         inverse_mass_matrix = warmup_state.mm_state.inverse_mass_matrix
         return step_size, inverse_mass_matrix
 
