@@ -58,7 +58,7 @@ class Trace(InferenceData):
             Posterior samples from a model. The dictionary maps the variables
             names to their posterior samples with shape (n_chains, num_samples, var_shape).
         """
-
+        self.log_likelihood_value = None
         self.samples = samples
         self.loglikelihood_contributions_fn = loglikelihood_contributions_fn
 
@@ -82,6 +82,9 @@ class Trace(InferenceData):
     @property
     def log_likelihood(self):
 
+        if self.log_likelihood_value:
+            return self.log_likelihood_value
+
         def compute_in(samples):
             return self.loglikelihood_contributions_fn(**samples)
 
@@ -91,7 +94,9 @@ class Trace(InferenceData):
 
         in_axes = ({key: 0 for key in self.samples},)
         loglikelihoods = jax.vmap(compute, in_axes=in_axes)(self.samples)
-        print(loglikelihoods)
+
+        self.log_likelihood_value = dict_to_dataset(data=loglikelihoods, library=mcx)
+        return self.log_likelihood_value
 
     def append(self, *, samples, sampling_info):
         """Append a trace or new elements to the current trace. This is useful
