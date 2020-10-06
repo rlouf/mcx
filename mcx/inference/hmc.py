@@ -75,7 +75,12 @@ class HMC:
         accelerate=False,
         initial_step_size: float = 0.1,
     ) -> Tuple[HMCState, HMCParameters]:
-        """I don't like having a ton of warmup logic in here."""
+        """I don't like having a ton of warmup logic in here.
+
+        Chain info should be returned as (chain_state, warmup_state), info
+        as in any other sampling stuff.
+
+        """
 
         if not self.needs_warmup:
             parameters = HMCParameters(
@@ -91,13 +96,13 @@ class HMC:
             )
             return initial_state, parameters
 
-        # kernel_factory = self.kernel_factory(loglikelihood)
         hmc_factory = jax.partial(kernel_factory, self.parameters.num_integration_steps)
         init, update, final = stan_hmc_warmup(hmc_factory, self.is_mass_matrix_diagonal)
 
         rng_keys = jax.random.split(rng_key, num_chains)
-        chain_state, warmup_state = jax.vmap(init, in_axes=(0, 0, None))(
-            rng_keys, initial_state, initial_step_size
+        chain_state = initial_state
+        warmup_state = jax.vmap(init, in_axes=(0, 0, None))(
+            rng_keys, chain_state, initial_step_size
         )
 
         schedule = np.array(stan_warmup_schedule(num_warmup_steps))
@@ -117,13 +122,16 @@ class HMC:
 
                 _, rng_key = jax.random.split(rng_key)
                 keys = jax.random.split(rng_key, num_chains)
-                chain_state, warmup_state = jax.vmap(
+                chain_state, warmup_state, chain_info = jax.vmap(
                     update, in_axes=(0, None, None, 0, 0)
-                )(keys, stage, is_middle_window_end, chain_state, warmup_state,)
+                )(keys, stage, is_middle_window_end, chain_state, warmup_state)
 
-                return (rng_key, chain_state, warmup_state), (chain_state, warmup_state)
+                return (
+                    (rng_key, chain_state, warmup_state),
+                    (chain_state, warmup_state, chain_info),
+                )
 
-            last_state, _ = jax.lax.scan(
+            last_state, chain = jax.lax.scan(
                 update_chain, (rng_key, chain_state, warmup_state), schedule
             )
             _, chain_state, warmup_state = last_state
@@ -142,10 +150,10 @@ class HMC:
                     _, rng_key = jax.random.split(rng_key)
                     rng_keys = jax.random.split(rng_key, num_chains)
                     stage, is_middle_window_end = interval
-                    chain_state, warmup_state = jax.vmap(
+                    chain_state, warmup_state, chain_info = jax.vmap(
                         update, in_axes=(0, None, None, 0, 0)
                     )(rng_keys, stage, is_middle_window_end, chain_state, warmup_state)
-                    chain.append((chain_state, warmup_state))
+                    chain.append((chain_state, warmup_state, chain_info))
 
             chain_state, warmup_state = chain[
                 -1
