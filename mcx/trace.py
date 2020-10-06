@@ -1,8 +1,9 @@
-from typing import Dict
-import mcx
+from typing import Callable, Dict
 from arviz import InferenceData
 from arviz.data.base import dict_to_dataset
+import jax
 
+import mcx
 
 __all__ = ["Trace"]
 
@@ -14,12 +15,16 @@ class Trace(InferenceData):
     The class is a thin wrapper around ArviZ's InferenceData, it is an
     interface between the chains produced by the samplers and ArviZ.
 
-    +---------+        +------------+        +------------+
-    | Sampler | -----> |  Evaluator | -----> |   Trace    |
-    +---------+        +------------+        +------------+
+    +---------+            +------------+              +------------+
+    | Sampler | ---------> |  Evaluator | -----------> |   Trace    |
+    +---------+  states    +------------+   samples    +------------+
+                 info                       info
+                 ravel_fn
 
-    We do not want to have evaluator-specific logic either in the samplers
-    or the trace.
+    This design ensures that neither of the sampler of the trace need be aware
+    of what evaluator produced the trace. This avoids carrying branching logic
+    to accomodate fundamentally different algorithms (such as HMC and
+    Metropolis Hastings).
 
     Attributes
     ----------
@@ -29,7 +34,13 @@ class Trace(InferenceData):
         The chain info as provided by the sampling algorithm.
     """
 
-    def __init__(self, *, samples: Dict = None, sampling_info: Dict = None):
+    def __init__(
+        self,
+        *,
+        samples: Dict = None,
+        sampling_info: Dict = None,
+        loglikelihood_contributions_fn: Callable = None
+    ):
         """Build a Trace object from MCX data.
 
         Note
@@ -48,6 +59,9 @@ class Trace(InferenceData):
             names to their posterior samples with shape (n_chains, num_samples, var_shape).
         """
 
+        self.samples = samples
+        self.loglikelihood_contributions_fn = loglikelihood_contributions_fn
+
         samples_dataset = dict_to_dataset(data=samples, library=mcx)
 
         # This will do as long as we only have samplers in the HMC family but
@@ -65,7 +79,21 @@ class Trace(InferenceData):
 
         super().__init__(posterior=samples_dataset, sample_stats=samples_stats_dataset)
 
-    def append(self, data):
+    @property
+    def log_likelihood(self):
+
+        def compute_in(samples):
+            return self.loglikelihood_contributions_fn(**samples)
+
+        def compute(samples):
+            in_axes = ({key: 0 for key in self.samples},)
+            return jax.vmap(compute_in, in_axes=in_axes)(samples)
+
+        in_axes = ({key: 0 for key in self.samples},)
+        loglikelihoods = jax.vmap(compute, in_axes=in_axes)(self.samples)
+        print(loglikelihoods)
+
+    def append(self, *, samples, sampling_info):
         """Append a trace or new elements to the current trace. This is useful
         when performing repeated inference on the same dataset, or using the
         generator runtime. Sequential inference should use different traces for

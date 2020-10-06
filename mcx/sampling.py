@@ -8,7 +8,7 @@ from tqdm import tqdm
 
 import mcx
 from mcx import sample_forward
-from mcx.core import compile_to_logpdf
+from mcx.core import compile_to_logpdf, compile_to_loglikelihoods
 from mcx.trace import Trace
 
 
@@ -114,6 +114,7 @@ class sampler(object):
         print("sampler: build the loglikelihood")
         validate_conditioning_variables(model, **observations)
         loglikelihood = build_loglikelihood(model, **observations)
+        loglikelihood_contributions = build_loglikelihoods(model, **observations)
 
         print("sampler: find the initial states")
         initial_positions, unravel_fn = get_initial_position(
@@ -135,6 +136,7 @@ class sampler(object):
         self.initial_state = initial_state
         self.state = initial_state
         self.unravel_fn = unravel_fn
+        self.loglikelihood_contributions = loglikelihood_contributions
 
     def __iter__(self) -> Iterator:
         """Make the sampler behave like an iterable and an iterator.
@@ -338,7 +340,7 @@ class sampler(object):
             samples, sampling_info = self.program.make_trace(
                 chain=chain, ravel_fn=self.unravel_fn
             )
-            trace = Trace(samples=samples, sampling_info=sampling_info)
+            trace = Trace(samples=samples, sampling_info=sampling_info, loglikelihood_contributions_fn=self.loglikelihood_contributions)
 
             print(f"Done in {(datetime.now()-start).total_seconds():.1f} seconds.")
 
@@ -378,7 +380,7 @@ class sampler(object):
             samples, sampling_info = self.program.make_trace(
                 chain=chain, ravel_fn=self.unravel_fn
             )
-            trace = Trace(samples=samples, sampling_info=sampling_info)
+            trace = Trace(samples=samples, sampling_info=sampling_info, loglikelihood_contributions_fn=self.loglikelihood_contributions)
 
         return trace
 
@@ -521,6 +523,16 @@ def build_loglikelihood(model, **kwargs):
     logpdf = artifact.compiled_fn
     loglikelihood = jax.partial(logpdf, **kwargs)
     return loglikelihood
+
+
+def build_loglikelihoods(model, **kwargs):
+    """Function to compute the loglikelihood contribution
+    of each variable.
+    """
+    artifact = compile_to_loglikelihoods(model.graph, model.namespace)
+    logpdf = artifact.compiled_fn
+    loglikelihoods = jax.partial(logpdf, **kwargs)
+    return loglikelihoods
 
 
 def get_initial_position(rng_key, model, num_chains, **kwargs):
