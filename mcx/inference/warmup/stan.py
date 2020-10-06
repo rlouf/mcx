@@ -149,7 +149,7 @@ def stan_hmc_warmup(
 
         chain_state, info = kernel(rng_key, chain_state)
 
-        jax.lax.switch(
+        chain_state, warmup_state = jax.lax.switch(
             stage,
             (first_stage_update, second_stage_update),
             (rng_key, chain_state, warmup_state),
