@@ -1,11 +1,24 @@
-from typing import Callable, Dict
-from arviz import InferenceData
+from dataclasses import dataclass
+
+from typing import Callable, Dict, Optional
 from arviz.data.base import dict_to_dataset
+from arviz import InferenceData
 import jax
+import jax.numpy as np
 
 import mcx
 
 __all__ = ["Trace"]
+
+
+@dataclass
+class MCXTrace:
+    samples: Optional[Dict] = None
+    sampling_info: Optional[Dict] = None
+    loglikelihoods: Optional[Dict] = None
+    warmup_samples: Optional[Dict] = None
+    warmup_sampling_info: Optional[Dict] = None
+    warmup_info: Optional[Dict] = None
 
 
 class Trace(InferenceData):
@@ -39,64 +52,123 @@ class Trace(InferenceData):
         *,
         samples: Dict = None,
         sampling_info: Dict = None,
-        loglikelihood_contributions_fn: Callable = None
+        warmup_samples: Dict = None,
+        warmup_sampling_info: Dict = None,
+        warmup_info: Dict = None,
+        loglikelihood_contributions_fn: Callable = None,
     ):
         """Build a Trace object from MCX data.
-
-        Note
-        ----
-        I performed an elementary benchmark where I go from returning the raw
-        chains + information to an `InferenceData` object with the posterior
-        and sample statistics. I found that there is no substantial difference
-        in terms of performance. Therefore there is not reason to not
-        initialize the `InferenceData` with both the posterior and the sample
-        stats.
 
         Parameters
         ----------
         samples
             Posterior samples from a model. The dictionary maps the variables
             names to their posterior samples with shape (n_chains, num_samples, var_shape).
+
         """
-        self.log_likelihood_value = None
-        self.samples = samples
+        self._groups = []
+        self._groups_warmup = []
+
+        if samples is not None:
+            pass
+        elif warmup_samples is not None:
+            pass
+        else:
+            raise ValueError(
+                "To build a Trace you need at least one of samples or warmup_samples."
+                " It is not recommended to build a Trace object yourself. Please raise"
+                " an issue if your use case necessitates to instantiate a Trace yourself."
+            )
+
+        self.mcx = MCXTrace(
+            samples=samples,
+            sampling_info=sampling_info,
+            warmup_samples=warmup_samples,
+            warmup_sampling_info=warmup_sampling_info,
+            warmup_info=warmup_info,
+        )
         self.loglikelihood_contributions_fn = loglikelihood_contributions_fn
 
-        samples_dataset = dict_to_dataset(data=samples, library=mcx)
+    # The following properties constitute the interface with ArviX; when called
+    # by and ArviZ function they return the data in a format it can understand.
+    # We prefer to keep MCX's and ArviZ's format decoupled for now, as MCX's needs
+    # are currently not properly defined.
 
-        # This will do as long as we only have samplers in the HMC family but
-        # we will need to use a conversion dictionary otherwise to not
-        # have specialized code here.
-        sample_stats_dict = {
-            "lp": sampling_info["potential_energy"],
-            "acceptance_probability": sampling_info["acceptance_probability"],
-            "diverging": sampling_info["is_divergent"],
-            "energy": sampling_info["energy"],
-            "step_size": sampling_info["step_size"],
-            "num_integration_steps": sampling_info["num_integration_steps"],
+    @property
+    def posterior(self):
+        samples = self.mcx.samples
+        return dict_to_dataset(data=samples, library=mcx)
+
+    @property
+    def warmup_posterior(self):
+        samples = self.mcx.warmup_samples
+        return dict_to_dataset(data=samples, library=mcx)
+
+    @property
+    def sample_stats(self):
+        info = self.mcx.sampling_info
+        sample_stats = {
+            "lp": info["potential_energy"],
+            "acceptance_probability": info["acceptance_probability"],
+            "diverging": info["is_divergent"],
+            "energy": info["energy"],
+            "step_size": info["step_size"],
+            "num_integration_steps": info["num_integration_steps"],
         }
-        samples_stats_dataset = dict_to_dataset(data=sample_stats_dict, library=mcx)
+        return dict_to_dataset(data=sample_stats, library=mcx)
 
-        super().__init__(posterior=samples_dataset, sample_stats=samples_stats_dataset)
+    @property
+    def warmup_sample_stats(self):
+        info = self.mcx.warmup_sampling_info
+        sample_stats = {
+            "lp": info["potential_energy"],
+            "acceptance_probability": info["acceptance_probability"],
+            "diverging": info["is_divergent"],
+            "energy": info["energy"],
+            "step_size": info["step_size"],
+            "num_integration_steps": info["num_integration_steps"],
+        }
+        return dict_to_dataset(data=sample_stats, library=mcx)
 
     @property
     def log_likelihood(self):
+        if self.mcx.loglikelihoods:
+            loglikelihoods = self.mcx.loglikelihoods
+        else:
 
-        if self.log_likelihood_value:
-            return self.log_likelihood_value
+            def compute_in(samples):
+                return self.loglikelihood_contributions_fn(**samples)
 
-        def compute_in(samples):
-            return self.loglikelihood_contributions_fn(**samples)
+            def compute(samples):
+                in_axes = ({key: 0 for key in self.mcx.samples},)
+                return jax.vmap(compute_in, in_axes=in_axes)(samples)
 
-        def compute(samples):
-            in_axes = ({key: 0 for key in self.samples},)
-            return jax.vmap(compute_in, in_axes=in_axes)(samples)
+            in_axes = ({key: 0 for key in self.mcx.samples},)
+            loglikelihoods = jax.vmap(compute, in_axes=in_axes)(self.mcx.samples)
+            self.mcx.loglikelihoods = loglikelihoods
 
-        in_axes = ({key: 0 for key in self.samples},)
-        loglikelihoods = jax.vmap(compute, in_axes=in_axes)(self.samples)
+        return dict_to_dataset(data=loglikelihoods, library=mcx)
 
-        self.log_likelihood_value = dict_to_dataset(data=loglikelihoods, library=mcx)
-        return self.log_likelihood_value
+    # The following methods are used to concatenate two traces or add new samples
+    # to a trace. This can be
+
+    def __add__(self, trace):
+        """Concatenate this trace with another.
+
+        Examples
+        --------
+        This can be used to concantenate a sampling trace with the warmup trace:
+
+            >>> trace = sampler.warmup()
+            >>> trace += sampler.run()
+
+        Or to append more samples to a trace shall we want more:
+
+            >>> trace = sampler.run(1_000)
+            >>> trace += sampler.run(10_000)
+
+        """
+        pass
 
     def append(self, *, samples, sampling_info):
         """Append a trace or new elements to the current trace. This is useful

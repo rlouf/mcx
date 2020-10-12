@@ -248,7 +248,7 @@ class sampler(object):
         # )
         # self.state = self.initial_state
 
-        chain_state, parameters = self.program.warmup(
+        last_state, parameters, warmup_chain = self.program.warmup(
             self.rng_key,
             self.state,
             self.kernel_factory,
@@ -257,10 +257,21 @@ class sampler(object):
             accelerate,
             **kwargs,
         )
-        self.state = chain_state
+        self.state = last_state
         self.parameters = parameters
         self.is_warmed_up = True
-        return chain_state, parameters
+
+        samples, sampling_info, warmup_info = self.program.make_warmup_trace(
+            chain=warmup_chain, ravel_fn=self.unravel_fn
+        )
+
+        trace = Trace(
+            warmup_samples=samples,
+            warmup_sampling_info=sampling_info,
+            warmup_info=warmup_info,
+        )
+
+        return trace
 
     def run(
         self,
@@ -340,7 +351,11 @@ class sampler(object):
             samples, sampling_info = self.program.make_trace(
                 chain=chain, ravel_fn=self.unravel_fn
             )
-            trace = Trace(samples=samples, sampling_info=sampling_info, loglikelihood_contributions_fn=self.loglikelihood_contributions)
+            trace = Trace(
+                samples=samples,
+                sampling_info=sampling_info,
+                loglikelihood_contributions_fn=self.loglikelihood_contributions,
+            )
 
             print(f"Done in {(datetime.now()-start).total_seconds():.1f} seconds.")
 
@@ -380,7 +395,11 @@ class sampler(object):
             samples, sampling_info = self.program.make_trace(
                 chain=chain, ravel_fn=self.unravel_fn
             )
-            trace = Trace(samples=samples, sampling_info=sampling_info, loglikelihood_contributions_fn=self.loglikelihood_contributions)
+            trace = Trace(
+                samples=samples,
+                sampling_info=sampling_info,
+                loglikelihood_contributions_fn=self.loglikelihood_contributions,
+            )
 
         return trace
 
@@ -466,7 +485,8 @@ class sequential_sampler(object):
         rng_keys = jax.random.split(self.rng_key, self.num_samples)
         with tqdm(rng_keys, unit="samples") as progress:
             progress.set_description(
-                "Collecting {:,} samples".format(self.num_samples), refresh=False,
+                "Collecting {:,} samples".format(self.num_samples),
+                refresh=False,
             )
             for key in progress:
                 state = update_chains(state, key)

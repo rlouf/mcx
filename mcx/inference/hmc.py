@@ -131,10 +131,11 @@ class HMC:
                     (chain_state, warmup_state, chain_info),
                 )
 
-            last_state, chain = jax.lax.scan(
+            last_state, warmup_chain = jax.lax.scan(
                 update_chain, (rng_key, chain_state, warmup_state), schedule
             )
-            _, chain_state, warmup_state = last_state
+            _, last_chain_state, last_warmup_state = last_state
+            # Now we need to separate the different elements in the chain
 
             print(f"Done in {(datetime.now()-start).total_seconds():.1f} seconds.")
 
@@ -155,11 +156,16 @@ class HMC:
                     )(rng_keys, stage, is_middle_window_end, chain_state, warmup_state)
                     chain.append((chain_state, warmup_state, chain_info))
 
-            chain_state, warmup_state = chain[
+            chain_state, warmup_state, _ = chain[
                 -1
             ]  # not using it now, but to give lax.scan a fair comparison
 
-        step_size, inverse_mass_matrix = jax.vmap(final, in_axes=(0,))(warmup_state)
+            # TODO: benchmark against stacking at every iteration, instead of
+            # effectively appending twice.
+            stack = lambda y, *ys: np.stack((y, *ys))
+            warmup_chain = jax.tree_multimap(stack, *chain)
+
+        step_size, inverse_mass_matrix = jax.vmap(final, in_axes=(0,))(last_warmup_state)
         num_integration_steps = self.parameters.num_integration_steps
 
         parameters = HMCParameters(
@@ -169,7 +175,7 @@ class HMC:
             inverse_mass_matrix,
         )
 
-        return chain_state, parameters
+        return last_chain_state, parameters, warmup_chain
 
     def kernel_factory(self, loglikelihood: Callable) -> Callable:
         potential = self._to_potential(loglikelihood)
@@ -218,6 +224,18 @@ class HMC:
         }
 
         return samples, sampling_info
+
+    def make_warmup_trace(self, chain: Tuple[HMCState, HMCInfo], ravel_fn: Callable,) -> Dict:
+        chain_state, warmup_info, chain_info = chain
+        samples, sampling_info = self.make_trace((chain_state, chain_info), ravel_fn)
+
+        warmup_info = {
+                "log_step_size": warmup_info.da_state.log_step_size,
+                "log_step_size_avg": warmup_info.da_state.log_step_size_avg,
+                "inverse_mass_matrix": warmup_info.mm_state.inverse_mass_matrix,
+        }
+
+        return samples, sampling_info, warmup_info
 
     def _to_potential(self, loglikelihood: Callable) -> Callable:
         """The potential in the Hamiltonian Monte Carlo algorithm is equal to
