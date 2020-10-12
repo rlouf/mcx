@@ -55,6 +55,7 @@ class Trace(InferenceData):
         warmup_samples: Dict = None,
         warmup_sampling_info: Dict = None,
         warmup_info: Dict = None,
+        loglikelihoods: Dict = None,
         loglikelihood_contributions_fn: Callable = None,
     ):
         """Build a Trace object from MCX data.
@@ -83,6 +84,7 @@ class Trace(InferenceData):
         self.mcx = MCXTrace(
             samples=samples,
             sampling_info=sampling_info,
+            loglikelihoods=loglikelihoods,
             warmup_samples=warmup_samples,
             warmup_sampling_info=warmup_sampling_info,
             warmup_info=warmup_info,
@@ -171,17 +173,47 @@ class Trace(InferenceData):
             >>> trace += sampler.run(10_000)
 
         """
+        concatenate = lambda cur, new: np.concatenate((cur, new), axis=1)
+
         for field, new_value in asdict(trace.mcx).items():
             current_value = getattr(self.mcx, field)
             if current_value is None and new_value is not None:
                 changes = {f"{field}": new_value}
                 self.mcx = replace(self.mcx, **changes)
             elif current_value is not None and new_value is not None:
-                stacked_values = jax.tree.multimap(np.stack, ((current_value, new_value)))
+                stacked_values = jax.tree_multimap(
+                    concatenate, current_value, new_value
+                )
                 changes = {f"{field}": stacked_values}
                 self.mcx = replace(self.mcx, **changes)
 
+        return self
+
     def __add__(self, trace):
+
+        concatenate = lambda cur, new: np.concatenate((cur, new), axis=1)
+
+        mcx_trace_dict = {}
+        for field, new_value in asdict(trace.mcx).items():
+            current_value = getattr(self.mcx, field)
+            if current_value is None and new_value is not None:
+                mcx_trace_dict[f"{field}"] = new_value
+            elif current_value is not None and new_value is None:
+                mcx_trace_dict[f"{field}"] = current_value
+            elif current_value is not None and new_value is not None:
+                stacked_values = jax.tree_multimap(
+                    concatenate, current_value, new_value
+                )
+                mcx_trace_dict[f"{field}"] = stacked_values
+            else:
+                mcx_trace_dict[f"{field}"] = None
+
+        new_trace = Trace(
+            **mcx_trace_dict,
+            loglikelihood_contributions_fn=self.loglikelihood_contributions_fn,
+        )
+
+        return new_trace
 
     def append(self, *, samples, sampling_info):
         """Append a trace or new elements to the current trace. This is useful
