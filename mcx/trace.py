@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass, replace
 
 from typing import Callable, Dict, Optional
 from arviz.data.base import dict_to_dataset
@@ -152,8 +152,11 @@ class Trace(InferenceData):
     # The following methods are used to concatenate two traces or add new samples
     # to a trace. This can be
 
-    def __add__(self, trace):
+    def __iadd__(self, trace):
         """Concatenate this trace with another.
+
+        We only need to concatenate the information contained in the internal
+        trace.
 
         Examples
         --------
@@ -168,7 +171,17 @@ class Trace(InferenceData):
             >>> trace += sampler.run(10_000)
 
         """
-        pass
+        for field, new_value in asdict(trace.mcx).items():
+            current_value = getattr(self.mcx, field)
+            if current_value is None and new_value is not None:
+                changes = {f"{field}": new_value}
+                self.mcx = replace(self.mcx, **changes)
+            elif current_value is not None and new_value is not None:
+                stacked_values = jax.tree.multimap(np.stack, ((current_value, new_value)))
+                changes = {f"{field}": stacked_values}
+                self.mcx = replace(self.mcx, **changes)
+
+    def __add__(self, trace):
 
     def append(self, *, samples, sampling_info):
         """Append a trace or new elements to the current trace. This is useful
