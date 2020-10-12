@@ -8,7 +8,7 @@ import networkx as nx
 
 import mcx
 from mcx.core.graph import GraphicalModel
-from mcx.core.nodes import Argument, RandVar, Transformation
+from mcx.core.nodes import Argument, RandVar
 
 
 class Artifact(NamedTuple):
@@ -244,7 +244,10 @@ def compile_to_loglikelihoods(graph: GraphicalModel, namespace: Dict) -> Artifac
 
     returned = ast.Return(
         value=ast.Dict(
-            keys=[ast.Constant(value=f"{name.arg}", kind=None) for name in random_variables],
+            keys=[
+                ast.Constant(value=f"{name.arg}", kind=None)
+                for name in random_variables
+            ],
             values=[
                 ast.Name(id=f"logpdf_{name.arg}", ctx=ast.Load())
                 for name in random_variables
@@ -336,7 +339,12 @@ def compile_to_sampler(graph, namespace) -> Artifact:
         if not isinstance(node, mcx.core.graph.Var)
     ]
 
-    returned = ast.Return(value=ast.Tuple(elts=returned_vars, ctx=ast.Load(),))
+    returned = ast.Return(
+        value=ast.Tuple(
+            elts=returned_vars,
+            ctx=ast.Load(),
+        )
+    )
     body.append(returned)
 
     sampler_ast = ast.Module(
@@ -426,7 +434,12 @@ def compile_to_forward_sampler(graph, namespace, jit=False) -> Artifact:
     if len(returned_vars) == 1:
         returned = ast.Return(returned_vars[0])
     else:
-        returned = ast.Return(value=ast.Tuple(elts=returned_vars, ctx=ast.Load(),))
+        returned = ast.Return(
+            value=ast.Tuple(
+                elts=returned_vars,
+                ctx=ast.Load(),
+            )
+        )
     body.append(returned)
     sampler_ast = ast.Module(
         body=[

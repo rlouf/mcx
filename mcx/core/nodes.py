@@ -57,7 +57,7 @@ class RandVar(object):
                 ),
                 args=[ast.Name(id=self.name, ctx=ast.Load())],
                 keywords=[],
-            )
+            ),
         )
 
     def to_logpdf_iadd(self):

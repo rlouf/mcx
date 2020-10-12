@@ -269,6 +269,7 @@ class sampler(object):
             warmup_samples=samples,
             warmup_sampling_info=sampling_info,
             warmup_info=warmup_info,
+            loglikelihood_contributions_fn=self.loglikelihood_contributions,
         )
 
         return trace
