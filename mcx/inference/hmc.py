@@ -9,7 +9,7 @@ from tqdm import tqdm
 from mcx.inference.integrators import velocity_verlet, hmc_proposal
 from mcx.inference.kernels import HMCInfo, HMCState, hmc_kernel, hmc_init
 from mcx.inference.metrics import gaussian_euclidean_metric
-from mcx.inference.warmup import stan_hmc_warmup, stan_warmup_schedule
+from mcx.inference.warmup import stan_hmc_warmup, stan_warmup_schedule, StanWarmupState
 
 
 class HMCParameters(NamedTuple):
@@ -74,13 +74,8 @@ class HMC:
         num_warmup_steps: int = 1000,
         accelerate=False,
         initial_step_size: float = 0.1,
-    ) -> Tuple[HMCState, HMCParameters]:
-        """I don't like having a ton of warmup logic in here.
-
-        Chain info should be returned as (chain_state, warmup_state), info
-        as in any other sampling stuff.
-
-        """
+    ) -> Tuple[HMCState, HMCParameters, Optional[StanWarmupState]]:
+        """I don't like having a ton of warmup logic in here."""
 
         if not self.needs_warmup:
             parameters = HMCParameters(
@@ -94,7 +89,7 @@ class HMC:
                     ]
                 ),
             )
-            return initial_state, parameters
+            return initial_state, parameters, None
 
         hmc_factory = jax.partial(kernel_factory, self.parameters.num_integration_steps)
         init, update, final = stan_hmc_warmup(hmc_factory, self.is_mass_matrix_diagonal)
@@ -135,7 +130,6 @@ class HMC:
                 update_chain, (rng_key, chain_state, warmup_state), schedule
             )
             _, last_chain_state, last_warmup_state = last_state
-            # Now we need to separate the different elements in the chain
 
             print(f"Done in {(datetime.now()-start).total_seconds():.1f} seconds.")
 
@@ -156,9 +150,7 @@ class HMC:
                     )(rng_keys, stage, is_middle_window_end, chain_state, warmup_state)
                     chain.append((chain_state, warmup_state, chain_info))
 
-            chain_state, warmup_state, _ = chain[
-                -1
-            ]  # not using it now, but to give lax.scan a fair comparison
+            last_chain_state, last_warmup_state, _ = chain[-1]
 
             # TODO: benchmark against stacking at every iteration, instead of
             # effectively appending twice.
@@ -197,7 +189,7 @@ class HMC:
         self,
         chain: Tuple[HMCState, HMCInfo],
         ravel_fn: Callable,
-    ) -> Dict:
+    ) -> Tuple[Dict, Dict]:
         """Translate the raw chain into a Trace object.
 
         Parameters
@@ -220,32 +212,41 @@ class HMC:
         ravel_chain = jax.vmap(ravel_fn, in_axes=(0,))
         samples = jax.vmap(ravel_chain, in_axes=(1,))(state.position)
 
+        # I added all these `type: ignore` because I am getting lazy about types.
+        # The chain that we accumulate is not a list of HMC State, but rather
+        # and HMC State where fields are list of the subequent values in the
+        # chain. This is due to the way JAX handles "pytrees". Thus at this
+        # point we are not manipulating HMCStates but a ChainState that looks
+        # like a HMCState but with arrays as fields.
+        # We can either create new states (verbose but preferred, I am not sure
+        # this distinction is clear for newcomers) or keep silencing the checker.
+        # Please keep this comment if the later is chosen.
         sampling_info = {
-            "potential_energy": state.potential_energy.T,
-            "acceptance_probability": info.acceptance_probability.T,
-            "is_divergent": info.is_divergent.T,
-            "energy": info.energy.T,
-            "step_size": info.proposal_info.step_size.T,
-            "num_integration_steps": info.proposal_info.num_integration_steps.T,
+            "potential_energy": state.potential_energy.T,  # type: ignore
+            "acceptance_probability": info.acceptance_probability.T,  # type: ignore
+            "is_divergent": info.is_divergent.T,  # type: ignore
+            "energy": info.energy.T,  # type: ignore
+            "step_size": info.proposal_info.step_size.T,  # type: ignore
+            "num_integration_steps": info.proposal_info.num_integration_steps.T,  # type: ignore
         }
 
         return samples, sampling_info
 
     def make_warmup_trace(
         self,
-        chain: Tuple[HMCState, HMCInfo],
+        chain: Tuple[HMCState, StanWarmupState, HMCInfo],
         ravel_fn: Callable,
-    ) -> Dict:
+    ) -> Tuple[Dict, Dict, Dict]:
         chain_state, warmup_info, chain_info = chain
         samples, sampling_info = self.make_trace((chain_state, chain_info), ravel_fn)
 
-        warmup_info = {
+        warmup_info_dict = {
             "log_step_size": warmup_info.da_state.log_step_size,
             "log_step_size_avg": warmup_info.da_state.log_step_size_avg,
             "inverse_mass_matrix": warmup_info.mm_state.inverse_mass_matrix,
         }
 
-        return samples, sampling_info, warmup_info
+        return samples, sampling_info, warmup_info_dict
 
     def _to_potential(self, loglikelihood: Callable) -> Callable:
         """The potential in the Hamiltonian Monte Carlo algorithm is equal to

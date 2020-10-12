@@ -1,6 +1,6 @@
 from dataclasses import asdict, dataclass, replace
 
-from typing import Callable, Dict, Optional
+from typing import Callable, Dict, List, Optional
 from arviz.data.base import dict_to_dataset
 from arviz import InferenceData
 import jax
@@ -67,8 +67,8 @@ class Trace(InferenceData):
             names to their posterior samples with shape (n_chains, num_samples, var_shape).
 
         """
-        self._groups = []
-        self._groups_warmup = []
+        self._groups: List[str] = []
+        self._groups_warmup: List[str] = []
 
         if samples is not None:
             pass
