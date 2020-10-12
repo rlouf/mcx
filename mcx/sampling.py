@@ -261,6 +261,9 @@ class sampler(object):
         self.parameters = parameters
         self.is_warmed_up = True
 
+        if warmup_chain is None:  # if no warmup needed
+            return
+
         samples, sampling_info, warmup_info = self.program.make_warmup_trace(
             chain=warmup_chain, ravel_fn=self.unravel_fn
         )
