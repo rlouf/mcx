@@ -208,7 +208,9 @@ def stan_first_stage(kernel_factory: Callable) -> Tuple[Callable, Callable]:
 
         chain_state, chain_info = kernel(rng_key, chain_state)
 
-        new_da_state = da_update(chain_info.acceptance_probability, warmup_state.da_state)
+        new_da_state = da_update(
+            chain_info.acceptance_probability, warmup_state.da_state
+        )
         new_warmup_state = StanWarmupState(new_da_state, warmup_state.mm_state)
 
         return chain_state, new_warmup_state, chain_info
@@ -268,16 +270,16 @@ def stan_second_stage(
         kernel = kernel_factory(step_size, inverse_mass_matrix)
 
         chain_state, chain_info = kernel(rng_key, chain_state)
-        new_da_state = da_update(chain_info.acceptance_probability, warmup_state.da_state)
+        new_da_state = da_update(
+            chain_info.acceptance_probability, warmup_state.da_state
+        )
         new_mm_state = mm_update(warmup_state.mm_state, chain_state.position)
         new_warmup_state = StanWarmupState(new_da_state, new_mm_state)
 
         return chain_state, new_warmup_state, chain_info
 
     @jax.jit
-    def final(
-        warmup_state: StanWarmupState
-    ) -> StanWarmupState:
+    def final(warmup_state: StanWarmupState) -> StanWarmupState:
         """Update the parameters at the end of a slow adaptation window.
 
         This consists essentially in computing the mass matrix from the current

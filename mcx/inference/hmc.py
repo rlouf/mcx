@@ -165,7 +165,9 @@ class HMC:
             stack = lambda y, *ys: np.stack((y, *ys))
             warmup_chain = jax.tree_multimap(stack, *chain)
 
-        step_size, inverse_mass_matrix = jax.vmap(final, in_axes=(0,))(last_warmup_state)
+        step_size, inverse_mass_matrix = jax.vmap(final, in_axes=(0,))(
+            last_warmup_state
+        )
         num_integration_steps = self.parameters.num_integration_steps
 
         parameters = HMCParameters(
@@ -191,7 +193,11 @@ class HMC:
 
         return build_kernel
 
-    def make_trace(self, chain: Tuple[HMCState, HMCInfo], ravel_fn: Callable,) -> Dict:
+    def make_trace(
+        self,
+        chain: Tuple[HMCState, HMCInfo],
+        ravel_fn: Callable,
+    ) -> Dict:
         """Translate the raw chain into a Trace object.
 
         Parameters
@@ -225,14 +231,18 @@ class HMC:
 
         return samples, sampling_info
 
-    def make_warmup_trace(self, chain: Tuple[HMCState, HMCInfo], ravel_fn: Callable,) -> Dict:
+    def make_warmup_trace(
+        self,
+        chain: Tuple[HMCState, HMCInfo],
+        ravel_fn: Callable,
+    ) -> Dict:
         chain_state, warmup_info, chain_info = chain
         samples, sampling_info = self.make_trace((chain_state, chain_info), ravel_fn)
 
         warmup_info = {
-                "log_step_size": warmup_info.da_state.log_step_size,
-                "log_step_size_avg": warmup_info.da_state.log_step_size_avg,
-                "inverse_mass_matrix": warmup_info.mm_state.inverse_mass_matrix,
+            "log_step_size": warmup_info.da_state.log_step_size,
+            "log_step_size_avg": warmup_info.da_state.log_step_size_avg,
+            "inverse_mass_matrix": warmup_info.mm_state.inverse_mass_matrix,
         }
 
         return samples, sampling_info, warmup_info

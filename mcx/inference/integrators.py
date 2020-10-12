@@ -203,7 +203,8 @@ def mclachlan_integrator(
 
 
 def yoshida_integrator(
-    potential_fn: Callable, kinetic_energy_fn: Callable,
+    potential_fn: Callable,
+    kinetic_energy_fn: Callable,
 ) -> Integrator:
     """Three stages palindromic symplectic integrator derived in [1]_
 
@@ -258,7 +259,8 @@ def yoshida_integrator(
 
 
 def four_stages_integrator(
-    potential_fn: Callable, kinetic_energy_fn: Callable,
+    potential_fn: Callable,
+    kinetic_energy_fn: Callable,
 ) -> Integrator:
     """Four stages palindromic symplectic integrator derived in [1]_
 
