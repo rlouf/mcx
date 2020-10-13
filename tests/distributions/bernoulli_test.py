@@ -1,7 +1,7 @@
 import jax
-from jax import numpy as np
 import numpy as onp
 import pytest
+from jax import numpy as np
 
 from mcx.distributions import Bernoulli
 

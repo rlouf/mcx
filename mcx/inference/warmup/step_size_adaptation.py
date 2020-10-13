@@ -14,7 +14,6 @@ import jax.numpy as np
 
 from mcx.inference.kernels import HMCState
 
-
 __all__ = [
     "dual_averaging",
     "find_reasonable_step_size",

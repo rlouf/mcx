@@ -1,8 +1,7 @@
-from jax import numpy as np
 import pytest
+from jax import numpy as np
 
 from mcx.distributions import Poisson
-
 
 #
 # SAMPLING CORRECTNESS

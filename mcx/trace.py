@@ -1,10 +1,10 @@
 from dataclasses import asdict, dataclass, replace
-
 from typing import Callable, Dict, List, Optional, Tuple
-from arviz.data.base import dict_to_dataset
-from arviz import InferenceData
+
 import jax
 import jax.numpy as np
+from arviz import InferenceData
+from arviz.data.base import dict_to_dataset
 
 import mcx
 

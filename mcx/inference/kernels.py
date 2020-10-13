@@ -6,9 +6,8 @@ from typing import Callable, NamedTuple, Tuple
 import jax
 import jax.numpy as np
 
-from mcx.inference.integrators import ProposalState, ProposalInfo, Proposer
+from mcx.inference.integrators import ProposalInfo, ProposalState, Proposer
 from mcx.inference.metrics import KineticEnergy, MomentumGenerator
-
 
 __all__ = ["HMCState", "HMCInfo", "hmc_init", "hmc_kernel", "rwm_kernel"]
 

@@ -1,6 +1,6 @@
 import jax
-from jax import numpy as np
 import pytest
+from jax import numpy as np
 
 from mcx.inference.integrators import (
     IntegratorState,

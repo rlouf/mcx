@@ -17,7 +17,6 @@ from typing import Callable, Tuple
 import jax
 from jax import numpy as np
 
-
 __all__ = ["longest_batch_before_turn"]
 
 

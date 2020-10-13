@@ -5,7 +5,6 @@ from typing import Callable, NamedTuple, Tuple
 import jax
 from jax import numpy as np
 
-
 __all__ = [
     "empirical_hmc_proposal",
     "hmc_proposal",

@@ -6,7 +6,6 @@ import jax
 import jax.numpy as np
 from jax import scipy
 
-
 __all__ = ["gaussian_euclidean_metric"]
 
 

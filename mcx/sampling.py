@@ -8,9 +8,8 @@ from tqdm import tqdm
 
 import mcx
 from mcx import sample_forward
-from mcx.core import compile_to_logpdf, compile_to_loglikelihoods
+from mcx.core import compile_to_loglikelihoods, compile_to_logpdf
 from mcx.trace import Trace
-
 
 __all__ = ["sampler", "sequential_sampler"]
 

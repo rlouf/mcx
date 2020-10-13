@@ -8,7 +8,6 @@ import numpy
 from mcx import core
 from mcx.distributions import Distribution
 
-
 __all__ = ["model", "sample_forward", "seed"]
 
 
