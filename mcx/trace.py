@@ -1,6 +1,6 @@
 from dataclasses import asdict, dataclass, replace
 
-from typing import Callable, Dict, List, Optional
+from typing import Callable, Dict, List, Optional, Tuple
 from arviz.data.base import dict_to_dataset
 from arviz import InferenceData
 import jax
@@ -12,7 +12,7 @@ __all__ = ["Trace"]
 
 
 @dataclass
-class MCXTrace:
+class RawTrace:
     samples: Optional[Dict] = None
     sampling_info: Optional[Dict] = None
     loglikelihoods: Optional[Dict] = None
@@ -70,18 +70,7 @@ class Trace(InferenceData):
         self._groups: List[str] = []
         self._groups_warmup: List[str] = []
 
-        if samples is not None:
-            pass
-        elif warmup_samples is not None:
-            pass
-        else:
-            raise ValueError(
-                "To build a Trace you need at least one of samples or warmup_samples."
-                " It is not recommended to build a Trace object yourself. Please raise"
-                " an issue if your use case necessitates to instantiate a Trace yourself."
-            )
-
-        self.mcx = MCXTrace(
+        self.raw = RawTrace(
             samples=samples,
             sampling_info=sampling_info,
             loglikelihoods=loglikelihoods,
@@ -98,17 +87,17 @@ class Trace(InferenceData):
 
     @property
     def posterior(self):
-        samples = self.mcx.samples
+        samples = self.raw.samples
         return dict_to_dataset(data=samples, library=mcx)
 
     @property
     def warmup_posterior(self):
-        samples = self.mcx.warmup_samples
+        samples = self.raw.warmup_samples
         return dict_to_dataset(data=samples, library=mcx)
 
     @property
     def sample_stats(self):
-        info = self.mcx.sampling_info
+        info = self.raw.sampling_info
         sample_stats = {
             "lp": info["potential_energy"],
             "acceptance_probability": info["acceptance_probability"],
@@ -121,7 +110,7 @@ class Trace(InferenceData):
 
     @property
     def warmup_sample_stats(self):
-        info = self.mcx.warmup_sampling_info
+        info = self.raw.warmup_sampling_info
         sample_stats = {
             "lp": info["potential_energy"],
             "acceptance_probability": info["acceptance_probability"],
@@ -134,20 +123,20 @@ class Trace(InferenceData):
 
     @property
     def log_likelihood(self):
-        if self.mcx.loglikelihoods:
-            loglikelihoods = self.mcx.loglikelihoods
+        if self.raw.loglikelihoods:
+            loglikelihoods = self.raw.loglikelihoods
         else:
 
             def compute_in(samples):
                 return self.loglikelihood_contributions_fn(**samples)
 
             def compute(samples):
-                in_axes = ({key: 0 for key in self.mcx.samples},)
+                in_axes = ({key: 0 for key in self.raw.samples},)
                 return jax.vmap(compute_in, in_axes=in_axes)(samples)
 
-            in_axes = ({key: 0 for key in self.mcx.samples},)
-            loglikelihoods = jax.vmap(compute, in_axes=in_axes)(self.mcx.samples)
-            self.mcx.loglikelihoods = loglikelihoods
+            in_axes = ({key: 0 for key in self.raw.samples},)
+            loglikelihoods = jax.vmap(compute, in_axes=in_axes)(self.raw.samples)
+            self.raw.loglikelihoods = loglikelihoods
 
         return dict_to_dataset(data=loglikelihoods, library=mcx)
 
@@ -175,17 +164,17 @@ class Trace(InferenceData):
         """
         concatenate = lambda cur, new: np.concatenate((cur, new), axis=1)
 
-        for field, new_value in asdict(trace.mcx).items():
-            current_value = getattr(self.mcx, field)
+        for field, new_value in asdict(trace.raw).items():
+            current_value = getattr(self.raw, field)
             if current_value is None and new_value is not None:
                 changes = {f"{field}": new_value}
-                self.mcx = replace(self.mcx, **changes)
+                self.raw = replace(self.raw, **changes)
             elif current_value is not None and new_value is not None:
                 stacked_values = jax.tree_multimap(
                     concatenate, current_value, new_value
                 )
                 changes = {f"{field}": stacked_values}
-                self.mcx = replace(self.mcx, **changes)
+                self.raw = replace(self.raw, **changes)
 
         return self
 
@@ -193,32 +182,63 @@ class Trace(InferenceData):
 
         concatenate = lambda cur, new: np.concatenate((cur, new), axis=1)
 
-        mcx_trace_dict = {}
-        for field, new_value in asdict(trace.mcx).items():
-            current_value = getattr(self.mcx, field)
+        raw_trace_dict = {}
+        for field, new_value in asdict(trace.raw).items():
+            current_value = getattr(self.raw, field)
             if current_value is None and new_value is not None:
-                mcx_trace_dict[f"{field}"] = new_value
+                raw_trace_dict[f"{field}"] = new_value
             elif current_value is not None and new_value is None:
-                mcx_trace_dict[f"{field}"] = current_value
+                raw_trace_dict[f"{field}"] = current_value
             elif current_value is not None and new_value is not None:
                 stacked_values = jax.tree_multimap(
                     concatenate, current_value, new_value
                 )
-                mcx_trace_dict[f"{field}"] = stacked_values
+                raw_trace_dict[f"{field}"] = stacked_values
             else:
-                mcx_trace_dict[f"{field}"] = None
+                raw_trace_dict[f"{field}"] = None
 
         new_trace = Trace(
-            **mcx_trace_dict,
+            **raw_trace_dict,
             loglikelihood_contributions_fn=self.loglikelihood_contributions_fn,
         )
 
         return new_trace
 
-    def append(self, *, samples, sampling_info):
+    def append(self, state: Tuple):
         """Append a trace or new elements to the current trace. This is useful
         when performing repeated inference on the same dataset, or using the
         generator runtime. Sequential inference should use different traces for
         each sequence.
+
+        Parameter
+        ---------
+        state
+            A tuple that contains the chain state and the corresponding sampling info.
         """
-        pass
+        sample, sample_info = state
+        concatenate = lambda cur, new: np.concatenate((cur, new), axis=1)
+        concatenate_1d = lambda cur, new: np.column_stack((cur, new))
+
+        if self.raw.samples is None:
+            stacked_chain = sample
+        else:
+            try:
+                stacked_chain = jax.tree_multimap(concatenate, self.raw.samples, sample)
+            except TypeError:
+                stacked_chain = jax.tree_multimap(
+                    concatenate_1d, self.raw.samples, sample
+                )
+
+        if self.raw.sampling_info is None:
+            stacked_info = sample_info
+        else:
+            try:
+                stacked_info = jax.tree_multimap(
+                    concatenate, self.raw.sampling_info, sample_info
+                )
+            except TypeError:
+                stacked_info = jax.tree_multimap(
+                    concatenate_1d, self.raw.sampling_info, sample_info
+                )
+
+        self.raw = replace(self.raw, samples=stacked_chain, sampling_info=stacked_info)

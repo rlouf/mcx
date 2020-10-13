@@ -207,8 +207,12 @@ class sampler(object):
         corresponding sampling information.
 
         """
-        self.state, info = next(self.sample_generator)
-        return self.state, info
+        new_state = next(self.sample_generator)
+        self.state, info = new_state
+        sample, sampling_info = self.program.make_trace(
+            chain=new_state, ravel_fn=self.unravel_fn
+        )
+        return sample, sampling_info
 
     def warmup(self, num_warmup_steps: int = 1000, accelerate: bool = False, **kwargs):
         """Warmup the sampler.

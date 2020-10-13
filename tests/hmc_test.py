@@ -49,7 +49,7 @@ def test_linear_regression():
     )
     trace = sampler.run(num_samples=3000)
 
-    mean_coeffs = onp.asarray(np.mean(trace.mcx.samples["coeffs"][:, 1000:], axis=1))
-    mean_scale = onp.asarray(np.mean(trace.mcx.samples["sigma"][:, 1000:], axis=1))
+    mean_coeffs = onp.asarray(np.mean(trace.raw.samples["coeffs"][:, 1000:], axis=1))
+    mean_scale = onp.asarray(np.mean(trace.raw.samples["sigma"][:, 1000:], axis=1))
     assert mean_coeffs == pytest.approx(3, 1e-1)
     assert mean_scale == pytest.approx(1, 1e-1)

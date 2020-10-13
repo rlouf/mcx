@@ -210,7 +210,10 @@ class HMC:
         # computations on flat arrays in the backend. We now need to bring
         # their to their original shape before adding to the trace.
         ravel_chain = jax.vmap(ravel_fn, in_axes=(0,))
-        samples = jax.vmap(ravel_chain, in_axes=(1,))(state.position)
+        try:
+            samples = jax.vmap(ravel_chain, in_axes=(1,))(state.position)
+        except IndexError:  # ravel single samples
+            samples = ravel_chain(state.position)
 
         # I added all these `type: ignore` because I am getting lazy about types.
         # The chain that we accumulate is not a list of HMC State, but rather
