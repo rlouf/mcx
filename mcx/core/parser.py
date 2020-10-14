@@ -1,6 +1,7 @@
 import ast
 import inspect
 import re
+import textwrap
 from typing import Any, Callable, Dict, List, Optional, Union
 
 import astor
@@ -36,6 +37,7 @@ def parse_definition(model: Callable, namespace: Dict) -> GraphicalModel:
     """
     source = inspect.getsource(model)
     source = re.sub(r"<~", "is", source, re.X)
+    source = textwrap.dedent(source)
     tree = ast.parse(source)
     return ModelParser(namespace).visit(tree)
 

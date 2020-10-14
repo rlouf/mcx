@@ -1,15 +1,15 @@
-from typing import Callable, NamedTuple, Tuple, Optional
 import warnings
+from datetime import datetime
+from typing import Callable, Dict, NamedTuple, Optional, Tuple
 
 import jax
 from jax import numpy as np
 from tqdm import tqdm
 
-from mcx.inference.integrators import velocity_verlet, hmc_proposal
-from mcx.inference.kernels import HMCState, hmc_kernel, hmc_init
+from mcx.inference.integrators import hmc_proposal, velocity_verlet
+from mcx.inference.kernels import HMCInfo, HMCState, hmc_init, hmc_kernel
 from mcx.inference.metrics import gaussian_euclidean_metric
-
-from mcx.inference.warmup import stan_hmc_warmup, stan_warmup_schedule
+from mcx.inference.warmup import StanWarmupState, stan_hmc_warmup, stan_warmup_schedule
 
 
 class HMCParameters(NamedTuple):
@@ -74,7 +74,7 @@ class HMC:
         num_warmup_steps: int = 1000,
         accelerate=False,
         initial_step_size: float = 0.1,
-    ) -> Tuple[HMCState, HMCParameters]:
+    ) -> Tuple[HMCState, HMCParameters, Optional[StanWarmupState]]:
         """I don't like having a ton of warmup logic in here."""
 
         if not self.needs_warmup:
@@ -89,20 +89,26 @@ class HMC:
                     ]
                 ),
             )
-            return initial_state, parameters
+            return initial_state, parameters, None
 
-        # kernel_factory = self.kernel_factory(loglikelihood)
         hmc_factory = jax.partial(kernel_factory, self.parameters.num_integration_steps)
         init, update, final = stan_hmc_warmup(hmc_factory, self.is_mass_matrix_diagonal)
 
         rng_keys = jax.random.split(rng_key, num_chains)
-        chain_state, warmup_state = jax.vmap(init, in_axes=(0, 0, None))(
-            rng_keys, initial_state, initial_step_size
+        chain_state = initial_state
+        warmup_state = jax.vmap(init, in_axes=(0, 0, None))(
+            rng_keys, chain_state, initial_step_size
         )
 
         schedule = np.array(stan_warmup_schedule(num_warmup_steps))
 
         if accelerate:
+
+            print(
+                f"sampler: warmup {num_chains:,} chains for {num_warmup_steps:,} iterations.",
+                end=" ",
+            )
+            start = datetime.now()
 
             @jax.jit
             def update_chain(carry, interval):
@@ -111,24 +117,32 @@ class HMC:
 
                 _, rng_key = jax.random.split(rng_key)
                 keys = jax.random.split(rng_key, num_chains)
-                chain_state, warmup_state = jax.vmap(
+                chain_state, warmup_state, chain_info = jax.vmap(
                     update, in_axes=(0, None, None, 0, 0)
-                )(
-                    keys,
-                    stage,
-                    is_middle_window_end,
-                    chain_state,
-                    warmup_state,
+                )(keys, stage, is_middle_window_end, chain_state, warmup_state)
+
+                return (
+                    (rng_key, chain_state, warmup_state),
+                    (chain_state, warmup_state, chain_info),
                 )
 
-                return (rng_key, chain_state, warmup_state), (chain_state, warmup_state)
-
-            last_state, _ = jax.lax.scan(
+            last_state, warmup_chain = jax.lax.scan(
                 update_chain, (rng_key, chain_state, warmup_state), schedule
             )
-            _, chain_state, warmup_state = last_state
+            _, last_chain_state, last_warmup_state = last_state
+
+            print(f"Done in {(datetime.now()-start).total_seconds():.1f} seconds.")
 
         else:
+
+            @jax.jit
+            def update_fn(rng_key, interval, chain_state, warmup_state):
+                rng_keys = jax.random.split(rng_key, num_chains)
+                stage, is_middle_window_end = interval
+                chain_state, warmup_state, chain_info = jax.vmap(
+                    update, in_axes=(0, None, None, 0, 0)
+                )(rng_keys, stage, is_middle_window_end, chain_state, warmup_state)
+                return chain_state, warmup_state, chain_info
 
             chain = []
             with tqdm(schedule, unit="samples") as progress:
@@ -138,18 +152,22 @@ class HMC:
                 )
                 for interval in progress:
                     _, rng_key = jax.random.split(rng_key)
-                    rng_keys = jax.random.split(rng_key, num_chains)
-                    stage, is_middle_window_end = interval
-                    chain_state, warmup_state = jax.vmap(
-                        update, in_axes=(0, None, None, 0, 0)
-                    )(rng_keys, stage, is_middle_window_end, chain_state, warmup_state)
-                    chain.append((chain_state, warmup_state))
+                    chain_state, warmup_state, chain_info = update_fn(
+                        rng_key, interval, chain_state, warmup_state
+                    )
+                    chain.append((chain_state, warmup_state, chain_info))
 
-            chain_state, warmup_state = chain[
-                -1
-            ]  # not using it now, but to give lax.scan a fair comparison
+            last_chain_state, last_warmup_state, _ = chain[-1]
 
-        step_size, inverse_mass_matrix = jax.vmap(final, in_axes=(0,))(warmup_state)
+            # The sampling process, the composition between scan and for loop
+            # is identical for the warmup and the sampling.  Should we
+            # generalize this to only call a single `scan` function?
+            stack = lambda y, *ys: np.stack((y, *ys))
+            warmup_chain = jax.tree_multimap(stack, *chain)
+
+        step_size, inverse_mass_matrix = jax.vmap(final, in_axes=(0,))(
+            last_warmup_state
+        )
         num_integration_steps = self.parameters.num_integration_steps
 
         parameters = HMCParameters(
@@ -159,7 +177,7 @@ class HMC:
             inverse_mass_matrix,
         )
 
-        return chain_state, parameters
+        return last_chain_state, parameters, warmup_chain
 
     def kernel_factory(self, loglikelihood: Callable) -> Callable:
         potential = self._to_potential(loglikelihood)
@@ -175,38 +193,91 @@ class HMC:
 
         return build_kernel
 
-    def make_trace(self, chain: np.DeviceArray, ravel_fn: Callable) -> np.DeviceArray:
-        """Translate the raw chains to a format that can be understood by and
-        is useful to humans. Will enventually transform it to a Trace object.
+    def make_trace(
+        self,
+        chain: Tuple[HMCState, HMCInfo],
+        unravel_fn: Callable,
+    ) -> Tuple[Dict, Dict]:
+        """Translate the raw chain to a format that `Trace` understands.
+
+        Parameters
+        ----------
+        chain
+            A tuple that contains the HMC sampler's states and additional information
+            on the sampling process.
+        unravel_fn
+            A functions that returns flattened variables to their original shape.
+
+        Returns
+        -------
+        A dictionary with the variables' samples and a dictionary with sampling
+        information, which are later processed to build a Trace object.
+
         """
-        trace = {}
+        state, info = chain
 
-        # maybe we should ravel the chain in the sampling part?
-        def ravel_chain(chain):
-            return jax.vmap(ravel_fn, in_axes=(0,))(chain)
+        # We ravelled positions before sampling to be able to make
+        # computations on flat arrays in the backend. We now need to bring
+        # their to their original shape before adding to the trace.
+        unravel_chain = jax.vmap(unravel_fn, in_axes=(0,))
+        try:
+            samples = jax.vmap(unravel_chain, in_axes=(1,))(state.position)
+        except IndexError:  # unravel single samples
+            samples = unravel_chain(state.position)
 
-        # Positionned were ravelled before sampling to be able to make computations
-        # on flat arrays in the backend. We now need to bring their to
-        # their original shape before adding to the trace.
-        positions_array = np.stack([state.position for state, _ in chain], axis=1)
-        trace["posterior"] = jax.vmap(ravel_chain, in_axes=(0,))(positions_array)
+        # I added all these `type: ignore` because I am getting lazy about types.
+        # The chain that we accumulate is not a list of HMC State, but rather
+        # and HMC State where fields are list of the subequent values in the
+        # chain. This is due to the way JAX handles "pytrees". Thus at this
+        # point we are not manipulating HMCStates but a ChainState that looks
+        # like a HMCState but with arrays as fields.
+        # We can either create new states (verbose but preferred, I am not sure
+        # this distinction is clear for newcomers) or keep silencing the checker.
+        # Please keep this comment if the later is chosen.
+        # TODO: Create new HMCChain type.
+        sampling_info = {
+            "potential_energy": state.potential_energy.T,  # type: ignore
+            "acceptance_probability": info.acceptance_probability.T,  # type: ignore
+            "is_divergent": info.is_divergent.T,  # type: ignore
+            "energy": info.energy.T,  # type: ignore
+            "step_size": info.proposal_info.step_size.T,  # type: ignore
+            "num_integration_steps": info.proposal_info.num_integration_steps.T,  # type: ignore
+        }
 
-        # log-likelihood can be interesting
-        trace["log_likelihood"] = np.stack(
-            [state.log_prob for state, _ in chain], axis=1
-        )
+        return samples, sampling_info
 
-        # We store information that may be needed for diagnostics in the
-        # "info" section of the chain
-        trace["info"] = {}
-        trace["info"]["is_divergent"] = np.stack(
-            [info.is_divergent for _, info in chain], axis=1
-        )
-        trace["info"]["is_accepted"] = np.stack(
-            [info.is_accepted for _, info in chain], axis=1
-        )
+    def make_warmup_trace(
+        self,
+        chain: Tuple[HMCState, StanWarmupState, HMCInfo],
+        unravel_fn: Callable,
+    ) -> Tuple[Dict, Dict, Dict]:
+        """Translate the Warmup chains to a format `Trace` can understand.
 
-        return trace
+        Parameters
+        ----------
+        chain
+            A tuple that contains the HMC sampler's states and additional information
+            on the sampling and warmup process.
+        unravel_fn
+            A functions that returns flattened variables to their original shape.
+
+        Returns
+        -------
+        Three dictionaries. The first contains the variables' samples, the second
+        information about the sampling process and the third information about
+        the consecutive states of the warmup algorithms.
+
+        """
+        chain_state, warmup_info, chain_info = chain
+        samples, sampling_info = self.make_trace((chain_state, chain_info), unravel_fn)
+
+        warmup_info_dict = {
+            "log_step_size": warmup_info.da_state.log_step_size,
+            "log_step_size_avg": warmup_info.da_state.log_step_size_avg,
+            "inverse_mass_matrix": warmup_info.mm_state.inverse_mass_matrix,
+        }
+
+        return samples, sampling_info, warmup_info_dict
 
     def _to_potential(self, loglikelihood: Callable) -> Callable:
         """The potential in the Hamiltonian Monte Carlo algorithm is equal to

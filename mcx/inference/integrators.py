@@ -1,14 +1,9 @@
-"""Integrators of hamiltonian trajectories on euclidean and riemannian
-manifolds.
-
-IntegratorStep does not need to compute and return the logprob!
-"""
+"""Integrate hamiltonian trajectories on euclidean and riemannian manifolds."""
 from functools import partial
-from typing import Callable, NamedTuple
+from typing import Callable, NamedTuple, Tuple
 
 import jax
 from jax import numpy as np
-
 
 __all__ = [
     "empirical_hmc_proposal",
@@ -26,10 +21,17 @@ class IntegratorState(NamedTuple):
     log_prob_grad: float
 
 
-Proposal = IntegratorState
+ProposalState = IntegratorState
 
 
-Proposer = Callable[[jax.random.PRNGKey, Proposal], Proposal]
+class ProposalInfo(NamedTuple):
+    step_size: float
+    num_integration_steps: int
+
+
+Proposer = Callable[
+    [jax.random.PRNGKey, ProposalState], Tuple[ProposalState, ProposalInfo]
+]
 Integrator = Callable[[IntegratorState, float], IntegratorState]
 
 
@@ -43,22 +45,22 @@ def hmc_proposal(
 ) -> Proposer:
     """Vanilla HMC proposal.
 
-    Given a path length and a step size, the HMC proposer will run the appropriate
-    number of integration steps (typically with the velocity Verlet algorithm).
+    Given a path length and a step size, the HMC proposer will run the
+    appropriate number of integration steps (typically with the velocity Verlet
+    algorithm).
 
-    When `num_integration_steps` = 1 the proposer reduces to the integrator
-    step.
     """
+    info = ProposalInfo(step_size, num_integration_steps)
 
     @jax.jit
-    def propose(_, init_state: Proposal) -> Proposal:
+    def propose(_, init_state: ProposalState) -> Tuple[ProposalState, ProposalInfo]:
         new_state = jax.lax.fori_loop(
             0,
             num_integration_steps,
             lambda i, state: integrator(state, step_size),
             init_state,
         )
-        return new_state
+        return new_state, info
 
     return propose
 
@@ -78,16 +80,22 @@ def empirical_hmc_proposal(
     .. [1]: Wu, Changye, Julien Stoehr, and Christian P. Robert. "Faster
             Hamiltonian Monte Carlo by learning leapfrog scale." arXiv preprint
             arXiv:1810.04449 (2018).
+
     """
 
     @jax.jit
-    def propose(rng_key: jax.random.PRNGKey, state: Proposal) -> Proposal:
+    def propose(
+        rng_key: jax.random.PRNGKey, state: ProposalState
+    ) -> Tuple[ProposalState, ProposalInfo]:
         path_length = path_length_generator(rng_key)
-        num_steps = np.clip(path_length / step_size, a_min=1).astype(int)
+        num_integration_steps = np.clip(path_length / step_size, a_min=1).astype(int)
         new_state = jax.lax.fori_loop(
-            0, num_steps, lambda i, state: integrator(state, step_size), state
+            0,
+            num_integration_steps,
+            lambda i, state: integrator(state, step_size),
+            state,
         )
-        return new_state
+        return new_state, ProposalInfo(step_size, num_integration_steps)
 
     return propose
 
@@ -106,7 +114,6 @@ def velocity_verlet(potential_fn: Callable, kinetic_energy_fn: Callable) -> Inte
 
     Note
     ----
-
     Micro-benchmarks on the harmonic oscillator show that pre-computing the
     gradient of the log-probability density function and the kinetic energy
     yields a 10% performance improvement.

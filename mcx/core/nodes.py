@@ -19,6 +19,9 @@ class Argument(object):
     def to_logpdf(self):
         return ast.arg(arg=self.name, annotation=None)
 
+    def to_logpdf_iadd(self):
+        return ast.arg(arg=self.name, annotation=None)
+
     def to_sampler(self):
         return ast.arg(arg=self.name, annotation=None)
 
@@ -40,6 +43,28 @@ class RandVar(object):
         return "{} ~ {}".format(self.name, astor.code_gen.to_source(self.distribution))
 
     def to_logpdf(self):
+        """Returns the AST corresponding to the expression
+
+        logpdf_{name} = {distribution}.logpdf_sum(*{arg_names})
+        """
+        return ast.Assign(
+            targets=[ast.Name(id=f"logpdf_{self.name}", ctx=ast.Store())],
+            value=ast.Call(
+                func=ast.Attribute(
+                    value=self.distribution,
+                    attr="logpdf_sum",
+                    ctx=ast.Load(),
+                ),
+                args=[ast.Name(id=self.name, ctx=ast.Load())],
+                keywords=[],
+            ),
+        )
+
+    def to_logpdf_iadd(self):
+        """Returns the AST corresponding to the expression
+
+        logpdf += {distribution}.logpdf_sum(*{arg_names})
+        """
         return ast.AugAssign(
             target=ast.Name(id="logpdf", ctx=ast.Store()),
             op=ast.Add(),
@@ -87,6 +112,11 @@ class Var(object):
             targets=[ast.Name(id=self.name, ctx=ast.Store())], value=self.value
         )
 
+    def to_logpdf_iadd(self):
+        return ast.Assign(
+            targets=[ast.Name(id=self.name, ctx=ast.Store())], value=self.value
+        )
+
     def to_sampler(self, graph):
         return ast.Assign(
             targets=[ast.Name(id=self.name, ctx=ast.Store())], value=self.value
@@ -110,6 +140,11 @@ class Transformation(object):
         return "{} = {}".format(self.name, astor.code_gen.to_source(self.expression))
 
     def to_logpdf(self):
+        return ast.Assign(
+            targets=[ast.Name(id=self.name, ctx=ast.Store())], value=self.expression
+        )
+
+    def to_logpdf_iadd(self):
         return ast.Assign(
             targets=[ast.Name(id=self.name, ctx=ast.Store())], value=self.expression
         )

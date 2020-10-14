@@ -1,6 +1,6 @@
+import pytest
 from jax import numpy as np
 from jax import random
-import pytest
 
 from mcx.distributions import Normal
 

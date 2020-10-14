@@ -1,5 +1,6 @@
-from jax import lax, random
+from jax import lax
 from jax import numpy as np
+from jax import random
 from jax.scipy import stats
 
 from mcx.distributions import constraints

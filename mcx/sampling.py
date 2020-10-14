@@ -1,5 +1,5 @@
+from datetime import datetime
 from typing import Iterator, Tuple
-import warnings
 
 import jax
 import jax.numpy as np
@@ -8,8 +8,8 @@ from tqdm import tqdm
 
 import mcx
 from mcx import sample_forward
-from mcx.core import compile_to_logpdf
-
+from mcx.core import compile_to_loglikelihoods, compile_to_logpdf
+from mcx.trace import Trace
 
 __all__ = ["sampler", "sequential_sampler"]
 
@@ -72,7 +72,7 @@ class sampler(object):
         self,
         rng_key: jax.random.PRNGKey,
         model: mcx.model,
-        program,
+        evaluator,
         num_chains: int = 4,
         **observations,
     ):
@@ -87,9 +87,9 @@ class sampler(object):
         observations. This can take some time for large datasets.
         4. Flatten the loglikelihood so the inference algorithms only need to
         deal with flat arrays.
-        5. Get initial positions from the program.
+        5. Get initial positions from the evaluator.
         6. Get a function that returns a kernel given its parameters from the
-        program.
+        evaluator.
 
         Parameters
         ----------
@@ -98,8 +98,8 @@ class sampler(object):
             in charge of splitting the key as it is being used.
         model
             The model whose posterior we want to sample.
-        program
-            The program that will be used to sampler the posterior.
+        evaluator
+            The evaluator that will be used to sampler the posterior.
         num_chains
             The number of chains that will be used concurrently for sampling.
         observations
@@ -113,26 +113,29 @@ class sampler(object):
         print("sampler: build the loglikelihood")
         validate_conditioning_variables(model, **observations)
         loglikelihood = build_loglikelihood(model, **observations)
+        loglikelihood_contributions = build_loglikelihoods(model, **observations)
 
         print("sampler: find the initial states")
         initial_positions, unravel_fn = get_initial_position(
             rng_key, model, num_chains, **observations
         )
         loglikelihood = flatten_loglikelihood(loglikelihood, unravel_fn)
-        initial_state = program.states(initial_positions, loglikelihood)
+        initial_state = evaluator.states(initial_positions, loglikelihood)
 
         print("sampler: build and compile the inference kernel")
-        kernel_factory = program.kernel_factory(loglikelihood)
+        kernel_factory = evaluator.kernel_factory(loglikelihood)
         kernel_factory = jax.jit(kernel_factory, static_argnums=(0, 1, 2))
 
         self.is_warmed_up = False
         self.rng_key = rng_key
         self.num_chains = num_chains
-        self.program = program
+        self.model = model
+        self.evaluator = evaluator
         self.kernel_factory = kernel_factory
         self.initial_state = initial_state
         self.state = initial_state
         self.unravel_fn = unravel_fn
+        self.loglikelihood_contributions = loglikelihood_contributions
 
     def __iter__(self) -> Iterator:
         """Make the sampler behave like an iterable and an iterator.
@@ -203,17 +206,21 @@ class sampler(object):
         corresponding sampling information.
 
         """
-        self.state, info = next(self.sample_generator)
-        return self.state, info
+        new_state = next(self.sample_generator)
+        self.state, info = new_state
+        sample, sampling_info = self.evaluator.make_trace(
+            chain=new_state, ravel_fn=self.unravel_fn
+        )
+        return sample, sampling_info
 
     def warmup(self, num_warmup_steps: int = 1000, accelerate: bool = False, **kwargs):
         """Warmup the sampler.
 
-        Warmup is necessary to get values for the program's parameters that are
+        Warmup is necessary to get values for the evaluator's parameters that are
         adapted to the geometry of the posterior distribution. While run will
-        automatically run the warmup if it hasn't been done before, this method
-        gives access to the trace for the warmup phase and the values of the
-        parameters for diagnostics.
+        automatically run the warmup if it hasn't been done before, runnning
+        this method independently gives access to the trace for the warmup
+        phase and the values of the parameters for diagnostics.
 
         Parameters
         ----------
@@ -223,31 +230,16 @@ class sampler(object):
             If True the progress of the warmup will be displayed. Otherwise it
             will use `lax.scan` to iterate (which is potentially faster).
         kwargs
-            Parameters to pass to the program's warmup.
+            Parameters to pass to the evaluator's warmup.
 
         Returns
         -------
-        chain
-            The trace of the warmup phase.
-        parameters
-            The value of parameters that will be used in the sampling phase.
+        trace
+            A Trace object that contains the warmup sampling chain, warmup sampling info
+            and warmup info.
 
         """
-        if self.is_warmed_up:
-            warnings.warn(
-                "You are trying to warmup a sampler that has already "
-                "been warmed up. MCX will re-launch the warmup from the "
-                "sampler's initial position. If your use case requires "
-                "a different behavior please raise an issue on "
-                "https://github.com/rlouf/mcx.",
-                UserWarning,
-            )
-            self.state = self.initial_state
-
-        print(
-            f"sampler: warmup {self.num_chains:,} chains for {num_warmup_steps:,} iterations"
-        )
-        chain_state, parameters = self.program.warmup(
+        last_state, parameters, warmup_chain = self.evaluator.warmup(
             self.rng_key,
             self.state,
             self.kernel_factory,
@@ -256,10 +248,26 @@ class sampler(object):
             accelerate,
             **kwargs,
         )
-        self.state = chain_state
+        self.state = last_state
         self.parameters = parameters
         self.is_warmed_up = True
-        return chain_state, parameters
+
+        # The evaluator must return `None` when no warmup is needed.
+        if warmup_chain is None:
+            return
+
+        samples, sampling_info, warmup_info = self.evaluator.make_warmup_trace(
+            chain=warmup_chain, unravel_fn=self.unravel_fn
+        )
+
+        trace = Trace(
+            warmup_samples=samples,
+            warmup_sampling_info=sampling_info,
+            warmup_info=warmup_info,
+            loglikelihood_contributions_fn=self.loglikelihood_contributions,
+        )
+
+        return trace
 
     def run(
         self,
@@ -285,13 +293,13 @@ class sampler(object):
             Otherwise it will use `lax.scan` to iterate (which is potentially
             faster).
         warmup_kwargs
-            Parameters to pass to the program's warmup.
+            Parameters to pass to the evaluator's warmup.
 
         Returns
         -------
         trace
             A Trace object that contains the chains, some information about
-            the inference process (e.g. divergences for programs in the
+            the inference process (e.g. divergences for evaluators in the
             HMC family).
 
         """
@@ -302,10 +310,8 @@ class sampler(object):
         rng_keys = jax.random.split(self.rng_key, num_samples)
         state = self.state
 
-        print(f"sampler: draw {num_samples:,} samples from {self.num_chains:,} chains")
-
         @jax.jit
-        def update_chains(rng_key, parameters, chain_state):
+        def update_chain(rng_key, parameters, chain_state):
             kernel = self.kernel_factory(*parameters)
             new_chain_state, info = kernel(rng_key, chain_state)
             return new_chain_state, info
@@ -318,11 +324,17 @@ class sampler(object):
         # initial exploration.
         if accelerate:
 
+            print(
+                f"sampler: draw {num_samples:,} samples from {self.num_chains:,} chains.",
+                end=" ",
+            )
+            start = datetime.now()
+
             @jax.jit
             def update_scan(carry, key):
                 state, parameters = carry
                 keys = jax.random.split(key, self.num_chains)
-                state, info = jax.vmap(update_chains, in_axes=(0, 0, 0))(
+                state, info = jax.vmap(update_chain, in_axes=(0, 0, 0))(
                     keys, parameters, state
                 )
                 return (state, parameters), (state, info)
@@ -331,7 +343,27 @@ class sampler(object):
                 update_scan, (state, self.parameters), rng_keys
             )
 
+            self.state = last_state[0]
+            samples, sampling_info = self.evaluator.make_trace(
+                chain=chain, unravel_fn=self.unravel_fn
+            )
+            trace = Trace(
+                samples=samples,
+                sampling_info=sampling_info,
+                loglikelihood_contributions_fn=self.loglikelihood_contributions,
+            )
+
+            print(f"Done in {(datetime.now()-start).total_seconds():.1f} seconds.")
+
         else:
+
+            @jax.jit
+            def step(key, state):
+                keys = jax.random.split(key, self.num_chains)
+                state, info = jax.vmap(update_chain, in_axes=(0, 0, 0))(
+                    keys, self.parameters, state
+                )
+                return state, info
 
             chain = []
             with tqdm(rng_keys, unit="samples") as progress:
@@ -341,19 +373,31 @@ class sampler(object):
                     ),
                     refresh=False,
                 )
-                for key in progress:
-                    keys = jax.random.split(key, self.num_chains)
-                    state, info = jax.vmap(update_chains, in_axes=(0, 0, 0))(
-                        keys, self.parameters, state
-                    )
+                for i, key in enumerate(progress):
+                    state, info = step(key, state)
                     chain.append((state, info))
 
-        # chain
-        # with progress bar is of format [(state, info) ,(state, info), (state, info)]
-        # with scan [all_states, all_infos]
-        # I believe second format is easier to unpack later and should be preferred
-        self.state = state
-        trace = self.program.make_trace(chain, self.unravel_fn)
+            self.state = chain[-1][0]
+
+            # lax.scan returns a tuple (State, Info, etc.) where each element
+            # contains the information for all steps. On the other hand the for
+            # loop returns a list of chain states. Since the former format is
+            # more convenient to build the trace, we need to pack the results
+            # of the latter. The following lines are inspired by the
+            # implementation of lax.scan when jit is disabled.
+            # TODO: Packing introduces a heavy performance penalty that should
+            # be addressed in a future PR.
+            stack = lambda y, *ys: np.stack((y, *ys))
+            chain = jax.tree_multimap(stack, *chain)
+
+            samples, sampling_info = self.evaluator.make_trace(
+                chain=chain, unravel_fn=self.unravel_fn
+            )
+            trace = Trace(
+                samples=samples,
+                sampling_info=sampling_info,
+                loglikelihood_contributions_fn=self.loglikelihood_contributions,
+            )
 
         return trace
 
@@ -365,16 +409,16 @@ class sampler(object):
 
 class sequential_sampler(object):
     def __init__(
-        self, rng_key, model, program, num_samples=1000, num_warmup_steps=1000
+        self, rng_key, model, evaluator, num_samples=1000, num_warmup_steps=1000
     ):
         """Sequential Markov Chain Monte Carlo sampling."""
         self.model = model
-        self.program = program
+        self.evaluator = evaluator
         self.num_samples = num_samples
         self.num_warmup_steps = num_warmup_steps
         self.rng_key = rng_key
 
-        init, warmup, build_kernel, to_trace, adapt_loglikelihood = self.program
+        init, warmup, build_kernel, to_trace, adapt_loglikelihood = self.evaluator
         self.prg_init = init
         self.prg_warmup = warmup
         self.prg_build_kernel = build_kernel
@@ -497,6 +541,16 @@ def build_loglikelihood(model, **kwargs):
     logpdf = artifact.compiled_fn
     loglikelihood = jax.partial(logpdf, **kwargs)
     return loglikelihood
+
+
+def build_loglikelihoods(model, **kwargs):
+    """Function to compute the loglikelihood contribution
+    of each variable.
+    """
+    artifact = compile_to_loglikelihoods(model.graph, model.namespace)
+    logpdf = artifact.compiled_fn
+    loglikelihoods = jax.partial(logpdf, **kwargs)
+    return loglikelihoods
 
 
 def get_initial_position(rng_key, model, num_chains, **kwargs):

@@ -1,10 +1,8 @@
-# Discrete random variables
 from .bernoulli import Bernoulli
-
-# Continuous random variables
 from .beta import Beta
 from .binomial import Binomial
 from .categorical import Categorical
+from .dirichlet import Dirichlet
 from .discrete_uniform import DiscreteUniform
 from .distribution import Distribution
 from .exponential import Exponential
@@ -19,6 +17,7 @@ __all__ = [
     "Beta",
     "Binomial",
     "Categorical",
+    "Dirichlet",
     "DiscreteUniform",
     "Exponential",
     "LogNormal",

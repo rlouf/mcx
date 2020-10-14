@@ -12,7 +12,6 @@ from typing import Callable, NamedTuple, Tuple
 import jax
 import jax.numpy as np
 
-
 __all__ = ["mass_matrix_adaptation", "welford_algorithm"]
 
 
