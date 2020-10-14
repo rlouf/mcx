@@ -152,7 +152,9 @@ class HMC:
                 )
                 for interval in progress:
                     _, rng_key = jax.random.split(rng_key)
-                    chain_state, warmup_state, chain_info = update_fn(rng_key, interval, chain_state, warmup_state)
+                    chain_state, warmup_state, chain_info = update_fn(
+                        rng_key, interval, chain_state, warmup_state
+                    )
                     chain.append((chain_state, warmup_state, chain_info))
 
             last_chain_state, last_warmup_state, _ = chain[-1]
@@ -282,6 +284,7 @@ class HMC:
         minus the log-likelihood.
 
         """
+
         def potential(array: np.DeviceArray) -> float:
             return -loglikelihood(array)
 

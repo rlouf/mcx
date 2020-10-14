@@ -13,6 +13,8 @@ __all__ = ["Trace"]
 
 @dataclass
 class RawTrace:
+    """Internal format for inference information."""
+
     samples: Optional[Dict] = None
     sampling_info: Optional[Dict] = None
     loglikelihoods: Optional[Dict] = None
@@ -22,11 +24,15 @@ class RawTrace:
 
 
 class Trace(InferenceData):
-    """Trace contains the data generated during inference: samples,
-    divergences, values of diagnostics, etc.
+    """Trace contains the data generated during inference.
 
-    The class is a thin wrapper around ArviZ's InferenceData, it is an
+    The class is a thin wrapper around ArviZ's `InferenceData`, an
     interface between the chains produced by the samplers and ArviZ.
+
+    The sampler runs the inference kernel provided by the evaluator. This
+    kernel produces information in that the evaluator translates into samples
+    and sampling information. This information is used to initialize a Trace
+    object:
 
     +---------+            +------------+              +------------+
     | Sampler | ---------> |  Evaluator | -----------> |   Trace    |
@@ -34,17 +40,62 @@ class Trace(InferenceData):
                  info                       info
                  ravel_fn
 
-    This design ensures that neither of the sampler of the trace need be aware
-    of what evaluator produced the trace. This avoids carrying branching logic
-    to accomodate fundamentally different algorithms (such as HMC and
-    Metropolis Hastings).
+    This design ensures that neither the sampler nor the Trace need to be aware
+    of what evaluator was used. This avoids carrying branching logic to
+    accomodate fundamentally different algorithms (such as HMC and Metropolis
+    Hastings).
+
+    Samples and informations are stored as dictionnary internally and we interface
+    with ArviZ by mimicking the `InferenceData` class. The latter's attributes are
+    implemented as properties which transform the internal format to xarrays. There
+    are two reasons for this design choice:
+
+    1. Having some flexibility in the trace format. We may want to extract
+    information from the trace down the line, and having control over the trace
+    format means we can tweak it to improve performance. The moment we use
+    ArviZ's format we lose control over that.
+    2. Translating the trace to an xarray "concretizes" the DeviceArray's
+    values in RAM which we do not necessarily want to do right after sampling
+    in case we would like to perform other operations.
+    3. Name conventions are different and it would be confusing to support two
+    conventions internally.
+
+    Examples
+    --------
+
+    A trace is immediately created when sampling from a posterior distribution:
+
+        >>> trace_warmup = sampler.warmup()
+        >>> trace_sample = sampler.run()
+
+    It is possible to concatenate traces in place:
+
+        >>> trace = sampler.warmup()
+        >>> trace += sampler.run()
+
+    or to concatenate two traces:
+
+        >>> trace_1 = sampler.run()
+        >>> trace_2 = sampler.run()
+        >>> trace = trace_1 + trace_2
+
+    This allows, for instance, to take first a few samples to check for convergence and
+    add more samples afterwards.
+
+    The integration with ArviZ is seemless: MCX traces can be passed to ArviZ's
+    diagnostics, statistics and plotting functions.
+
+        >>> import arvix as az
+        >>> az.plot_trace(trace)
+
 
     Attributes
     ----------
-    state:
-        The chain state as provided by the sampling algorithm.
-    info:
-        The chain info as provided by the sampling algorithm.
+    raw
+        The trace in MCX's internal format.
+    loglikelihood_contributions_fn
+        A function that allows to contribute the variables' individual
+        contribution to the loglikelihood given their values.
     """
 
     def __init__(
@@ -65,8 +116,19 @@ class Trace(InferenceData):
         samples
             Posterior samples from a model. The dictionary maps the variables
             names to their posterior samples with shape (n_chains, num_samples, var_shape).
+        info:
+            The chain info as provided by the sampling algorithm.
+        loglikelihoods
+            The contributions of each variable to the loglikelihood.
+        warmup_samples
+            The chain states provided by the sampling algorithm as part of the warmup.
+        warmup_sampling_info
+            The chain info as provided by the sampling algorithm as part of the warmup.
+        warmup_info
+            Additional information about the warmup (e.g. value of the step size at each step).
 
         """
+        # These are currently not updated
         self._groups: List[str] = []
         self._groups_warmup: List[str] = []
 
@@ -141,13 +203,10 @@ class Trace(InferenceData):
         return dict_to_dataset(data=loglikelihoods, library=mcx)
 
     # The following methods are used to concatenate two traces or add new samples
-    # to a trace. This can be
+    # to a trace.
 
-    def __iadd__(self, trace):
-        """Concatenate this trace with another.
-
-        We only need to concatenate the information contained in the internal
-        trace.
+    def __iadd__(self, trace: "Trace") -> "Trace":
+        """Concatenate this trace inplace with another.
 
         Examples
         --------
@@ -160,6 +219,11 @@ class Trace(InferenceData):
 
             >>> trace = sampler.run(1_000)
             >>> trace += sampler.run(10_000)
+
+        Parameters
+        ----------
+        trace
+            The trace we need to concatenate to the current one.
 
         """
         concatenate = lambda cur, new: np.concatenate((cur, new), axis=1)
@@ -178,8 +242,29 @@ class Trace(InferenceData):
 
         return self
 
-    def __add__(self, trace):
+    def __add__(self, trace: "Trace") -> "Trace":
+        """Concatenate the current trace with another.
 
+        Examples
+        --------
+        This can be used to concatenate warmup and sampling traces or two
+        sampling traces:
+
+            >>> trace_1 = sampler.run(1_000)
+            >>> trace_2 = sampler.run(10_000)
+            >>> trace = trace_1 + trace_2
+
+        Parameters
+        ----------
+        trace
+            The trace we need to concatenate to the current one.
+
+        Returns
+        -------
+        A new Trace object that contains the information contained in both the current
+        trace and the trace passed as argument.
+
+        """
         concatenate = lambda cur, new: np.concatenate((cur, new), axis=1)
 
         raw_trace_dict = {}
@@ -198,13 +283,13 @@ class Trace(InferenceData):
                 raw_trace_dict[f"{field}"] = None
 
         new_trace = Trace(
-            **raw_trace_dict,
             loglikelihood_contributions_fn=self.loglikelihood_contributions_fn,
+            **raw_trace_dict,
         )
 
         return new_trace
 
-    def append(self, state: Tuple):
+    def append(self, state: Tuple) -> None:
         """Append a trace or new elements to the current trace. This is useful
         when performing repeated inference on the same dataset, or using the
         generator runtime. Sequential inference should use different traces for

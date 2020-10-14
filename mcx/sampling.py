@@ -1,14 +1,8 @@
-from functools import partial
 from datetime import datetime
 from typing import Iterator, Tuple
-from collections import namedtuple
 
 import jax
 import jax.numpy as np
-from jax import lax
-from jax.lib import pytree
-from jax.tree_util import tree_flatten, tree_map, tree_unflatten
-from jax.dtypes import canonicalize_dtype
 from jax.flatten_util import ravel_pytree
 from tqdm import tqdm
 
