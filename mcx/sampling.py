@@ -387,7 +387,7 @@ class sampler(object):
             # implementation of lax.scan when jit is disabled.
             # TODO: Packing introduces a heavy performance penalty that should
             # be addressed in a future PR.
-            stack = lambda y, *ys: np.column_stack((y, *ys))
+            stack = lambda y, *ys: np.stack((y, *ys))
             chain = jax.tree_multimap(stack, *chain)
 
             samples, sampling_info = self.evaluator.make_trace(
