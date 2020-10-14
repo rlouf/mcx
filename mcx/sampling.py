@@ -1,8 +1,14 @@
+from functools import partial
 from datetime import datetime
 from typing import Iterator, Tuple
+from collections import namedtuple
 
 import jax
 import jax.numpy as np
+from jax import lax
+from jax.lib import pytree
+from jax.tree_util import tree_flatten, tree_map, tree_unflatten
+from jax.dtypes import canonicalize_dtype
 from jax.flatten_util import ravel_pytree
 from tqdm import tqdm
 
@@ -367,6 +373,48 @@ class sampler(object):
             print(f"Done in {(datetime.now()-start).total_seconds():.1f} seconds.")
 
         else:
+            pytree_metadata = namedtuple('pytree_metadata', ['flat', 'shape', 'size', 'dtype'])
+
+            def _ravel_list(*leaves):
+                leaves_metadata = tree_map(lambda l: pytree_metadata(
+                    np.ravel(l), np.shape(l), np.size(l), canonicalize_dtype(lax.dtype(l))), leaves)
+                leaves_idx = np.cumsum(np.array((0,) + tuple(d.size for d in leaves_metadata)))
+
+                def unravel_list(arr):
+                    return [np.reshape(lax.dynamic_slice_in_dim(arr, leaves_idx[i], m.size),
+                                        m.shape).astype(m.dtype)
+                            for i, m in enumerate(leaves_metadata)]
+
+                flat = np.concatenate([m.flat for m in leaves_metadata]) if leaves_metadata else np.array([])
+                return flat, unravel_list
+
+
+            def ravel_pytree(pytree):
+                leaves, treedef = tree_flatten(pytree)
+                flat, unravel_list = _ravel_list(*leaves)
+
+                def unravel_pytree(arr):
+                    return tree_unflatten(treedef, unravel_list(arr))
+
+                return flat, unravel_pytree
+
+            key = rng_keys[0]
+            keys = jax.random.split(key, self.num_chains)
+            state, info = jax.vmap(update_chains, in_axes=(0, 0, 0))(
+                keys, self.parameters, self.state
+            )
+            init_val, unravel_fn = ravel_pytree((state, info))
+
+            def update_fn(i, update_state):
+                key, state, collection = update_state
+                keys = jax.random.split(key, self.num_chains)
+                state, info = jax.vmap(update_chains, in_axes=(0, 0, 0))(
+                    keys, self.parameters, state
+                )
+                collection = jax.ops.index_update(collection, i, ravel_pytree((state, info))[0])
+                return state, info, collection
+
+            collection = np.zeros((num_samples,) + init_val.shape)
 
             chain = []
             with tqdm(rng_keys, unit="samples") as progress:
@@ -376,14 +424,26 @@ class sampler(object):
                     ),
                     refresh=False,
                 )
-                for key in progress:
-                    keys = jax.random.split(key, self.num_chains)
-                    state, info = jax.vmap(update_chains, in_axes=(0, 0, 0))(
-                        keys, self.parameters, state
-                    )
+                for i, key in enumerate(progress):
+                    state, _, collection = jax.jit(update_fn)(i, (key, state, collection))
+                    # keys = jax.random.split(key, self.num_chains)
+                    # state, info = jax.vmap(update_chains, in_axes=(0, 0, 0))(
+                        # keys, self.parameters, state
+                    # )
+                    # if i == 0:
+                        # init_val, unravel_fn = ravel_pytree((state, info))
+                        # collection = np.zeros((num_samples,) + init_val.shape)
+                    # collection = jax.ops.index_update(collection, i, ravel_pytree((state, info))[0])
+                    # stack = lambda y: np.column_stack(y)
+                    # chain = jax.tree_multimap(stack, (chain, (state, info)))
                     chain.append((state, info))
 
-            self.state = chain[-1][0]
+            chain = jax.vmap(unravel_fn)(collection)
+            self.state = state
+            # self.state = chain[-1][0]
+
+            # stack = lambda y, *ys: np.column_stack((y, *ys))
+            # chain = jax.tree_multimap(stack, *chain)
 
             # While lax.scan returns a tuple (State, Info, etc.) where each
             # member of each tuple contains the informations for all chains,
@@ -391,10 +451,45 @@ class sampler(object):
             # contains the information for a single step. Since the former format
             # is more convenient to later create the trace we pack the latter.
 
-            # TODO: benchmark against stacking at every iteration, instead of
-            # effectively appending twice.
-            stack = lambda y, *ys: np.stack((y, *ys))
-            chain = jax.tree_multimap(stack, *chain)
+            # A simple way to stack the values of the chain is
+            # stack = lambda y, *ys: np.column_stack((y, *ys))
+            # chain = jax.tree_multimap(stack, *chain)
+            # But this is extremely slow due to the repeated application
+            # of np.column_stack; this is due to the fact that jax needs to
+            # allocate new memory at each iteration. Instead we need to pre-allocate
+            # memory and populate the array.
+
+            """
+            Use a fori_loop to unpack everything?
+            
+            print("scan accumulate")
+            def _body_fn(_, element):
+                return None, element
+            print("done")
+
+            chain = jax.lax.scan(_body_fn, None, chain)
+            """
+            # print(a)
+
+            # init_val_flat, unravel_fn = ravel_pytree(chain[0])
+            # collection = np.zeros((num_samples,) + init_val_flat.shape)
+            # for i, chain_state in enumerate(chain):
+                # collection = jax.ops.index_update(collection, i, ravel_pytree(chain_state)[0])
+            # chain = jax.vmap(unravel_fn)(collection)
+            
+            # chain = jax.lax.scan(lambda x, y: y, np.array([1]), chain)
+
+            
+            # @partial(jax.jit, static_argnums=(0,))
+            # def loop_fn(i, collection):
+                # chain_state = chain[i]
+                # collection = jax.ops.index_update(collection, i, ravel_pytree(chain_state)[0])
+                # return collection
+
+            # init_val_flat, unravel_fn = ravel_pytree(chain[0])
+            # collection = np.zeros((num_samples,) + init_val_flat.shape)
+            # collection = jax.lax.fori_loop(0, num_samples, loop_fn, collection)
+
 
             # It is inconvenient to have to repeat the Trace creation, but it is
             # the only way I could see to get an accurate estimate of the real
