@@ -78,7 +78,7 @@ class sampler(object):
         self,
         rng_key: jax.random.PRNGKey,
         model: mcx.model,
-        program,
+        evaluator,
         num_chains: int = 4,
         **observations,
     ):
@@ -93,9 +93,9 @@ class sampler(object):
         observations. This can take some time for large datasets.
         4. Flatten the loglikelihood so the inference algorithms only need to
         deal with flat arrays.
-        5. Get initial positions from the program.
+        5. Get initial positions from the evaluator.
         6. Get a function that returns a kernel given its parameters from the
-        program.
+        evaluator.
 
         Parameters
         ----------
@@ -104,8 +104,8 @@ class sampler(object):
             in charge of splitting the key as it is being used.
         model
             The model whose posterior we want to sample.
-        program
-            The program that will be used to sampler the posterior.
+        evaluator
+            The evaluator that will be used to sampler the posterior.
         num_chains
             The number of chains that will be used concurrently for sampling.
         observations
@@ -126,17 +126,17 @@ class sampler(object):
             rng_key, model, num_chains, **observations
         )
         loglikelihood = flatten_loglikelihood(loglikelihood, unravel_fn)
-        initial_state = program.states(initial_positions, loglikelihood)
+        initial_state = evaluator.states(initial_positions, loglikelihood)
 
         print("sampler: build and compile the inference kernel")
-        kernel_factory = program.kernel_factory(loglikelihood)
+        kernel_factory = evaluator.kernel_factory(loglikelihood)
         kernel_factory = jax.jit(kernel_factory, static_argnums=(0, 1, 2))
 
         self.is_warmed_up = False
         self.rng_key = rng_key
         self.num_chains = num_chains
         self.model = model
-        self.program = program
+        self.evaluator = evaluator
         self.kernel_factory = kernel_factory
         self.initial_state = initial_state
         self.state = initial_state
@@ -214,7 +214,7 @@ class sampler(object):
         """
         new_state = next(self.sample_generator)
         self.state, info = new_state
-        sample, sampling_info = self.program.make_trace(
+        sample, sampling_info = self.evaluator.make_trace(
             chain=new_state, ravel_fn=self.unravel_fn
         )
         return sample, sampling_info
@@ -222,7 +222,7 @@ class sampler(object):
     def warmup(self, num_warmup_steps: int = 1000, accelerate: bool = False, **kwargs):
         """Warmup the sampler.
 
-        Warmup is necessary to get values for the program's parameters that are
+        Warmup is necessary to get values for the evaluator's parameters that are
         adapted to the geometry of the posterior distribution. While run will
         automatically run the warmup if it hasn't been done before, runnning
         this method independently gives access to the trace for the warmup
@@ -236,7 +236,7 @@ class sampler(object):
             If True the progress of the warmup will be displayed. Otherwise it
             will use `lax.scan` to iterate (which is potentially faster).
         kwargs
-            Parameters to pass to the program's warmup.
+            Parameters to pass to the evaluator's warmup.
 
         Returns
         -------
@@ -245,7 +245,7 @@ class sampler(object):
             and warmup info.
 
         """
-        last_state, parameters, warmup_chain = self.program.warmup(
+        last_state, parameters, warmup_chain = self.evaluator.warmup(
             self.rng_key,
             self.state,
             self.kernel_factory,
@@ -262,8 +262,8 @@ class sampler(object):
         if warmup_chain is None:
             return
 
-        samples, sampling_info, warmup_info = self.program.make_warmup_trace(
-            chain=warmup_chain, ravel_fn=self.unravel_fn
+        samples, sampling_info, warmup_info = self.evaluator.make_warmup_trace(
+            chain=warmup_chain, unravel_fn=self.unravel_fn
         )
 
         trace = Trace(
@@ -299,13 +299,13 @@ class sampler(object):
             Otherwise it will use `lax.scan` to iterate (which is potentially
             faster).
         warmup_kwargs
-            Parameters to pass to the program's warmup.
+            Parameters to pass to the evaluator's warmup.
 
         Returns
         -------
         trace
             A Trace object that contains the chains, some information about
-            the inference process (e.g. divergences for programs in the
+            the inference process (e.g. divergences for evaluators in the
             HMC family).
 
         """
@@ -350,8 +350,8 @@ class sampler(object):
             )
 
             self.state = last_state[0]
-            samples, sampling_info = self.program.make_trace(
-                chain=chain, ravel_fn=self.unravel_fn
+            samples, sampling_info = self.evaluator.make_trace(
+                chain=chain, unravel_fn=self.unravel_fn
             )
             trace = Trace(
                 samples=samples,
@@ -396,8 +396,8 @@ class sampler(object):
             stack = lambda y, *ys: np.column_stack((y, *ys))
             chain = jax.tree_multimap(stack, *chain)
 
-            samples, sampling_info = self.program.make_trace(
-                chain=chain, ravel_fn=self.unravel_fn
+            samples, sampling_info = self.evaluator.make_trace(
+                chain=chain, unravel_fn=self.unravel_fn
             )
             trace = Trace(
                 samples=samples,
@@ -415,16 +415,16 @@ class sampler(object):
 
 class sequential_sampler(object):
     def __init__(
-        self, rng_key, model, program, num_samples=1000, num_warmup_steps=1000
+        self, rng_key, model, evaluator, num_samples=1000, num_warmup_steps=1000
     ):
         """Sequential Markov Chain Monte Carlo sampling."""
         self.model = model
-        self.program = program
+        self.evaluator = evaluator
         self.num_samples = num_samples
         self.num_warmup_steps = num_warmup_steps
         self.rng_key = rng_key
 
-        init, warmup, build_kernel, to_trace, adapt_loglikelihood = self.program
+        init, warmup, build_kernel, to_trace, adapt_loglikelihood = self.evaluator
         self.prg_init = init
         self.prg_warmup = warmup
         self.prg_build_kernel = build_kernel
