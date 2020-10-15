@@ -17,9 +17,7 @@ particularities:
    function and it will not work.
 2. MCX uses the symbol `<~` for random variable assignments and `=` for
    deterministic assignments. As a result models are visually very similar
-   to their mathematical counterpart. It also signals that the variables 
-   assigned are not just containers for a value, that this relationship has
-   different meaning depending on the context.
+   to their mathematical counterpart.
 
 To illustrate this, let us model the number of successes in `N` tosses of a
 coin:
@@ -35,7 +33,7 @@ coin:
        successes <~ Binomial(N, p)
        return successes
 
-Generative models behave like functions:
+As we said, generative models behave like functions:
 
 >>> coin_toss(10)
 4
@@ -51,9 +49,13 @@ value. If you want to generate a large number of values, you can simply iterate:
 Caveats
 *******
 
-MCX comes with a few caveats, things that you cannot do when expressing a
-model. First any variable, random or deterministic, must be assigned to a name.
-The following functions are invalid MCX code:
+The MCX language is still young and comes with a few caveats, things that you
+cannot do when expressing a model. As time passes, code is written and PRs are
+merged these constraints will be relaxed and you will be able to written MCX
+code like you would regular python code.
+
+First any variable, random or deterministic, must be given a name. The
+following functions are invalid MCX code:
 
 .. code-block:: python
 
@@ -84,7 +86,7 @@ functions such as:
 .. code-block:: python
 
     @mcx.model
-    def control_flow():
+    def if_else():
         a <~ Bernoulli(.5)
 
         if a > .3:
@@ -94,15 +96,43 @@ functions such as:
 
         return b
 
-Its implementation is currently on the roadmap.
+    @mcx.model
+    def for_loop():
+        a <~ Poisson(10)
+        
+        total = 0
+        for i in range(1, a):
+            b <~ Bernoulli(1./i)
+            total += b
 
+        return total
+
+This will eventually be integrated to support models with stochastic support.
+Model closures are also currently not supported. MCX will not process code such
+as:
+
+.. code-block:: python
+
+    @mcx.model
+    def closure():
+        p <~ Beta(.5, .5)
+
+        @mcx.model
+        def toss():
+            is_head <~ Binomial(p)
+            return is_head
+
+        return toss
+
+These will eventually be supported as part of the implementation of non-parametrics.
 
 Call functions from a model
 ---------------------------
 
-You can call other (deterministic) python functions inside a generative
-model as long as they only use python operators or functions implemented
-in `JAX <https://jax.readthedocs.io/en/latest/jax.html>`_.
+You can call other (deterministic) python functions inside a generative model
+as long as they only use python operators or functions implemented in
+`JAX <https://jax.readthedocs.io/en/latest/jax.html>`_ (most of numpy's and some of
+scipy's methods).
 
 .. code-block:: python
 
@@ -120,16 +150,11 @@ in `JAX <https://jax.readthedocs.io/en/latest/jax.html>`_.
         return Normal(y, sigma)
 
 
-Use models as distributions 
----------------------------
+Models are (multivariate) distributions
+----------------------------------------
 
-Generative functions implicitely define a multivariate distribution. They
-"augment" this distribution with an execution model and define some variables
-as inputs and outputs.
-
-Conversely, most distributions can also be seen as the result of a generative
-process. For instance you can re-implement the exponential distribution in MCX
-as
+Most distributions can be seen as the result of a generative process. For
+instance you can re-implement the exponential distribution in MCX as
 
 .. code-block:: python
   
@@ -139,8 +164,8 @@ as
         
   @mcx.model
   def Exponential(lmbda):
-      U <~ Uniform
-      t = - np.log(U) / lmba
+      U <~ Uniform(0, 1)
+      t = - np.log(U) / lmbda
       return t
 
 When we say that we "sample" from the exponential distribution, we are actually
@@ -176,16 +201,49 @@ Which encourages code re-use and modularity.
 Querying / Debugging the model
 -------------------------------
 
-MCX translates model definitions in an intermediate representation which can be
-dynamically queried and modified at runtime.
+MCX translates model definitions in an intermediate representation (a graph)
+which can be dynamically queried and modified at runtime. Three features of MCX
+make debugging a model easier: forward sampling, conditioning and the ability to
+modify the model dynamically.
 
-It is possible to interact dynamically with a model. Let us use the
-one-dimensional linear regression example. First you can query the
-prior values for each variable.
+Forward sampling
+================
 
->>> model = one_dimensional_linear_regression(np.array([1., 2., 3.])
->>> model['y']
-... shows information about the distibution, shape, etc.
+Forward sampling means sampling from the prior distribution of each variable in
+the model. We sample for one data point at a time or the whole dataset in one
+go.
+
+.. code-block:: python
+        
+  import jax
+  import mcx
+        
+  rng_key = jax.random.PRNGKey(0)
+  mcx.sample_forward(rng_key, model, **data)
+
+Intervention
+============
+
+Sometimes we want to set the value of a variable in the model to a constant. We
+can do so using the `do` operator which can be combined with the `sample_forward`
+function:
+
+.. code-block:: python
+        
+  import jax
+  import mcx
+        
+  rng_key = jax.random.PRNGKey(0)
+  model_c = model.do(rv=10)
+  mcx.sample_forward(rng_key, model_c, **data)
+
+
+Modify the graph dynamically
+============================
+
+We can also inspect the values of variables individually
+
+>>> model["y"]
 
 You can also change the variables' distribution for quick iteration on the
 model:
@@ -194,7 +252,4 @@ model:
 
 This is pretty much all there is to known about how to express models with MCX.
 You can consult the section of the documentation on distributions to get
-acquainted with the distributions included with MCX. You can also have a look
-at the API for neural network layers.
-
-Next we will see how to sample from the model's prior distribution.
+acquainted with the distributions included with MCX.

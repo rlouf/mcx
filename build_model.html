@@ -48,9 +48,7 @@ particularities:</p>
 function and it will not work.</p></li>
 <li><p>MCX uses the symbol <cite>&lt;~</cite> for random variable assignments and <cite>=</cite> for
 deterministic assignments. As a result models are visually very similar
-to their mathematical counterpart. It also signals that the variables
-assigned are not just containers for a value, that this relationship has
-different meaning depending on the context.</p></li>
+to their mathematical counterpart.</p></li>
 </ol>
 <p>To illustrate this, let us model the number of successes in <cite>N</cite> tosses of a
 coin:</p>
@@ -64,7 +62,7 @@ coin:</p>
     <span class="k">return</span> <span class="n">successes</span>
 </pre></div>
 </div>
-<p>Generative models behave like functions:</p>
+<p>As we said, generative models behave like functions:</p>
 <div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">coin_toss</span><span class="p">(</span><span class="mi">10</span><span class="p">)</span>
 <span class="go">4</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">coin_toss</span><span class="p">(</span><span class="mi">10</span><span class="p">)</span>
@@ -78,9 +76,12 @@ value. If you want to generate a large number of values, you can simply iterate:
 </div>
 <div class="section" id="caveats">
 <h3>Caveats<a class="headerlink" href="#caveats" title="Permalink to this headline">¶</a></h3>
-<p>MCX comes with a few caveats, things that you cannot do when expressing a
-model. First any variable, random or deterministic, must be assigned to a name.
-The following functions are invalid MCX code:</p>
+<p>The MCX language is still young and comes with a few caveats, things that you
+cannot do when expressing a model. As time passes, code is written and PRs are
+merged these constraints will be relaxed and you will be able to written MCX
+code like you would regular python code.</p>
+<p>First any variable, random or deterministic, must be given a name. The
+following functions are invalid MCX code:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@mcx</span><span class="o">.</span><span class="n">model</span>
 <span class="k">def</span> <span class="nf">return_value_not_assigned</span><span class="p">():</span>
     <span class="sd">&quot;&quot;&quot;The returned variable must have a name.&quot;&quot;&quot;</span>
@@ -106,7 +107,7 @@ The following functions are invalid MCX code:</p>
 <p>Control flow is also not supported for the moment. MCX will not compile
 functions such as:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@mcx</span><span class="o">.</span><span class="n">model</span>
-<span class="k">def</span> <span class="nf">control_flow</span><span class="p">():</span>
+<span class="k">def</span> <span class="nf">if_else</span><span class="p">():</span>
     <span class="n">a</span> <span class="o">&lt;~</span> <span class="n">Bernoulli</span><span class="p">(</span><span class="o">.</span><span class="mi">5</span><span class="p">)</span>
 
     <span class="k">if</span> <span class="n">a</span> <span class="o">&gt;</span> <span class="o">.</span><span class="mi">3</span><span class="p">:</span>
@@ -115,16 +116,43 @@ functions such as:</p>
         <span class="n">b</span> <span class="o">&lt;~</span> <span class="n">Normal</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
 
     <span class="k">return</span> <span class="n">b</span>
+
+<span class="nd">@mcx</span><span class="o">.</span><span class="n">model</span>
+<span class="k">def</span> <span class="nf">for_loop</span><span class="p">():</span>
+    <span class="n">a</span> <span class="o">&lt;~</span> <span class="n">Poisson</span><span class="p">(</span><span class="mi">10</span><span class="p">)</span>
+
+    <span class="n">total</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">a</span><span class="p">):</span>
+        <span class="n">b</span> <span class="o">&lt;~</span> <span class="n">Bernoulli</span><span class="p">(</span><span class="mf">1.</span><span class="o">/</span><span class="n">i</span><span class="p">)</span>
+        <span class="n">total</span> <span class="o">+=</span> <span class="n">b</span>
+
+    <span class="k">return</span> <span class="n">total</span>
 </pre></div>
 </div>
-<p>Its implementation is currently on the roadmap.</p>
+<p>This will eventually be integrated to support models with stochastic support.
+Model closures are also currently not supported. MCX will not process code such
+as:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@mcx</span><span class="o">.</span><span class="n">model</span>
+<span class="k">def</span> <span class="nf">closure</span><span class="p">():</span>
+    <span class="n">p</span> <span class="o">&lt;~</span> <span class="n">Beta</span><span class="p">(</span><span class="o">.</span><span class="mi">5</span><span class="p">,</span> <span class="o">.</span><span class="mi">5</span><span class="p">)</span>
+
+    <span class="nd">@mcx</span><span class="o">.</span><span class="n">model</span>
+    <span class="k">def</span> <span class="nf">toss</span><span class="p">():</span>
+        <span class="n">is_head</span> <span class="o">&lt;~</span> <span class="n">Binomial</span><span class="p">(</span><span class="n">p</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">is_head</span>
+
+    <span class="k">return</span> <span class="n">toss</span>
+</pre></div>
+</div>
+<p>These will eventually be supported as part of the implementation of non-parametrics.</p>
 </div>
 </div>
 <div class="section" id="call-functions-from-a-model">
 <h2>Call functions from a model<a class="headerlink" href="#call-functions-from-a-model" title="Permalink to this headline">¶</a></h2>
-<p>You can call other (deterministic) python functions inside a generative
-model as long as they only use python operators or functions implemented
-in <a class="reference external" href="https://jax.readthedocs.io/en/latest/jax.html">JAX</a>.</p>
+<p>You can call other (deterministic) python functions inside a generative model
+as long as they only use python operators or functions implemented in
+<a class="reference external" href="https://jax.readthedocs.io/en/latest/jax.html">JAX</a> (most of numpy’s and some of
+scipy’s methods).</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">mcx</span>
 <span class="kn">from</span> <span class="nn">mcx.distributions</span> <span class="kn">import</span> <span class="n">Exponential</span><span class="p">,</span> <span class="n">Normal</span>
 
@@ -140,22 +168,18 @@ in <a class="reference external" href="https://jax.readthedocs.io/en/latest/jax.
 </pre></div>
 </div>
 </div>
-<div class="section" id="use-models-as-distributions">
-<h2>Use models as distributions<a class="headerlink" href="#use-models-as-distributions" title="Permalink to this headline">¶</a></h2>
-<p>Generative functions implicitely define a multivariate distribution. They
-“augment” this distribution with an execution model and define some variables
-as inputs and outputs.</p>
-<p>Conversely, most distributions can also be seen as the result of a generative
-process. For instance you can re-implement the exponential distribution in MCX
-as</p>
+<div class="section" id="models-are-multivariate-distributions">
+<h2>Models are (multivariate) distributions<a class="headerlink" href="#models-are-multivariate-distributions" title="Permalink to this headline">¶</a></h2>
+<p>Most distributions can be seen as the result of a generative process. For
+instance you can re-implement the exponential distribution in MCX as</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">jax.numpy</span> <span class="k">as</span> <span class="nn">np</span>
 <span class="kn">import</span> <span class="nn">mcx</span>
 <span class="kn">from</span> <span class="nn">mcx.distributions</span> <span class="kn">import</span> <span class="n">Exponential</span>
 
 <span class="nd">@mcx</span><span class="o">.</span><span class="n">model</span>
 <span class="k">def</span> <span class="nf">Exponential</span><span class="p">(</span><span class="n">lmbda</span><span class="p">):</span>
-    <span class="n">U</span> <span class="o">&lt;~</span> <span class="n">Uniform</span>
-    <span class="n">t</span> <span class="o">=</span> <span class="o">-</span> <span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">U</span><span class="p">)</span> <span class="o">/</span> <span class="n">lmba</span>
+    <span class="n">U</span> <span class="o">&lt;~</span> <span class="n">Uniform</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+    <span class="n">t</span> <span class="o">=</span> <span class="o">-</span> <span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">U</span><span class="p">)</span> <span class="o">/</span> <span class="n">lmbda</span>
     <span class="k">return</span> <span class="n">t</span>
 </pre></div>
 </div>
@@ -187,14 +211,33 @@ possible to compose MCX models as follows</p>
 </div>
 <div class="section" id="querying-debugging-the-model">
 <h2>Querying / Debugging the model<a class="headerlink" href="#querying-debugging-the-model" title="Permalink to this headline">¶</a></h2>
-<p>MCX translates model definitions in an intermediate representation which can be
-dynamically queried and modified at runtime.</p>
-<p>It is possible to interact dynamically with a model. Let us use the
-one-dimensional linear regression example. First you can query the
-prior values for each variable.</p>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">model</span> <span class="o">=</span> <span class="n">one_dimensional_linear_regression</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="mf">1.</span><span class="p">,</span> <span class="mf">2.</span><span class="p">,</span> <span class="mf">3.</span><span class="p">])</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">model</span><span class="p">[</span><span class="s1">&#39;y&#39;</span><span class="p">]</span>
-<span class="gp">... </span><span class="n">shows</span> <span class="n">information</span> <span class="n">about</span> <span class="n">the</span> <span class="n">distibution</span><span class="p">,</span> <span class="n">shape</span><span class="p">,</span> <span class="n">etc</span><span class="o">.</span>
+<p>MCX translates model definitions in an intermediate representation (a graph)
+which can be dynamically queried and modified at runtime. Three features of MCX
+make debugging a model easier: forward sampling, conditioning and the ability to
+modify the model dynamically.</p>
+<p>Forward sampling means sampling from the prior distribution of each variable in
+the model. We sample for one data point at a time or the whole dataset in one
+go.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">jax</span>
+<span class="kn">import</span> <span class="nn">mcx</span>
+
+<span class="n">rng_key</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">PRNGKey</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+<span class="n">mcx</span><span class="o">.</span><span class="n">sample_forward</span><span class="p">(</span><span class="n">rng_key</span><span class="p">,</span> <span class="n">model</span><span class="p">,</span> <span class="o">**</span><span class="n">data</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Sometimes we want to set the value of a variable in the model to a constant. We
+can do so using the <cite>do</cite> operator which can be combined with the <cite>sample_forward</cite>
+function:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">jax</span>
+<span class="kn">import</span> <span class="nn">mcx</span>
+
+<span class="n">rng_key</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">PRNGKey</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+<span class="n">model_c</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">do</span><span class="p">(</span><span class="n">rv</span><span class="o">=</span><span class="mi">10</span><span class="p">)</span>
+<span class="n">mcx</span><span class="o">.</span><span class="n">sample_forward</span><span class="p">(</span><span class="n">rng_key</span><span class="p">,</span> <span class="n">model_c</span><span class="p">,</span> <span class="o">**</span><span class="n">data</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>We can also inspect the values of variables individually</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">model</span><span class="p">[</span><span class="s2">&quot;y&quot;</span><span class="p">]</span>
 </pre></div>
 </div>
 <p>You can also change the variables’ distribution for quick iteration on the
@@ -204,9 +247,7 @@ model:</p>
 </div>
 <p>This is pretty much all there is to known about how to express models with MCX.
 You can consult the section of the documentation on distributions to get
-acquainted with the distributions included with MCX. You can also have a look
-at the API for neural network layers.</p>
-<p>Next we will see how to sample from the model’s prior distribution.</p>
+acquainted with the distributions included with MCX.</p>
 </div>
 </div>
 

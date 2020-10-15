@@ -86,7 +86,4 @@ Quickstart
     :maxdepth: 1
         
     build_model
-    prior_predictive
     inference
-    diagnostics
-    posterior inference
