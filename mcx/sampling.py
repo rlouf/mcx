@@ -1,5 +1,4 @@
-from datetime import datetime
-from typing import Iterator, Tuple
+from typing import Callable, Iterator, Tuple
 
 import jax
 import jax.numpy as np
@@ -306,105 +305,47 @@ class sampler(object):
         if not self.is_warmed_up:
             self.warmup(num_warmup_steps, accelerate, **warmup_kwargs)
 
-        _, self.rng_key = jax.random.split(self.rng_key)
-        rng_keys = jax.random.split(self.rng_key, num_samples)
-        state = self.state
-
         @jax.jit
         def update_chain(rng_key, parameters, chain_state):
             kernel = self.kernel_factory(*parameters)
             new_chain_state, info = kernel(rng_key, chain_state)
             return new_chain_state, info
 
-        # The progress bar is an important indicator for exploratory analysis,
-        # while lax.scan is optimal for production environments where speed is
-        # needed (an no one is there to look at the progress bar).  Note that
-        # for small sample sizes lax.scan is not dramatically faster normal
-        # iteration and lax. You thus are not losing much by using it for
-        # initial exploration.
+        _, self.rng_key = jax.random.split(self.rng_key)
+        rng_keys = jax.random.split(self.rng_key, num_samples)
+
+        # The progress bar, displayed when accelerate=False, is an important
+        # indicator for exploratory analysis, while sample_scan is optimal for
+        # getting a large number of samples.  Note that for small sample sizes
+        # lax.scan is not dramatically faster than a for loop due to compile
+        # time. Expect however an increasing improvement as the number of
+        # samples increases.
         if accelerate:
-
-            print(
-                f"sampler: draw {num_samples:,} samples from {self.num_chains:,} chains.",
-                end=" ",
+            last_state, chain = sample_scan(
+                update_chain, self.state, self.parameters, rng_keys, self.num_chains
             )
-            start = datetime.now()
-
-            @jax.jit
-            def update_scan(carry, key):
-                state, parameters = carry
-                keys = jax.random.split(key, self.num_chains)
-                state, info = jax.vmap(update_chain, in_axes=(0, 0, 0))(
-                    keys, parameters, state
-                )
-                return (state, parameters), (state, info)
-
-            last_state, chain = jax.lax.scan(
-                update_scan, (state, self.parameters), rng_keys
-            )
-
-            self.state = last_state[0]
-            samples, sampling_info = self.evaluator.make_trace(
-                chain=chain, unravel_fn=self.unravel_fn
-            )
-            trace = Trace(
-                samples=samples,
-                sampling_info=sampling_info,
-                loglikelihood_contributions_fn=self.loglikelihood_contributions,
-            )
-
-            print(f"Done in {(datetime.now()-start).total_seconds():.1f} seconds.")
-
         else:
-
-            @jax.jit
-            def step(key, state):
-                keys = jax.random.split(key, self.num_chains)
-                state, info = jax.vmap(update_chain, in_axes=(0, 0, 0))(
-                    keys, self.parameters, state
-                )
-                return state, info
-
-            chain = []
-            with tqdm(rng_keys, unit="samples") as progress:
-                progress.set_description(
-                    "Collecting {:,} samples across {:,} chains".format(
-                        num_samples, self.num_chains
-                    ),
-                    refresh=False,
-                )
-                for i, key in enumerate(progress):
-                    state, info = step(key, state)
-                    chain.append((state, info))
-
-            self.state = chain[-1][0]
-
-            # lax.scan returns a tuple (State, Info, etc.) where each element
-            # contains the information for all steps. On the other hand the for
-            # loop returns a list of chain states. Since the former format is
-            # more convenient to build the trace, we need to pack the results
-            # of the latter. The following lines are inspired by the
-            # implementation of lax.scan when jit is disabled.
-            # TODO: Packing introduces a heavy performance penalty that should
-            # be addressed in a future PR.
-            stack = lambda y, *ys: np.stack((y, *ys))
-            chain = jax.tree_multimap(stack, *chain)
-
-            samples, sampling_info = self.evaluator.make_trace(
-                chain=chain, unravel_fn=self.unravel_fn
+            last_state, chain = sample_loop(
+                update_chain, self.state, self.parameters, rng_keys, self.num_chains
             )
-            trace = Trace(
-                samples=samples,
-                sampling_info=sampling_info,
-                loglikelihood_contributions_fn=self.loglikelihood_contributions,
-            )
+
+        samples, sampling_info = self.evaluator.make_trace(
+            chain=chain, unravel_fn=self.unravel_fn
+        )
+        trace = Trace(
+            samples=samples,
+            sampling_info=sampling_info,
+            loglikelihood_contributions_fn=self.loglikelihood_contributions,
+        )
+
+        self.state = last_state
 
         return trace
 
 
-# -------------------------------------------------------------------
+# --------------------------------------------------------------------
 #               == THE SEQUENTIAL SAMPLING RUNTIME ==
-# -------------------------------------------------------------------
+# --------------------------------------------------------------------
 
 
 class sequential_sampler(object):
@@ -500,11 +441,129 @@ class sequential_sampler(object):
 #
 
 
+def sample_scan(
+    kernel: Callable,
+    init_state: np.DeviceArray,
+    parameters: np.DeviceArray,
+    rng_keys: np.DeviceArray,
+    num_chains: int,
+) -> Tuple:
+    """Sample using JAX's scan.
+
+    Using scan over other constructs (and python loops) means reduced compilation time
+    for loops with many iterations. Since the loop itself is compiled, sampling with
+    scan will be faster than with the for loop. We thus recommend to use `sample_scan`
+    whenever possible.
+
+    Parameters
+    ----------
+    kernel
+        The function that will be repeatedly applied to the chain state. It
+        must include the transition kernel, but can also compute online
+        diagnostics.
+    init_state: array (n_chains, n_dim)
+        The initial chain state.
+    parameters: array (n_chains, n_parameters)
+        The parameters of the evaluator.
+    rng_keys: array (n_samples,)
+        JAX PRNGKeys used for each sampling step.
+    num_chains
+        The number of chains
+
+    Returns
+    -------
+    The last state of the chain as well as the full chain.
+
+    """
+
+    @jax.jit
+    def update_scan(carry, key):
+        state, parameters = carry
+        keys = jax.random.split(key, num_chains)
+        state, info = jax.vmap(kernel, in_axes=(0, 0, 0))(keys, parameters, state)
+        return (state, parameters), (state, info)
+
+    last_state, chain = jax.lax.scan(update_scan, (init_state, parameters), rng_keys)
+    last_chain_state = last_state[0]
+
+    return last_chain_state, chain
+
+
+def sample_loop(
+    kernel: Callable,
+    init_state: np.DeviceArray,
+    parameters: np.DeviceArray,
+    rng_keys: np.DeviceArray,
+    num_chains: int,
+) -> Tuple:
+    """Sample using a Python loop.
+
+    While `sample_scan` is more performant it may make sense to accept slower
+    sampling during the initial model iteration to get an idea of the speed at
+    which the sampler works and get regular updates on the diagnostics.
+
+    Parameters
+    ----------
+    kernel
+        The function that will be repeatedly applied to the chain state. It
+        must include the transition kernel, but can also compute online
+        diagnostics.
+    init_state: array (n_chains, n_dim)
+        The initial chain state.
+    parameters: array (n_chains, n_parameters)
+        The parameters of the evaluator.
+    rng_keys: array (n_samples,)
+        JAX PRNGKeys used for each sampling step.
+    num_chains
+        The number of chains
+
+    Returns
+    -------
+    The last state of the chain as well as the full chain.
+
+    """
+    num_samples = rng_keys.shape[0]
+
+    @jax.jit
+    def update_loop(state, key):
+        keys = jax.random.split(key, num_chains)
+        state, info = jax.vmap(kernel, in_axes=(0, 0, 0))(keys, parameters, state)
+        return state, info
+
+    with tqdm(rng_keys, unit="samples") as progress:
+        progress.set_description(
+            "Collecting {:,} samples across {:,} chains".format(
+                num_samples, num_chains
+            ),
+            refresh=False,
+        )
+        chain = []
+        state = init_state
+        for i, key in enumerate(progress):
+            state, info = update_loop(state, key)
+            chain.append((state, info))
+
+    last_state = chain[-1][0]
+
+    # lax.scan returns a tuple (StateChain, InfoChain, etc.) where each element
+    # contains the information for all steps. On the other hand the for loop
+    # returns a list of chain states [(State, Info)]. Since the former format
+    # is more convenient to build the trace, we need to pack the results of the
+    # latter. The following lines are inspired by the implementation of
+    # lax.scan when jit is disabled.
+    stack = lambda y, *ys: np.stack((y, *ys))
+    chain = jax.tree_multimap(stack, *chain)
+
+    return last_state, chain
+
+
 def validate_conditioning_variables(model, **kwargs):
     """Check that all variables passed as arguments to the sampler
     are random variables or arguments to the sampler. And converserly
     that all of the model definition's positional arguments are given
     a value.
+
+    TODO: Move to model.py?
     """
     conditioning_vars = set(kwargs.keys())
     model_randvars = set(model.random_variables)
