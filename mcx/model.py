@@ -316,7 +316,7 @@ class model(Distribution):
 # Convenience functions
 
 
-def sample_forward(rng_key, model: model, num_samples=1000, **kwargs) -> Dict:
+def sample_forward(rng_key, model: model, num_samples=1, **kwargs) -> Dict:
     """Returns forward samples from the model.
 
     The samples are returned in a dictionary, with the names of
