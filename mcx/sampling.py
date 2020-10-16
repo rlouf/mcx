@@ -2,12 +2,13 @@ from typing import Callable, Iterator, Tuple
 
 import jax
 import jax.numpy as np
-from jax.flatten_util import ravel_pytree
+from jax.flatten_util import ravel_pytree as jax_ravel_pytree
 from tqdm import tqdm
 
 import mcx
 from mcx import sample_forward
 from mcx.core import compile_to_loglikelihoods, compile_to_logpdf
+from mcx.jax import ravel_pytree as mcx_ravel_pytree
 from mcx.trace import Trace
 
 __all__ = ["sampler"]
@@ -409,6 +410,28 @@ def sample_loop(
     sampling during the initial model iteration to get an idea of the speed at
     which the sampler works and get regular updates on the diagnostics.
 
+    Note
+    ----
+    `jax.lax.scan` outputs a tuple (State, Info) where State and Info contain the
+    information for each sample stacked. On the other hand, naive iterative
+    sampling returns a list of (State, Info) tuples. The former being more
+    convenient to build the trace we reshape the output of the `for` loop. This
+    is slightly more complicated that we originally thought.
+
+    While we can copy the implementation of `jax.lax.scan` (non-jitted version) to get
+    the same output `jax.tree_util.tree_multimap(np.stack, chain)`, this is slow for large
+    numbers of samples. Since the work happens outside of the progress bar this can be
+    very confusing for the user.
+
+    The next possibility is to ravel the pytree of the kernel's output, stack
+    the ravelled pytrees, then unravel. This is made difficult by the fact that
+    JAX's version of ravel_pytree uses `vjp` and therefore does not support
+    some python types like booleans. We thus use Numpyro's `ravel_pytree`
+    function to ravel while sampling. Since stacking the ravelled pytrees and
+    unravelling is fast, this solution is much faster and shows the user a
+    realistic number of samples per second. Sampling speed is clearly limited
+    by I/O consideration, efforts to speed things up should be focused on this.
+
     Parameters
     ----------
     kernel
@@ -435,7 +458,15 @@ def sample_loop(
     def update_loop(state, key):
         keys = jax.random.split(key, num_chains)
         state, info = jax.vmap(kernel, in_axes=(0, 0, 0))(keys, parameters, state)
-        return state, info
+        return state, info, mcx_ravel_pytree((state, info))[0]
+
+    # we get the unraveling function for the tuple (state, info) by doing a dry
+    # run.
+    def get_unravel_fn():
+        state, info, _ = update_loop(init_state, rng_keys[0])
+        return mcx_ravel_pytree((state, info))
+
+    _, unravel_fn = get_unravel_fn()
 
     with tqdm(rng_keys, unit="samples") as progress:
         progress.set_description(
@@ -447,19 +478,12 @@ def sample_loop(
         chain = []
         state = init_state
         for i, key in enumerate(progress):
-            state, info = update_loop(state, key)
-            chain.append((state, info))
+            state, _, ravelled_state = update_loop(state, key)
+            chain.append(ravelled_state)
 
-    last_state = chain[-1][0]
-
-    # lax.scan returns a tuple (StateChain, InfoChain, etc.) where each element
-    # contains the information for all steps. On the other hand the for loop
-    # returns a list of chain states [(State, Info)]. Since the former format
-    # is more convenient to build the trace, we need to pack the results of the
-    # latter. The following lines are inspired by the implementation of
-    # lax.scan when jit is disabled.
-    stack = lambda y, *ys: np.stack((y, *ys))
-    chain = jax.tree_multimap(stack, *chain)
+    chain = np.stack(chain)
+    chain = jax.vmap(unravel_fn)(chain)
+    last_state = state
 
     return last_state, chain
 
@@ -548,7 +572,7 @@ def get_initial_position(rng_key, model, num_chains, **kwargs):
         parameter: np.atleast_1d(values)[0]
         for parameter, values in initial_positions.items()
     }
-    _, unravel_fn = ravel_pytree(sample_position_dict)
+    _, unravel_fn = jax_ravel_pytree(sample_position_dict)
 
     return positions, unravel_fn
 
