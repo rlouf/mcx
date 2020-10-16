@@ -10,7 +10,7 @@ from mcx import sample_forward
 from mcx.core import compile_to_loglikelihoods, compile_to_logpdf
 from mcx.trace import Trace
 
-__all__ = ["sampler", "sequential_sampler"]
+__all__ = ["sampler"]
 
 
 # -------------------------------------------------------------------
@@ -339,99 +339,6 @@ class sampler(object):
         )
 
         self.state = last_state
-
-        return trace
-
-
-# --------------------------------------------------------------------
-#               == THE SEQUENTIAL SAMPLING RUNTIME ==
-# --------------------------------------------------------------------
-
-
-class sequential_sampler(object):
-    def __init__(
-        self, rng_key, model, evaluator, num_samples=1000, num_warmup_steps=1000
-    ):
-        """Sequential Markov Chain Monte Carlo sampling."""
-        self.model = model
-        self.evaluator = evaluator
-        self.num_samples = num_samples
-        self.num_warmup_steps = num_warmup_steps
-        self.rng_key = rng_key
-
-        init, warmup, build_kernel, to_trace, adapt_loglikelihood = self.evaluator
-        self.prg_init = init
-        self.prg_warmup = warmup
-        self.prg_build_kernel = build_kernel
-        self.prg_to_trace = to_trace
-        self.prg_adapt_loglikelihood = adapt_loglikelihood
-
-        self.state = None
-
-    def _initialize(self, **kwargs):
-        loglikelihood = build_loglikelihood(self.model, **kwargs)
-        initial_position, self.unravel_fn = get_initial_position(
-            self.rng_key, self.model, self.num_samples, **kwargs
-        )
-        loglikelihood = flatten_loglikelihood(loglikelihood, self.unravel_fn)
-        loglikelihood = self.prg_adapt_loglikelihood(loglikelihood)
-        initial_state = jax.vmap(self.prg_init, in_axes=(0, None))(
-            initial_position, jax.value_and_grad(loglikelihood)
-        )
-        return initial_state
-
-    def _update_loglikelihood(self, **kwargs):
-        loglikelihood = build_loglikelihood(self.model, **kwargs)
-        loglikelihood = flatten_loglikelihood(loglikelihood, self.unravel_fn)
-        loglikelihood = self.prg_adapt_loglikelihood(loglikelihood)
-        loglikelihood = jax.jit(loglikelihood)
-        return loglikelihood
-
-    def _update_kernel(self, loglikelihood, parameters):
-        kernel = self.prg_build_kernel(loglikelihood, parameters)
-        kernel = jax.jit(kernel)
-        return kernel
-
-    def update(self, **kwargs):
-        _, self.rng_key = jax.random.split(self.rng_key)
-
-        validate_conditioning_variables(self.model, **kwargs)
-
-        if self.state is None:
-            self.state = self._initialize(**kwargs)
-
-        # Since the data changes the log-likelihood, and thus the
-        # kernel, need to be updated.
-        #
-        # Although there is no mention of this in the aforementionned
-        # papers, we re-run the warmup to adapt the kernel parameters
-        # to the new posterior geometry. Unlike the initial warmup, however,
-        # we re-start the chains at the initial position.
-        loglikelihood = self._update_loglikelihood(**kwargs)
-        parameters, _ = self.prg_warmup(
-            self.state, loglikelihood, self.num_warmup_steps
-        )
-        kernel = self._update_kernel(loglikelihood, parameters)
-
-        @jax.jit
-        def update_chains(state, rng_key):
-            keys = jax.random.split(rng_key, self.num_samples)
-            new_states, info = jax.vmap(kernel, in_axes=(0, 0))(keys, state)
-            return new_states
-
-        state = self.state
-
-        rng_keys = jax.random.split(self.rng_key, self.num_samples)
-        with tqdm(rng_keys, unit="samples") as progress:
-            progress.set_description(
-                "Collecting {:,} samples".format(self.num_samples),
-                refresh=False,
-            )
-            for key in progress:
-                state = update_chains(state, key)
-        self.state = state
-
-        trace = self.prg_to_trace(self.state, self.unravel_fn)
 
         return trace
 

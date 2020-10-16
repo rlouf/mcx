@@ -20,8 +20,7 @@ MCX's philosophy
 1. Knowing how to express a graphical model and manipulating Numpy arrays should
    be enough to define a model.
 2. Models should be modular and re-usable.
-3. Inference should be performant. Sequential inference should be a first class
-   citizen.
+3. Inference should be performant and should leverage GPUs.
 
 See the [documentation](https://rlouf.github.io/mcx) for more information.  See [this issue](https://github.com/rlouf/mcx/issues/1) for an updated roadmap for v0.1.
 
@@ -110,7 +109,7 @@ One could use the combination in a notebook to first get a lower bound on the
 sampling rate before deciding on a number of samples.
 
 
-## Iterative sampling
+### Interactive sampling
 
 Sampling the posterior is an iterative process. Yet most libraries only provide
 batch sampling. The generator runtime is already implemented in `mcx`, which
@@ -122,71 +121,38 @@ opens many possibilities such as:
 - Easier debugging.
 
 ```python
-samples = mcx.iterative_sampler(
+samples = mcx.sampler(
     rng_key,
     linear_regression,
     kernel,
     **observations
 )
 
+trace = mcx.Trace()
 for sample in samples:
-  print(sample)
-```
-
-### Note
-
-`sampler` and `iterative_sampler` share a very similar API and philosophy, they
-will likely be merged before the 0.1 release:
-
-```python
-sampler = mcx.sampler(
-    rng_key,
-    linear_regression,
-    kernel,
-    **observations
-)
-
-posterior = sampler.run()
-
-for sample in sampler:
-  print(sample)
-```
-
-so it is possible to switch between the two execution modes seemlessly.
-
-## Sequential sampling 
-
-One of Bayesian statistics' promises is the ability to update one's knowledge as
-more data becomes available. In practice, few libraries allow this in a
-straightforward way. This is however important in at least two areas of
-application:
-
-- Training models with data that does not fit in memory. For deep models,
-  obviously, but not necessarily;
-- Training models where data progressively arrives. Think A/B testing for
-  instance, where we need to update our knowledge as more users arive.
+  trace.append(sample)
   
-Sequential Markov Chain Monte-Carlo is already implemented in `mcx`. However,
-more work is needed to diagnose the obtained samples and possibly stop sampling
-dynamically.
+iter(sampler)
+next(sampler)
+```
+
+Note that the performance of the interactive mode is significantly lower than
+that of the batch sampler. However, both can be used successively:
 
 ```python
-sampler = mcx.sequential_sampler(
-    rng_key,
-    linear_regression,
-    kernel,
-    **observations
-)
-posterior = sampler.run()
-
-updated_posterior = sampler.update(posterior, **new_observations)
+trace = mcx.Trace()
+for i, sample in enumerate(samples):
+  print(do_something(sample)
+  trace.append(sample)
+  if i % 10 == 0:
+    trace += sampler.run(100_000, accelerate=True)
 ```
 
 ## Important note
 
-MCX is a building atop the excellent ideas that have come up in the past 10
-years of probablistic programming, whether from Stan (NUTS and the very
-knowledgeable community), PyMC3 & PyMC4 (for its simple API), Tensorflow
-Probability (for its shape system and inference vectorization), (Num)Pyro (for
-the use of JAX in the backend), Gen.jl and Turing.jl (for composable inference),
-Soss.jl (generative model API), Anglican, and many that I forget.
+MCX takes a lot of inspiration from other probabilistic programming languages
+and libraries: Stan (NUTS and the very knowledgeable community), PyMC3 (for its
+simple API), Tensorflow Probability (for its shape system and inference
+vectorization), (Num)Pyro (for the use of JAX in the backend), Gen.jl and
+Turing.jl (for composable inference), Soss.jl (generative model API), Anglican,
+and many that I forget.
