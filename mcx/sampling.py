@@ -129,10 +129,8 @@ class sampler(object):
         self.is_warmed_up = False
         self.rng_key = rng_key
         self.num_chains = num_chains
-        self.model = model
         self.evaluator = evaluator
         self.kernel_factory = kernel_factory
-        self.initial_state = initial_state
         self.state = initial_state
         self.unravel_fn = unravel_fn
         self.loglikelihood_contributions = loglikelihood_contributions
