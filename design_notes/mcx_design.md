@@ -18,11 +18,11 @@ We want a probabilistic programming library that
 
 Our understanding is that Probabilistic Programming libraries that rely on a
 non-standard interpretation of a programming language need to somehow bridge the
-gap between this langage's construct and the requirement of probabilistic models
+gap between this language's construct and the requirement of probabilistic models
 and their use. Mainly:
 
 - Random variable definitions can have two different intepretations depending on
-  the contex. `x ~ Normal(0, 1)` can either mean "x points to the value of a
+  the context. `x ~ Normal(0, 1)` can either mean "x points to the value of a
   random draw from the standard normal distribution" or "a (log) probability
   associated with the value of x: `Normal(0, 1).logpdf(x)`. There is no simple
   construct in Python to express these two meanings in one statement.
@@ -57,13 +57,13 @@ engine-specific optimizations.
 
 ```
 
-**This idea is not new.** It is at the hear of languages such as Stan, Bugs,
+**This idea is not new.** It is at the heart of languages such as Stan, Bugs,
 JAGS, Anglican, HackPPL, Joss.jl and many that I am unfortunately not aware of.
 The only innovation of `mcx` is to apply this idea to a python library.
 
 **There is a huge caveat.** Source code transformation/generation implies **a
 lot of black magic** under the hood. If this is not done carefully, at best the
-code will fail in unexpected way, at worst we make silent translation mistakes that affect the
+code will fail in unexpected ways, at worst we make silent translation mistakes that affect the
 inference.  
 However, these issues can be mitigated by (1) staying as close to the Python
 syntax as possible to benefit from the decades of development around its
@@ -83,7 +83,7 @@ the samplers in pure python/numpy code.
 The constraints on the syntax are simple: while we don't want to use the
 assignment `=` operator to assign a random object, we also need for the model's
 definition to be syntactically valid Python code. We choose the matrix
-multiplication `@` operator. Defining a normally-disitributed random variable
+multiplication `@` operator. Defining a normally-distributed random variable
 thus looks like
 
 ```python
@@ -95,13 +95,13 @@ x @ Normal(0, 1)
 
 Bayesian models are often called *generative models*, since they can generate
 random outcomes. We follow this philosophy, thus models are defined in functions
-that take some input data, and returns an outcome. Take a simple 1d linear
-regressions, where we would like to model the relationship between an outcome
+that take some input data, and return an outcome. Take a simple 1d linear
+regression, where we would like to model the relationship between an outcome
 `y` and an observation `x`:
 
 ```python
 def linear_regression(x): # can be vmapped
-    weight @ Normal(0, 1)
+    w @ Normal(0, 1)
     sigma @ HalfNormal(0, 1)
     y @ Normal(x*w, sigma)
     return y
@@ -145,7 +145,7 @@ def my_prior(sigma):
   return value
 
 def linear_regression(x):
-  weight @ my_prior(1)
+  w @ my_prior(1)
   sigma @ my_other_prior(0)
   y @ Normal(x*w, sigma)
   return y
@@ -161,7 +161,7 @@ code:
 multiply = lambda x, y: x*y
 
 def linear_regression(x):
-  weight @ Normal(1)
+  w @ Normal(1)
   sigma @ HalfNormal(0, 1)
   z = multiply(x, w)
   y @ Normal(z, sigma)
@@ -174,7 +174,7 @@ or if the function is defined in another module `utils`:
 from utils import multiply
 
 def linear_regression(x):
-  weight @ Normal(1)
+  w @ Normal(1)
   sigma @ HalfNormal(0, 1)
   z = multiply(x, w)
   y @ Normal(z, sigma)
@@ -184,14 +184,15 @@ def linear_regression(x):
 
 ### Bayesian Neural Networks are distributions over functions
 
-*the API for random layers is not yet fixed. Many details need to be ironed.*
+*The API for random layers is not yet fixed. Many details need to be ironed out.*
+
 The following will be valid `mcx` code. The execution of the generative model
 is as follows:
 
 1. Generate a function called `nn` by getting a sample of its weights' layers;
 2. Get the category probabilities by passing the image through the sampled
    function.
-3. Generate a category at random from th categorical distibution with
+3. Generate a category at random from the categorical distibution with
    the previously computed value of the vector `p`.
 
 ```python
