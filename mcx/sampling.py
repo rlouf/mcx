@@ -57,7 +57,7 @@ class sampler(object):
     Called with its default values, the `run` method will be as fast as getting
     samples iteratively. We can however make it sensibly faster by calling
 
-       >>> trace = sampler.run(1_000, accelerate=True)
+       >>> trace = sampler.run(1_000, compile=True)
 
     Behind the scene MCX replaces the for loop used internally (so it can
     display a progress bar) by JAX's `lax.scan`. The difference is most obvious
@@ -153,7 +153,7 @@ class sampler(object):
         of steps (say 100) and different warmup options, call the `warmup` method
         first:
 
-            >>> sampler.warmup(100, accelerate=True)
+            >>> sampler.warmup(100, compile=True)
             ... for sample in sampler:
             ...     print(sample)
 
@@ -169,7 +169,7 @@ class sampler(object):
         """
         default_warmup_steps = 1_000
         if not self.is_warmed_up:
-            _ = self.warmup(default_warmup_steps, accelerate=False)
+            _ = self.warmup(default_warmup_steps, compile=False)
 
         @jax.jit
         def update_chains(rng_key, parameters, state):
@@ -211,7 +211,7 @@ class sampler(object):
         )
         return sample, sampling_info
 
-    def warmup(self, num_warmup_steps: int = 1000, accelerate: bool = False, **kwargs):
+    def warmup(self, num_warmup_steps: int = 1000, compile: bool = False, **kwargs):
         """Warmup the sampler.
 
         Warmup is necessary to get values for the evaluator's parameters that are
@@ -243,7 +243,7 @@ class sampler(object):
             self.kernel_factory,
             self.num_chains,
             num_warmup_steps,
-            accelerate,
+            compile,
             **kwargs,
         )
         self.state = last_state
@@ -271,7 +271,7 @@ class sampler(object):
         self,
         num_samples: int = 1000,
         num_warmup_steps: int = 1000,
-        accelerate: bool = False,
+        compile: bool = False,
         **warmup_kwargs,
     ) -> np.DeviceArray:
         """Run the posterior inference.
@@ -286,7 +286,7 @@ class sampler(object):
             The number of samples to take from the posterior distribution.
         num_warmup_steps
             The number of warmup_steps to perform.
-        accelerate
+        compile
             If False the progress of the warmup and samplig will be displayed.
             Otherwise it will use `lax.scan` to iterate (which is potentially
             faster).
@@ -302,7 +302,7 @@ class sampler(object):
 
         """
         if not self.is_warmed_up:
-            self.warmup(num_warmup_steps, accelerate, **warmup_kwargs)
+            self.warmup(num_warmup_steps, compile, **warmup_kwargs)
 
         @jax.jit
         def update_chain(rng_key, parameters, chain_state):
@@ -313,13 +313,13 @@ class sampler(object):
         _, self.rng_key = jax.random.split(self.rng_key)
         rng_keys = jax.random.split(self.rng_key, num_samples)
 
-        # The progress bar, displayed when accelerate=False, is an important
+        # The progress bar, displayed when compile=False, is an important
         # indicator for exploratory analysis, while sample_scan is optimal for
         # getting a large number of samples.  Note that for small sample sizes
         # lax.scan is not dramatically faster than a for loop due to compile
         # time. Expect however an increasing improvement as the number of
         # samples increases.
-        if accelerate:
+        if compile:
             last_state, chain = sample_scan(
                 update_chain, self.state, self.parameters, rng_keys, self.num_chains
             )

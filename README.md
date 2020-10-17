@@ -102,7 +102,7 @@ By default MCX will sample using a python `for` loop and display a progress bar.
 For faster sampling (but without progress bar) you can use:
 
 ```python
-posterior = sampler.run(accelerate=True)
+posterior = sampler.run(compile=True)
 ```
 
 One could use the combination in a notebook to first get a lower bound on the
@@ -145,7 +145,7 @@ for i, sample in enumerate(samples):
   print(do_something(sample)
   trace.append(sample)
   if i % 10 == 0:
-    trace += sampler.run(100_000, accelerate=True)
+    trace += sampler.run(100_000, compile=True)
 ```
 
 ## Important note
