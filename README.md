@@ -6,14 +6,14 @@
  XLA-rated Bayesian inference
 </h3>
 
-MCX is a probabilistic programing library with a laser-focus on sampling
+MCX is a probabilistic programming library with a laser-focus on sampling
 methods. MCX transforms the model definitions to generate logpdf or sampling
 functions. These functions are JIT-compiled with JAX; they support batching and
 can be exectuted on CPU, GPU or TPU transparently.
 
 The project is currently at its infancy and a moonshot towards providing
 sequential inference as a first-class citizen, and performant sampling methods
-for bayesian deep learning.
+for Bayesian deep learning.
 
 MCX's philosophy
 

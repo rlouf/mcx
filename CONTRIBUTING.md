@@ -40,14 +40,14 @@ Start with writing a regression test that reproduces the bug in the simplest way
 
 Contributing to the documentation is a wonderful way to make a great impact to the library. Documentation is the first thing that new users see; you can help them avoid some of the confusions that you encountered when first using the library.
 
-Examples are a great way for you to learn how to use the library and contribute in a meaningful way. We're happy to help anyone who contributes examples, so don't heistate to open a PR!
+Examples are a great way for you to learn how to use the library and contribute in a meaningful way. We're happy to help anyone who contributes examples, so don't hesitate to open a PR!
 
 ## Give back
 
-MCX would not be possible without the great work put in other libraries such as Jax and Trax. Sometimes, imolementing new functionalities in MCX implies supplementing these libraries. Especially when adding new distributions: `jax.scipy.stats` implements relatively few distributions. It is important for us to give back to these libraires and push every feature in MCX that could be used by a wider audience:
+MCX would not be possible without the great work put in other libraries such as Jax and Trax. Sometimes, implementing new functionalities in MCX implies supplementing these libraries. Especially when adding new distributions: `jax.scipy.stats` implements relatively few distributions. It is important for us to give back to these libraries and push every feature in MCX that could be used by a wider audience:
 
-- Many users of these libraries probably need these features; Python is not only a language, but and ecosystem. We need to not only tend to our library but the ecosystem as a whole;
-- A utility that lives in these libraires will probably get more attention than here; this improves code quality;
+- Many users of these libraries probably need these features; Python is not only a language, but an ecosystem. We need to not only tend to our library but the ecosystem as a whole;
+- A utility that lives in these libraries will probably get more attention than here; this improves code quality;
 - This is just the right thing to do and show these libraries' author we are grateful for their work and willing to give back.
 
 As a result, the process to contribute a new distribution is the following:
