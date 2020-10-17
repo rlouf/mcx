@@ -38,7 +38,7 @@ class GraphicalModel(nx.DiGraph):
         new_model = self.copy()
         for name, value in kwargs.items():
             if name not in self.nodes:
-                raise NameError("The specified node {} does not exist.")
+                raise NameError("The specified node {} does not exist.".format(name))
 
             ast_value = ast.Constant(value=value)
             new_model.nodes[name]["content"] = Var(name, ast_value, False)
@@ -74,7 +74,7 @@ class GraphicalModel(nx.DiGraph):
         and its children's parents.
         """
         if var_name not in self.nodes:
-            raise NameError("The specified node {} does not exist.")
+            raise NameError("The specified node {} does not exist.".format(var_name))
 
         parents = list(self.predecessors(var_name))
         children = list(self.succ(var_name))
