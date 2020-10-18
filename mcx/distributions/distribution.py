@@ -120,15 +120,15 @@ class Distribution(ABC):
         """User-friendly representation of the probability distribution."""
         constraints_str = "\n  ".join(
             [
-                "{0}: {1!s}".format(key, value)
+                f"{key}: {value!s}"
                 for key, value in self.params_constraints.items()
             ]
         )
         support_str = str(self.support)
         return (
-            "{} distribution".format(self.__class__.__name__)
-            + "\n  batch_shape: {}".format(self.batch_shape)
-            + "\n  event_shape: {}".format(self.event_shape)
-            + "\n\nParameters\n  {}".format(constraints_str)
-            + "\n\nSupport: {}\n".format(support_str)
+            f"{self.__class__.__name__} distribution"
+            + f"\n  batch_shape: {self.batch_shape}"
+            + f"\n  event_shape: {self.event_shape}"
+            + f"\n\nParameters\n  {constraints_str}"
+            + f"\n\nSupport: {support_str}\n"
         )

@@ -38,7 +38,7 @@ class GraphicalModel(nx.DiGraph):
         new_model = self.copy()
         for name, value in kwargs.items():
             if name not in self.nodes:
-                raise NameError("The specified node {} does not exist.".format(name))
+                raise NameError(f"The specified node {name} does not exist.")
 
             ast_value = ast.Constant(value=value)
             new_model.nodes[name]["content"] = Var(name, ast_value, False)
@@ -74,7 +74,7 @@ class GraphicalModel(nx.DiGraph):
         and its children's parents.
         """
         if var_name not in self.nodes:
-            raise NameError("The specified node {} does not exist.".format(var_name))
+            raise NameError(f"The specified node {var_name} does not exist.")
 
         parents = list(self.predecessors(var_name))
         children = list(self.succ(var_name))
@@ -154,9 +154,8 @@ class GraphicalModel(nx.DiGraph):
                     self.add_edge(arg, name)
                 else:
                     raise SyntaxError(
-                        "The variable {} referenced in the expression {} ~ {} is undefined".format(
-                            arg, name, astor.code_gen.to_source(expression)
-                        )
+                        f"The variable {arg} referenced in the expression "
+                        f"{name} ~ {astor.code_gen.to_source(expression)} is undefined"
                     )
         self.add_node(name, content=Transformation(name, expression, args, is_returned))
 
@@ -167,9 +166,8 @@ class GraphicalModel(nx.DiGraph):
                     self.add_edge(arg, name)
                 else:
                     raise SyntaxError(
-                        "The variable {} referenced in the expression {} ~ {} is undefined".format(
-                            arg, name, astor.code_gen.to_source(distribution)
-                        )
+                        f"The variable {arg} referenced in the expression "
+                        f"{name} ~ {astor.code_gen.to_source(distribution)} is undefined"
                     )
         self.add_node(name, content=RandVar(name, distribution, args, is_returned))
 
@@ -189,7 +187,7 @@ class GraphicalModel(nx.DiGraph):
         # The returned variable of the model being merged is rename
         # to the variable being assigned in the current model.
         mapping = {
-            name: name + "_{}".format(model_graph.name) for name in model_graph.nodes
+            name: name + f"_{model_graph.name}" for name in model_graph.nodes
         }
         mapping.update({name_returned: var_name})
         model_graph = nx.relabel_nodes(model_graph, mapping)
@@ -227,9 +225,7 @@ class GraphicalModel(nx.DiGraph):
             else:
                 if model_graph.nodes[arg]["content"].default_value is None:
                     raise TypeError(
-                        "{} missing one require positional argument: '{}'".format(
-                            model_graph.name, arg
-                        )
+                        f"{model_graph.name} missing one required positional argument: '{arg}'"
                     )
 
         # Beware that the merged graph takes the name of the first

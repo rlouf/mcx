@@ -67,7 +67,7 @@ def gaussian_euclidean_metric(
     else:
         raise ValueError(
             "The mass matrix has the wrong number of dimensions: "
-            + "expected 1 or 2, got {}.".format(np.ndim(inverse_mass_matrix))
+            + f"expected 1 or 2, got {np.ndim(inverse_mass_matrix)}."
         )
 
 

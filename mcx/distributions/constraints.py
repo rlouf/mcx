@@ -89,7 +89,7 @@ class _GreaterThan(Constraint):
         return x >= self.lower_bound
 
     def __str__(self):
-        return "a real number >= {}".format(self.lower_bound)
+        return f"a real number >= {self.lower_bound}"
 
 
 class _StrictlyGreaterThan(Constraint):
@@ -100,7 +100,7 @@ class _StrictlyGreaterThan(Constraint):
         return x > self.lower_bound
 
     def __str__(self):
-        return "a real number > {}".format(self.lower_bound)
+        return f"a real number > {self.lower_bound}"
 
 
 class _Interval(Constraint):
@@ -109,7 +109,7 @@ class _Interval(Constraint):
         self.upper_bound = upper_bound
 
     def __str__(self):
-        return "a real number in ]{},{}[".format(self.lower_bound, self.upper_bound)
+        return f"a real number in ]{self.lower_bound},{self.upper_bound}["
 
     def __call__(self, x):
         return (x > self.lower_bound) & (x < self.upper_bound)
@@ -121,7 +121,7 @@ class _ClosedInterval(Constraint):
         self.upper_bound = upper_bound
 
     def __str__(self):
-        return "a real number in [{},{}]".format(self.lower_bound, self.upper_bound)
+        return f"a real number in [{self.lower_bound},{self.upper_bound}]"
 
     def __call__(self, x):
         return (x >= self.lower_bound) & (x <= self.upper_bound)
@@ -140,7 +140,7 @@ class _IntegerGreaterThan(Constraint):
         self.lower_bound = lower_bound
 
     def __str__(self):
-        return "an integer > {}".format(self.lower_bound)
+        return f"an integer > {self.lower_bound}"
 
     def __call__(self, x):
         return (x == np.floor(x)) & (x > self.lower_bound)
@@ -152,7 +152,7 @@ class _IntegerInterval(Constraint):
         self.upper_bound = upper_bound
 
     def __str__(self):
-        return "an integer in [{}, {}]".format(self.lower_bound, self.upper_bound)
+        return f"an integer in [{self.lower_bound}, {self.upper_bound}]"
 
     def __call__(self, x):
         return (x == np.floor(x)) & (x >= self.lower_bound) & (x <= self.upper_bound)
