@@ -41,11 +41,7 @@ def test_linear_regression():
 
     # Batch sampler
     sampler = mcx.sampler(
-        rng_key,
-        linear_regression,
-        kernel,
-        num_chains=2,
-        **observations,
+        rng_key, linear_regression, kernel, num_chains=2, **observations,
     )
     trace = sampler.run(num_samples=3000)
 

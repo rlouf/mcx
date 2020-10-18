@@ -155,10 +155,7 @@ def stan_hmc_warmup(
         )
 
         warmup_state = jax.lax.cond(
-            is_middle_window_end,
-            second_stage_final,
-            lambda x: x,
-            warmup_state,
+            is_middle_window_end, second_stage_final, lambda x: x, warmup_state,
         )
 
         return chain_state, warmup_state, chain_info

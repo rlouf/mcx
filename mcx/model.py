@@ -340,9 +340,7 @@ def sample_forward(rng_key, model: model, num_samples=1, **kwargs) -> Dict:
                 sampler_args += (value,)
                 in_axes += (None,)
         except KeyError:
-            raise AttributeError(
-                f"You need to specify the value of the variable {arg}"
-            )
+            raise AttributeError(f"You need to specify the value of the variable {arg}")
 
     for kwarg in model_kwargs:
         if kwarg in kwargs:

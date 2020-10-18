@@ -186,9 +186,7 @@ class GraphicalModel(nx.DiGraph):
         # model definitions.
         # The returned variable of the model being merged is rename
         # to the variable being assigned in the current model.
-        mapping = {
-            name: name + f"_{model_graph.name}" for name in model_graph.nodes
-        }
+        mapping = {name: name + f"_{model_graph.name}" for name in model_graph.nodes}
         mapping.update({name_returned: var_name})
         model_graph = nx.relabel_nodes(model_graph, mapping)
 

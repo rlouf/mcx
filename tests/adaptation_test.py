@@ -27,22 +27,12 @@ def test_find_reasonable_step_size():
 
     # Test that the algorithm actually does something
     epsilon_1 = find_reasonable_step_size(
-        rng_key,
-        kernel_generator,
-        init_state,
-        inv_mass_matrix,
-        1.0,
-        0.95,
+        rng_key, kernel_generator, init_state, inv_mass_matrix, 1.0, 0.95,
     )
     assert epsilon_1 != 1.0
 
     # Different target acceptance rate
     epsilon_3 = find_reasonable_step_size(
-        rng_key,
-        kernel_generator,
-        init_state,
-        inv_mass_matrix,
-        1.0,
-        0.05,
+        rng_key, kernel_generator, init_state, inv_mass_matrix, 1.0, 0.05,
     )
     assert epsilon_3 != epsilon_1

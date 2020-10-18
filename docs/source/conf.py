@@ -12,14 +12,15 @@
 #
 import os
 import sys
-sys.path.insert(0, os.path.abspath('../..'))
+
+sys.path.insert(0, os.path.abspath("../.."))
 
 
 # -- Project information -----------------------------------------------------
 
-project = 'mcx'
-copyright = '2020, Rémi Louf'
-author = 'Rémi Louf'
+project = "mcx"
+copyright = "2020, Rémi Louf"
+author = "Rémi Louf"
 
 
 # -- General configuration ---------------------------------------------------
@@ -28,16 +29,16 @@ author = 'Rémi Louf'
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
 extensions = [
-    'sphinx.ext.autodoc',
-    'sphinx.ext.napoleon',
-    'sphinx.ext.githubpages',
-    'sphinx.ext.mathjax',
+    "sphinx.ext.autodoc",
+    "sphinx.ext.napoleon",
+    "sphinx.ext.githubpages",
+    "sphinx.ext.mathjax",
 ]
 
 # Add any paths that contain templates here, relative to this directory.
-templates_path = ['_templates']
+templates_path = ["_templates"]
 
-pygments_style = 'nord'
+pygments_style = "nord"
 
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
@@ -50,24 +51,24 @@ exclude_patterns = []
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
 #
-html_theme = 'alabaster'
+html_theme = "alabaster"
 
 html_theme_options = {
-    'description': "MCX (pronounced /miks'/) is a python probabilistic programming library based on source code transformation.",
-    'show_powered_by': False,
-    'github_user': 'rlouf',
-    'github_repo': 'mcx',
-    'github_banner': True,
-    'show_related': False,
-    'github_button': True,
-    'github_type': 'star',
-    'github_count': False,
-    'note_bg': '#FFF59C',
-    'pre_bg': '#3B4252',
-    'page_width': 1140,
+    "description": "MCX (pronounced /miks'/) is a python probabilistic programming library based on source code transformation.",
+    "show_powered_by": False,
+    "github_user": "rlouf",
+    "github_repo": "mcx",
+    "github_banner": True,
+    "show_related": False,
+    "github_button": True,
+    "github_type": "star",
+    "github_count": False,
+    "note_bg": "#FFF59C",
+    "pre_bg": "#3B4252",
+    "page_width": 1140,
 }
 
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
-html_static_path = ['_static']
+html_static_path = ["_static"]

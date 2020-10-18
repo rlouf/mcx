@@ -119,10 +119,7 @@ class Distribution(ABC):
     def __str__(self):
         """User-friendly representation of the probability distribution."""
         constraints_str = "\n  ".join(
-            [
-                f"{key}: {value!s}"
-                for key, value in self.params_constraints.items()
-            ]
+            [f"{key}: {value!s}" for key, value in self.params_constraints.items()]
         )
         support_str = str(self.support)
         return (

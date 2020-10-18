@@ -198,9 +198,7 @@ class HMC:
         return build_kernel
 
     def make_trace(
-        self,
-        chain: Tuple[HMCState, HMCInfo],
-        unravel_fn: Callable,
+        self, chain: Tuple[HMCState, HMCInfo], unravel_fn: Callable,
     ) -> Tuple[Dict, Dict]:
         """Translate the raw chain to a format that `Trace` understands.
 
@@ -251,9 +249,7 @@ class HMC:
         return samples, sampling_info
 
     def make_warmup_trace(
-        self,
-        chain: Tuple[HMCState, StanWarmupState, HMCInfo],
-        unravel_fn: Callable,
+        self, chain: Tuple[HMCState, StanWarmupState, HMCInfo], unravel_fn: Callable,
     ) -> Tuple[Dict, Dict, Dict]:
         """Translate the Warmup chains to a format `Trace` can understand.
 
