@@ -1,6 +1,5 @@
 """Sampling kernels.
 """
-from functools import partial
 from typing import Callable, NamedTuple, Tuple
 
 import jax
