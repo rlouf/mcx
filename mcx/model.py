@@ -5,7 +5,7 @@ from typing import Any, Callable, Dict, List, Tuple, Union
 import jax
 import numpy
 
-from mcx import core
+import mcx.core as core
 from mcx.distributions import Distribution
 
 __all__ = ["model", "sample_forward", "seed"]
