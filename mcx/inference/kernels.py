@@ -9,7 +9,7 @@ import jax.numpy as np
 from mcx.inference.integrators import ProposalInfo, ProposalState, Proposer
 from mcx.inference.metrics import KineticEnergy, MomentumGenerator
 
-__all__ = ["HMCState", "HMCInfo", "hmc_init", "hmc_kernel", "rwm_kernel"]
+__all__ = ["HMCState", "HMCInfo", "hmc_kernel", "rwm_kernel"]
 
 
 # ----------------------------------------
@@ -37,15 +37,6 @@ class HMCInfo(NamedTuple):
     energy: float
     proposal: ProposalState
     proposal_info: ProposalInfo
-
-
-@partial(jax.jit, static_argnums=(1,))
-def hmc_init(position: np.DeviceArray, potential_value_and_grad: Callable) -> HMCState:
-    """Compute the initial state of the HMC algorithm from the initial position
-    and the log-likelihood.
-    """
-    potential_energy, potential_energy_grad = potential_value_and_grad(position)
-    return HMCState(position, potential_energy, potential_energy_grad)
 
 
 def hmc_kernel(

@@ -7,7 +7,7 @@ from jax import numpy as np
 from tqdm import tqdm
 
 from mcx.inference.integrators import hmc_proposal, velocity_verlet
-from mcx.inference.kernels import HMCInfo, HMCState, hmc_init, hmc_kernel
+from mcx.inference.kernels import HMCInfo, HMCState, hmc_kernel
 from mcx.inference.metrics import gaussian_euclidean_metric
 from mcx.inference.warmup import StanWarmupState, stan_hmc_warmup, stan_warmup_schedule
 
@@ -59,10 +59,14 @@ class HMC:
 
     def states(self, positions, loglikelihood):
         potential = self._to_potential(loglikelihood)
-        potential_val_and_grad = jax.value_and_grad(potential)
-        states = jax.vmap(hmc_init, in_axes=(0, None))(
-            positions, potential_val_and_grad
-        )
+        potential_value_and_grad = jax.value_and_grad(potential)
+
+        @jax.jit
+        def make_state(position):
+            potential_energy, potential_energy_grad = potential_value_and_grad(position)
+            return HMCState(position, potential_energy, potential_energy_grad)
+
+        states = jax.vmap(make_state)(positions)
         return states
 
     def warmup(
