@@ -2,7 +2,7 @@ import jax
 from jax import numpy as np
 
 from mcx.inference.integrators import hmc_proposal, velocity_verlet
-from mcx.inference.kernels import hmc_init, hmc_kernel
+from mcx.inference.kernels import HMCState, hmc_kernel
 from mcx.inference.metrics import gaussian_euclidean_metric
 from mcx.inference.warmup.step_size_adaptation import find_reasonable_step_size
 
@@ -16,7 +16,11 @@ def test_find_reasonable_step_size():
     inv_mass_matrix = np.array([1.0])
 
     init_position = np.array([3.0])
-    init_state = hmc_init(init_position, jax.value_and_grad(potential_fn))
+
+    potential_energy, potential_energy_grad = jax.value_and_grad(potential_fn)(
+        init_position
+    )
+    init_state = HMCState(init_position, potential_energy, potential_energy_grad)
 
     def kernel_generator(step_size, inv_mass_matrix):
         momentum_generator, kinetic_energy = gaussian_euclidean_metric(inv_mass_matrix)
