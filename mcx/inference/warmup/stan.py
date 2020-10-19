@@ -77,9 +77,9 @@ def stan_hmc_warmup(
         Function that returns the step size and mass matrix given a warmup state.
 
     """
-    first_stage_init, first_stage_update = stan_first_stage(kernel_factory)
+    first_stage_init, first_stage_update = stan_first_stage()
     second_stage_init, second_stage_update, second_stage_final = stan_second_stage(
-        kernel_factory, is_mass_matrix_diagonal
+        is_mass_matrix_diagonal
     )
 
     def init(
@@ -148,10 +148,10 @@ def stan_hmc_warmup(
 
         chain_state, chain_info = kernel(rng_key, chain_state)
 
-        chain_state, warmup_state, chain_info = jax.lax.switch(
+        warmup_state = jax.lax.switch(
             stage,
             (first_stage_update, second_stage_update),
-            (rng_key, chain_state, warmup_state),
+            (rng_key, chain_state, chain_info, warmup_state),
         )
 
         warmup_state = jax.lax.cond(
@@ -172,7 +172,7 @@ def stan_hmc_warmup(
     return init, update, final
 
 
-def stan_first_stage(kernel_factory: Callable) -> Tuple[Callable, Callable]:
+def stan_first_stage() -> Tuple[Callable, Callable]:
     """First stage of the Stan warmup. The step size is adapted using
     Nesterov's dual averaging algorithms while the mass matrix stays the same.
 
@@ -197,28 +197,22 @@ def stan_first_stage(kernel_factory: Callable) -> Tuple[Callable, Callable]:
 
     @jax.jit
     def update(
-        state: Tuple[jax.random.PRNGKey, HMCState, StanWarmupState]
-    ) -> Tuple[HMCState, StanWarmupState, HMCInfo]:
-        rng_key, chain_state, warmup_state = state
-        step_size = np.exp(warmup_state.da_state.log_step_size)
-        inverse_mass_matrix = warmup_state.mm_state.inverse_mass_matrix
-
-        kernel = kernel_factory(step_size, inverse_mass_matrix)
-
-        chain_state, chain_info = kernel(rng_key, chain_state)
+        state: Tuple[jax.random.PRNGKey, HMCState, HMCInfo, StanWarmupState]
+    ) -> StanWarmupState:
+        rng_key, chain_state, chain_info, warmup_state = state
 
         new_da_state = da_update(
             chain_info.acceptance_probability, warmup_state.da_state
         )
         new_warmup_state = StanWarmupState(new_da_state, warmup_state.mm_state)
 
-        return chain_state, new_warmup_state, chain_info
+        return new_warmup_state
 
     return init, update
 
 
 def stan_second_stage(
-    kernel_factory: Callable, is_mass_matrix_diagonal: bool = True
+    is_mass_matrix_diagonal: bool = True,
 ) -> Tuple[Callable, Callable, Callable]:
     """Slow stage of the Stan warmup.
 
@@ -253,8 +247,8 @@ def stan_second_stage(
 
     @jax.jit
     def update(
-        state: Tuple[jax.random.PRNGKey, HMCState, StanWarmupState]
-    ) -> Tuple[HMCState, StanWarmupState, HMCInfo]:
+        state: Tuple[jax.random.PRNGKey, HMCState, HMCInfo, StanWarmupState]
+    ) -> StanWarmupState:
         """Move the warmup by one state when in a slow adaptation interval.
 
         Mass matrix adaptation and dual averaging states are both
@@ -262,20 +256,15 @@ def stan_second_stage(
         reference manual.
 
         """
-        rng_key, chain_state, warmup_state = state
+        rng_key, chain_state, chain_info, warmup_state = state
 
-        step_size = np.exp(warmup_state.da_state.log_step_size)
-        inverse_mass_matrix = warmup_state.mm_state.inverse_mass_matrix
-        kernel = kernel_factory(step_size, inverse_mass_matrix)
-
-        chain_state, chain_info = kernel(rng_key, chain_state)
         new_da_state = da_update(
             chain_info.acceptance_probability, warmup_state.da_state
         )
         new_mm_state = mm_update(warmup_state.mm_state, chain_state.position)
         new_warmup_state = StanWarmupState(new_da_state, new_mm_state)
 
-        return chain_state, new_warmup_state, chain_info
+        return new_warmup_state
 
     @jax.jit
     def final(warmup_state: StanWarmupState) -> StanWarmupState:
