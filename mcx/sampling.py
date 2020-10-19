@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Callable, Iterator, Tuple
 
 import jax
@@ -381,6 +382,10 @@ def sample_scan(
     The last state of the chain as well as the full chain.
 
     """
+    num_samples = rng_keys.shape[0]
+
+    print(f"Draw {num_samples:,} samples from {num_chains:,} chains.", end=" ")
+    start = datetime.now()
 
     @jax.jit
     def update_scan(carry, key):
@@ -391,6 +396,10 @@ def sample_scan(
 
     last_state, chain = jax.lax.scan(update_scan, (init_state, parameters), rng_keys)
     last_chain_state = last_state[0]
+
+    mcx.jax.wait_until_computed(chain)
+    mcx.jax.wait_until_computed(last_state)
+    print(f"Done in {(datetime.now()-start).total_seconds():.1f} s.")
 
     return last_chain_state, chain
 
