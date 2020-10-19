@@ -119,7 +119,7 @@ def dual_averaging(
         mu: float = np.log(10 * inital_step_size)
         step = 1
         avg_error: float = 0.0
-        log_step_size: float = 0.0
+        log_step_size: float = np.log(inital_step_size)
         log_step_size_avg: float = 0.0
         return DualAveragingState(log_step_size, log_step_size_avg, step, avg_error, mu)
 
