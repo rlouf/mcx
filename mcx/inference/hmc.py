@@ -24,7 +24,7 @@ class HMC:
         num_integration_steps: int = 10,
         step_size: float = None,
         inverse_mass_matrix: np.DeviceArray = None,
-        is_mass_matrix_diagonal: bool = False,
+        is_mass_matrix_diagonal: bool = True,
         integrator: Callable = velocity_verlet,
     ):
         self.needs_warmup = True
@@ -276,9 +276,9 @@ class HMC:
         samples, sampling_info = self.make_trace((chain_state, chain_info), unravel_fn)
 
         warmup_info_dict = {
-            "log_step_size": warmup_info.da_state.log_step_size,
-            "log_step_size_avg": warmup_info.da_state.log_step_size_avg,
-            "inverse_mass_matrix": warmup_info.mm_state.inverse_mass_matrix,
+            "log_step_size": warmup_info.da_state.log_step_size.T,  # type: ignore
+            "log_step_size_avg": warmup_info.da_state.log_step_size_avg.T,  # type: ignore
+            "inverse_mass_matrix": warmup_info.mm_state.inverse_mass_matrix.T,  # type: ignore
         }
 
         return samples, sampling_info, warmup_info_dict
