@@ -11,12 +11,12 @@ from mcx.inference.warmup.mass_matrix_adaptation import (
 
 
 class GelmanRubinState(NamedTuple):
-    within_welford: WelfordAlgorithmState
+    w_state: WelfordAlgorithmState
     rhat: float
 
 
-def gelman_rubin():
-    """Compute the Gelman-Rubin diagnostic."""
+def online_gelman_rubin():
+    """Online estimation of the Gelman-Rubin diagnostic."""
 
     w_init, w_update, w_covariance = welford_algorithm(True)
 
@@ -39,3 +39,7 @@ def gelman_rubin():
         return GelmanRubinState(within_state, rhat)
 
     return init, update
+
+
+def split_gelman_rubin():
+    pass
