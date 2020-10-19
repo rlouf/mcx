@@ -477,9 +477,7 @@ def sample_loop(
 
     with tqdm(rng_keys, unit="samples") as progress:
         progress.set_description(
-            "Collecting {:,} samples across {:,} chains".format(
-                num_samples, num_chains
-            ),
+            f"Collecting {num_samples:,} samples across {num_chains:,} chains",
             refresh=False,
         )
         chain = []
@@ -515,9 +513,8 @@ def validate_conditioning_variables(model, **kwargs):
         unknown_vars = list(conditioning_vars.difference(available_vars))
         unknown_str = ", ".join(unknown_vars)
         raise AttributeError(
-            "You passed a value for {} which are neither random variables nor arguments to the model definition.".format(
-                unknown_str
-            )
+            f"You passed a value for {unknown_str} which are neither random variables "
+            "nor arguments to the model definition."
         )
 
     # The user must provide a value for all of the model definition's
@@ -527,9 +524,7 @@ def validate_conditioning_variables(model, **kwargs):
         missing_vars = model_posargs.difference(conditioning_vars)
         missing_str = ", ".join(missing_vars)
         raise AttributeError(
-            "You need to specify a value for the following arguments: {}".format(
-                missing_str
-            )
+            f"You need to specify a value for the following arguments: {missing_str}"
         )
 
 

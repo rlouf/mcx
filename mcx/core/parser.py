@@ -54,7 +54,7 @@ class ModelParser(ast.NodeVisitor):
 
     def generic_visit(self, node):
         node_type = type(node).__name__
-        raise SyntaxError("Method to process {} not specified".format(node_type))
+        raise SyntaxError(f"Method to process {node_type} not specified")
 
     def visit_Module(self, node: ast.Module) -> GraphicalModel:
         """Parsing the source code into an Abstract Syntax Tree returns an
@@ -172,9 +172,8 @@ class ModelParser(ast.NodeVisitor):
                     self.model.add_variable(var_name, value)
         else:
             raise SyntaxError(
-                "Require a name on the left-hand-side of a deterministic variable assignment, got {}".format(
-                    target
-                )
+                "Require a name on the left-hand-side of a deterministic "
+                f"variable assignment, got {target}"
             )
 
     def visit_Expr(self, node: ast.Expr) -> None:
@@ -203,15 +202,13 @@ class ModelParser(ast.NodeVisitor):
         """
         if not isinstance(node.left, ast.Name):
             raise SyntaxError(
-                "You need a variable name on the left of a random variable assignment, got {}".format(
-                    node.left
-                )
+                "You need a variable name on the left of a random variable assignment"
+                f", got {node.left}"
             )
         if not isinstance(node.comparators[0], ast.Call):
             raise SyntaxError(
-                "Statements on the right of the `<~` operator must be distribution initialization, got {}".format(
-                    node.comparators[0]
-                )
+                "Statements on the right of the `<~` operator must be distribution "
+                f"initialization, got {node.comparators[0]}"
             )
         name = node.left.id
         distribution = node.comparators[0]
@@ -255,14 +252,16 @@ class ModelParser(ast.NodeVisitor):
                 arguments.append(arg.n)
             else:
                 raise SyntaxError(
-                    "Expected a random variable of a constant to initialize distribution, got {} instead.\n"
-                    "Maybe you are trying to initialize a distribution directly, or call a function inside the "
-                    "distribution initialization. While this would be a perfectly legitimate move, it is currently "
+                    "Expected a random variable of a constant to initialize "
+                    f"distribution, got {astor.code_gen.to_source(arg)} instead.\n"
+                    "Maybe you are trying to initialize a distribution directly, "
+                    "or call a function inside the distribution initialization. "
+                    "While this would be a perfectly legitimate move, it is currently "
                     "not supported in mcx. Use an intermediate variable instead: \n\n"
-                    "Do not do `x <~ Normal(Normal(0, 1), 1)` or `x <~ Normal(my_function(10), 1)`, instead do "
-                    " `y <~ Normal(0, 1) & x <~ Normal(y, 1)` and `y = my_function(10) & x <~ Normal(y, 1)`".format(
-                        astor.code_gen.to_source(arg)
-                    )
+                    "Do not do `x <~ Normal(Normal(0, 1), 1)` or "
+                    "`x <~ Normal(my_function(10), 1)`, instead do "
+                    "`y <~ Normal(0, 1) & x <~ Normal(y, 1)` and "
+                    "`y = my_function(10) & x <~ Normal(y, 1)`"
                 )
         return arguments
 
@@ -284,9 +283,8 @@ class ModelParser(ast.NodeVisitor):
             self.model.mark_as_returned(node.value.id)
         else:
             raise SyntaxError(
-                "Expected the generative model to return a (random) variable or a tuple of (random) variables, got {}".format(
-                    node.value
-                )
+                "Expected the generative model to return a (random) variable or a tuple"
+                f"of (random) variables, got {node.value}"
             )
 
 
@@ -357,7 +355,6 @@ def read_object_name(node: ast.AST, name: Optional[List[str]] = None) -> str:
         return read_object_name(new_node, name)
     else:
         raise ValueError(
-            "Error while getting the right-hand-side object's name: expected `ast.Name` or `ast.Attribute`, got {}".format(
-                node
-            )
+            "Error while getting the right-hand-side object's name: expected `ast.Name`"
+            f"or `ast.Attribute`, got {node}"
         )
