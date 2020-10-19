@@ -203,7 +203,7 @@ def welford_algorithm(is_diagonal_matrix: bool) -> Tuple[Callable, Callable, Cal
         if is_diagonal_matrix:
             new_m2 = m2 + delta * updated_delta
         else:
-            new_m2 = m2 + np.outer(delta, updated_delta)
+            new_m2 = m2 + np.outer(updated_delta, delta)
 
         return WelfordAlgorithmState(mean, new_m2, sample_size)
 

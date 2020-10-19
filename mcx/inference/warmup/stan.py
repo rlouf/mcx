@@ -222,9 +222,6 @@ def stan_second_stage(
 
     Parameters
     ----------
-    kernel_factory
-        A function that takes the step size and the mass matrix as inputs to return
-        a HMC transition kernel.
     is_mass_matrix_diagonal
         Whether we want a diagonal mass matrix. Passed to the mass matrix adapation
         algorithm.
@@ -237,7 +234,7 @@ def stan_second_stage(
 
     """
     mm_init, mm_update, mm_final = mass_matrix_adaptation(is_mass_matrix_diagonal)
-    _, da_update = dual_averaging()
+    da_init, da_update = dual_averaging()
 
     def init(chain_state: HMCState) -> MassMatrixAdaptationState:
         """Initialize the mass matrix adaptation algorithm."""
@@ -270,12 +267,13 @@ def stan_second_stage(
     def final(warmup_state: StanWarmupState) -> StanWarmupState:
         """Update the parameters at the end of a slow adaptation window.
 
-        This consists essentially in computing the mass matrix from the current
-        state of the mass matrix algorithm.
+        We compute the value of the mass matrix and reset the mass matrix
+        adapation's internal state since middle windows are "memoryless".
 
         """
         new_mm_state = mm_final(warmup_state.mm_state)
-        new_warmup_state = StanWarmupState(warmup_state.da_state, new_mm_state)
+        new_da_state = da_init(np.exp(warmup_state.da_state.log_step_size_avg))
+        new_warmup_state = StanWarmupState(new_da_state, new_mm_state)
 
         return new_warmup_state
 
