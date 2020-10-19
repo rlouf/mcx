@@ -4,12 +4,22 @@ from collections import namedtuple
 import jax.lax as lax
 import jax.numpy as np
 from jax.dtypes import canonicalize_dtype
-from jax.tree_util import tree_flatten, tree_map, tree_unflatten
+from jax.tree_util import tree_flatten, tree_leaves, tree_map, tree_unflatten
 
-__all__ = ["ravel_pytree"]
+__all__ = ["ravel_pytree", "wait_until_computed"]
 
 
 pytree_metadata = namedtuple("pytree_metadata", ["flat", "shape", "size", "dtype"])
+
+
+def wait_until_computed(x):
+    """Wait until all the elements of x have been computed.
+
+    This is useful to display accurate computation times when using
+    lax.scan, for instance.
+    """
+    for leaf in tree_leaves(x):
+        leaf.block_until_ready()
 
 
 # Sourced from numpyro.distributions.utils.py
