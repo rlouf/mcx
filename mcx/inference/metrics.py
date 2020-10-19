@@ -4,7 +4,7 @@ from typing import Callable, Tuple
 
 import jax
 import jax.numpy as np
-from jax import scipy
+import jax.scipy as scipy
 
 __all__ = ["gaussian_euclidean_metric"]
 
@@ -49,7 +49,7 @@ def gaussian_euclidean_metric(
 
     elif ndim == 2:
 
-        mass_matrix_sqrt = cholesky_triangular(inverse_mass_matrix)
+        mass_matrix_sqrt = cholesky_of_inverse(inverse_mass_matrix)
 
         @jax.jit
         def momentum_generator(rng_key: jax.random.PRNGKey) -> np.DeviceArray:
@@ -66,15 +66,19 @@ def gaussian_euclidean_metric(
 
     else:
         raise ValueError(
-            "The mass matrix has the wrong number of dimensions: "
-            + "expected 1 or 2, got {}.".format(np.ndim(inverse_mass_matrix))
+            "The mass matrix has the wrong number of dimensions:"
+            f" expected 1 or 2, got {np.dim(inverse_mass_matrix)}."
         )
 
 
 # Sourced from numpyro.distributions.utils.py
 # Copyright Contributors to the NumPyro project.
 # SPDX-License-Identifier: Apache-2.0
-def cholesky_triangular(matrix: np.DeviceArray) -> np.DeviceArray:
+def cholesky_of_inverse(matrix):
+    # This formulation only takes the inverse of a triangular matrix
+    # which is more numerically stable.
+    # Refer to:
+    # https://nbviewer.jupyter.org/gist/fehiepsi/5ef8e09e61604f10607380467eb82006#Precision-to-scale_tril
     tril_inv = np.swapaxes(
         np.linalg.cholesky(matrix[..., ::-1, ::-1])[..., ::-1, ::-1], -2, -1
     )
