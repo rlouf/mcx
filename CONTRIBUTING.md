@@ -24,6 +24,8 @@ Not that we have anything against it, but one of this library's goal is to see h
 * Times series
 * New samplers. Specifically around managing discrete variables, sequential sampling and schemes that use the Hessian.
 
+*Please open an issue to discuss the feature and its design before opening a PR*
+
 ## Improving code quality
 
 We try to live by the lessons of "Clean Code" or "Refactoring", but as busy humans, we sometimes fail. Any contribution, even just a name change in the internals, which makes the code easier to read and maintain is welcome. We think that nitpicking is a good thing.
