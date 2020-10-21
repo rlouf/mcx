@@ -32,17 +32,17 @@ slightly.
 ```python
 from jax import numpy as np
 import mcx
-import mcx.distributions as dist
+from mcx.distributions import Exponential, Normal
 
 rng_key = jax.random.PRNGKey(0)
 observations = {'x': x_data, 'predictions': y_data, 'lmbda': 3.}
 
 @mcx.model
 def linear_regression(x, lmbda=1.):
-    scale <~ dist.Exponential(lmbda)
-    coefs <~ dist.Normal(np.zeros(np.shape(x)[-1]))
+    scale <~ Exponential(lmbda)
+    coefs <~ Normal(np.zeros(np.shape(x)[-1]))
     y = np.dot(x, coefs)
-    predictions <~ dist.Normal(y, scale)
+    predictions <~ Normal(y, scale)
     return predictions
 
 kernel = mcx.HMC(100)
