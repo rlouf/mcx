@@ -3,7 +3,6 @@ from types import FunctionType
 from typing import Dict, List, NamedTuple, Union
 
 import astor
-import jax
 import networkx as nx
 
 import mcx
@@ -371,14 +370,13 @@ def compile_to_sampler(graph, namespace) -> Artifact:
     sampler = compile(sampler_ast, filename="<ast>", mode="exec")
     exec(sampler, namespace)
     fn = namespace[fn_name]
-    fn = jax.jit(fn, static_argnums=(0, 1))
 
     returned_names = [arg.id for arg in returned_vars]
 
     return Artifact(fn, returned_names, fn_name, astor.code_gen.to_source(sampler_ast))
 
 
-def compile_to_forward_sampler(graph, namespace, jit=False) -> Artifact:
+def compile_to_prior_sampler(graph, namespace, jit=False) -> Artifact:
     """Compile the model in a function that generates prior samples from the
     model's generated variables.
 
@@ -405,7 +403,6 @@ def compile_to_forward_sampler(graph, namespace, jit=False) -> Artifact:
 
     args = (
         [ast.arg(arg="rng_key", annotation=None)]
-        + [ast.arg(arg="sample_shape", annotation=None)]
         + [
             node[1]["content"].to_sampler()
             for node in graph.nodes(data=True)
