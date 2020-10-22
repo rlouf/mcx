@@ -111,9 +111,11 @@ class sampler(object):
         A sampler object.
 
         """
-        print("sampler: build the loglikelihood")
         validate_conditioning_variables(model, **observations)
-        loglikelihood = build_loglikelihood(model, **observations)
+
+        print("sampler: build the loglikelihood")
+        transformed_model = evaluator.transform(model)
+        loglikelihood = build_loglikelihood(transformed_model, **observations)
         loglikelihood_contributions = build_loglikelihoods(model, **observations)
 
         print("sampler: find the initial states")
