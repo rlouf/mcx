@@ -57,6 +57,22 @@ class HMC:
             num_integration_steps, step_size, inverse_mass_matrix
         )
 
+    def transform(self, model: Callable):
+        """Adapts the model for the HMC evaluator.
+
+        HMC only performs well when the random variables are defined on the
+        real line. This function thus transforms the graph using
+        constrained-unconstrained bijectors.
+
+        Like with any evaluator we look for conjugacy relationships and
+        simplify them.
+
+        In the future this could be used to automatically transform
+        non-centered models.
+
+        """
+        return model
+
     def states(self, positions, loglikelihood):
         potential = self._to_potential(loglikelihood)
         potential_value_and_grad = jax.value_and_grad(potential)
