@@ -3,12 +3,14 @@ import functools
 from typing import Any, Callable, Dict, List, Tuple, Union
 
 import jax
+import jax.numpy as np
 import numpy
 
 import mcx.core as core
 from mcx.distributions import Distribution
+from mcx.trace import Trace
 
-__all__ = ["model", "sample_forward", "seed"]
+__all__ = ["model", "forward_sampler", "predict", "seed"]
 
 
 class model(Distribution):
@@ -182,10 +184,9 @@ class model(Distribution):
         """
         _, self.rng_key = jax.random.split(self.rng_key)
 
-        forward_sampler, _, _, _ = core.compile_to_forward_sampler(
-            self.graph, self.namespace
-        )
-        samples = forward_sampler(self.rng_key, (1,), *args)
+        forward_sampler, _, _, _ = core.compile_to_sampler(self.graph, self.namespace)
+        samples = forward_sampler(self.rng_key, *args)
+        print("Forward pass through the model")
         return numpy.asarray(samples).squeeze()
 
     def __getitem__(self, name: str):
@@ -238,6 +239,14 @@ class model(Distribution):
         new_model = model(self.model_fn)
         new_model.graph = conditionned_graph
         return new_model
+
+    def forward(self, **kwargs):
+        return forward_sampler(self.rng_key, self, **kwargs)
+
+    @property
+    def forward_src(self) -> str:
+        artifact = core.compile_to_sampler(self.graph, self.namespace)
+        return artifact.fn_source
 
     def sample(self, *args, sample_shape=(1000,)) -> jax.numpy.DeviceArray:
         """Return forward samples from the distribution."""
@@ -313,10 +322,80 @@ class model(Distribution):
         return self.graph.posterior_variables
 
 
-# Convenience functions
+#
+# BETER API
+# mcx.predict(rng_key, model, trace)(data)
+# mcx.predict(rng_key, model)(data)
+#
 
 
-def sample_forward(rng_key, model: model, num_samples=1, **kwargs) -> Dict:
+def predict(rng_key, model, trace=None):
+    """Provide a unified interface for prior and posterior predictive sampling."""
+    if isinstance(trace, Trace):
+        return posterior_predictive(rng_key, model, trace)
+    else:
+        return prior_predictive(rng_key, model)
+
+
+class posterior_predictive:
+    def __init__(self, rng_key, model, trace):
+        pass
+
+
+class prior_predictive:
+    def __init__(self, rng_key, model):
+        artifact = core.compile_to_prior_sampler(model.graph, model.namespace)
+        sampler_fn = artifact.compiled_fn
+        sampler_fn = jax.jit(sampler_fn)
+
+        self.model = model
+        self.sampler_fn = sampler_fn
+        self.rng_key = rng_key
+
+    def __call__(self, num_samples=10, **observations):
+        """Generate samples from the prior predictive distribution.
+
+        Returns
+        -------
+        samples
+            A DeviceArray of shape (data_shape, num_samples) that contains samples from
+            the models' prior predictive distribution.
+        """
+        model_posargs = self.model.posargs
+        model_kwargs = tuple(set(self.model.arguments).difference(self.model.posargs))
+
+        keys = jax.random.split(self.rng_key, num_samples)
+        sampler_args: Tuple[Any, ...] = (keys,)
+        in_axes: Tuple[int, ...] = (0,)
+
+        for arg in model_posargs:
+            try:
+                value = observations[arg]
+                try:
+                    sampler_args += (np.atleast_1d(value),)
+                except RuntimeError:
+                    sampler_args += (value,)
+                in_axes += (None,)
+            except KeyError:
+                raise AttributeError(
+                    "You need to specify the value of the variable {}".format(arg)
+                )
+
+        for kwarg in model_kwargs:
+            if kwarg in observations:
+                value = observations[kwarg]
+            else:
+                value = self.model.nodes[kwarg]["content"].default_value.n
+            sampler_args += (np.atleast_1d(value),)
+            in_axes += (None,)
+
+        print(f"Generating {num_samples:,} samples from the prior distribution.")
+        samples = jax.vmap(self.sampler_fn, in_axes=in_axes, out_axes=1)(*sampler_args)
+
+        return samples.squeeze()
+
+
+def forward_sampler(rng_key, model: model, num_samples=1, **kwargs) -> Dict:
     """Returns forward samples from the model.
 
     The samples are returned in a dictionary, with the names of
@@ -332,13 +411,11 @@ def sample_forward(rng_key, model: model, num_samples=1, **kwargs) -> Dict:
     for arg in model_posargs:
         try:
             value = kwargs[arg]
-            if isinstance(value, jax.numpy.DeviceArray):
-                idx = jax.random.randint(rng_key, (num_samples,), 0, value.shape[0])
-                sampler_args += (value[idx],)
-                in_axes += (0,)
-            else:
+            try:
+                sampler_args += (np.atleast_1d(value),)
+            except RuntimeError:
                 sampler_args += (value,)
-                in_axes += (None,)
+            in_axes += (None,)
         except KeyError:
             raise AttributeError(f"You need to specify the value of the variable {arg}")
 
@@ -350,12 +427,10 @@ def sample_forward(rng_key, model: model, num_samples=1, **kwargs) -> Dict:
         sampler_args += (value,)
         in_axes += (None,)
 
-    out_axes = (0,) * len(model.variables)
-
     artifact = core.compile_to_sampler(model.graph, model.namespace)
     sampler_fn = artifact.compiled_fn
     sampler_fn = jax.jit(sampler_fn)
-    samples = jax.vmap(sampler_fn, in_axes=in_axes, out_axes=out_axes)(*sampler_args)
+    samples = jax.vmap(sampler_fn, in_axes=in_axes)(*sampler_args)
 
     trace = {
         arg: numpy.asarray(arg_samples).T.squeeze()
