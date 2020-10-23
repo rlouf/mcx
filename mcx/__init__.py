@@ -1,5 +1,6 @@
 from mcx.inference.hmc import HMC
-from mcx.model import forward_sampler, model, predict
+from mcx.model import forward_sampler, model
+from mcx.predict import predict
 from mcx.sample import sampler
 from mcx.trace import Trace
 
