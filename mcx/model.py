@@ -358,6 +358,7 @@ class posterior_predictive:
     def __call__(self, **observations):
         model_posargs = self.model.posargs
         model_randvars = self.model.posterior_variables
+        model_returnedvars = self.model.returned_variables
         model_kwargs = tuple(set(self.model.arguments).difference(self.model.posargs))
 
         sampler_args = (self.rng_key,)
@@ -405,9 +406,14 @@ class posterior_predictive:
             in_axes += (None,)
             in_axes_chain += (None,)
 
+        if len(model_returnedvars) == 1:
+            out_axes = 1
+        else:
+            out_axes = (1,) * len(model_returnedvars)
+
         def samples_one_chain(*args):
             # out_axes is brittle, it is going to fail if more than 1 returned variable
-            return jax.vmap(self.sampler_fn, in_axes=in_axes, out_axes=1)(
+            return jax.vmap(self.sampler_fn, in_axes=in_axes, out_axes=out_axes)(
                 *args
             ).squeeze()
 
