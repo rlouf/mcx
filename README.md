@@ -42,8 +42,8 @@ def linear_regression(x, lmbda=1.):
     scale <~ Exponential(lmbda)
     coefs <~ Normal(np.zeros(np.shape(x)[-1]))
     y = np.dot(x, coefs)
-    predictions <~ Normal(y, scale)
-    return predictions
+    preds <~ Normal(y, scale)
+    return preds
 
 kernel = mcx.HMC(100)
 sampler = mcx.sampler(
