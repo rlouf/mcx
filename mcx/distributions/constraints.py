@@ -166,6 +166,14 @@ class _Real(Constraint):
         return np.isfinite(x)
 
 
+class _RealVector(Constraint):
+    def __str__(self):
+        return "a vector of real numbers"
+
+    def __call__(self, x):
+        return np.isfinite(x).all()
+
+
 class _Simplex(Constraint):
     def __str__(self):
         return "a vector of numbers that sums to one up to 1e-6 (probability simplex)"
@@ -175,14 +183,32 @@ class _Simplex(Constraint):
         return np.all(x > 0, axis=-1) & (x_sum <= 1) & (x_sum > 1 - 1e-6)
 
 
+class _SymmetricPositiveDefinite(Constraint):
+    def __init__(self):
+        pass
+
+    def __str__(self):
+        return "a definite positive matrix"
+
+    def __call__(self, x):
+        """A symmetric matrix is positive definite iff all of its eigenvalues are
+        positive i.e. if its smallest eigenvalue is positive.
+        """
+        is_symmetric = np.all(np.all(x == np.swapaxes(x, -2, -1), axis=-1), axis=-1)
+        is_positive_definite = np.linalg.eigh(x)[0][..., 0] > 0
+        return is_symmetric & is_positive_definite
+
+
 boolean = _Boolean()
 closed_interval = _ClosedInterval
 integer = _Integer()
 integer_interval = _IntegerInterval
 interval = _Interval
-positive_integer = _IntegerGreaterThan(0)
 positive = _GreaterThan(0.0)
+symmetric_positive_definite = _SymmetricPositiveDefinite
+positive_integer = _IntegerGreaterThan(0)
 probability = _Interval(0.0, 1.0)
 real = _Real()
+real_vector = _RealVector()
 simplex = _Simplex()
 strictly_positive = _StrictlyGreaterThan(0.0)
