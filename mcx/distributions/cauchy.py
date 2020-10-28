@@ -1,5 +1,5 @@
 from jax import numpy as np
-from jax import random
+from jax import random, scipy
 
 from mcx.distributions import constraints
 from mcx.distributions.distribution import Distribution
@@ -26,7 +26,4 @@ class Cauchy(Distribution):
 
     @constraints.limit_to_support
     def logpdf(self, x):
-        numerator = 2 * np.log(self.scale)
-        denominator = -np.log(np.pow(x - self.loc, 2) + np.pow(self.scale, 2))
-        normalization = -np.pi - self.scale
-        return numerator + denominator + normalization
+        return scipy.stats.cauchy.logpdf(x, self.loc, self.scale)
