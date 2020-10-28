@@ -200,10 +200,25 @@ Framework.” (2019).</p>
 <h2>Forward sampling<a class="headerlink" href="#forward-sampling" title="Permalink to this headline">¶</a></h2>
 <dl class="py function">
 <dt id="mcx.sample_forward">
-<code class="sig-prename descclassname">mcx.</code><code class="sig-name descname">sample_forward</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">rng_key</span></em>, <em class="sig-param"><span class="n">model</span><span class="p">:</span> <span class="n">mcx.model.model</span></em>, <em class="sig-param"><span class="n">num_samples</span><span class="o">=</span><span class="default_value">1</span></em>, <em class="sig-param"><span class="o">**</span><span class="n">kwargs</span></em><span class="sig-paren">)</span> &#x2192; Dict<a class="headerlink" href="#mcx.sample_forward" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">mcx.</code><code class="sig-name descname">sample_forward</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">rng_key</span><span class="p">:</span> <span class="n">jax.random.PRNGKey</span></em>, <em class="sig-param"><span class="n">model</span></em>, <em class="sig-param"><span class="n">num_samples</span><span class="p">:</span> <span class="n">int</span> <span class="o">=</span> <span class="default_value">1</span></em>, <em class="sig-param"><span class="o">**</span><span class="n">observations</span></em><span class="sig-paren">)</span> &#x2192; Dict<a class="headerlink" href="#mcx.sample_forward" title="Permalink to this definition">¶</a></dt>
 <dd><p>Returns forward samples from the model.</p>
-<p>The samples are returned in a dictionary, with the names of
-the variables as keys.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>rng_key</strong> – Key used by JAX’s random number generator.</p></li>
+<li><p><strong>model</strong> – The model from which we want to get forward samples.</p></li>
+<li><p><strong>num_samples</strong> – The number of forward samples we want to draw for each variable.</p></li>
+<li><p><strong>**observations</strong> – The values of the model’s input parameters.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p><em>A dictionary that maps all the (deterministic and random) variables defined</em></p></li>
+<li><p><em>in the model to samples from the forward prior distribution.</em></p></li>
+</ul>
+</p>
+</dd>
+</dl>
 </dd></dl>
 
 </div>
