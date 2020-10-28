@@ -240,6 +240,7 @@ class model(Distribution):
         return new_model
 
     def forward(self, **kwargs):
+        _, self.rng_key = jax.random.split(self.rng_key)
         return sample_forward(self.rng_key, self, **kwargs)
 
     @property

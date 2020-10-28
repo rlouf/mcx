@@ -1,8 +1,8 @@
 from typing import Any, Dict, Tuple, Union
 
 import jax
-from jax import numpy as np
 import numpy
+from jax import numpy as np
 
 import mcx.core as core
 from mcx.trace import Trace
