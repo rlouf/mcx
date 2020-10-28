@@ -5,10 +5,10 @@ from typing import Callable, NamedTuple, Tuple
 import jax
 import jax.numpy as np
 
-from mcx.inference.integrators import ProposalInfo, ProposalState, Proposer
 from mcx.inference.metrics import KineticEnergy, MomentumGenerator
+from mcx.inference.proposals import HMCProposalInfo, HMCProposalState, Proposer
 
-__all__ = ["HMCState", "HMCInfo", "hmc_kernel", "rwm_kernel"]
+__all__ = ["HMCState", "HMCInfo", "hmc_kernel", "RWMState", "RWMInfo", "rwm_kernel"]
 
 
 # ----------------------------------------
@@ -34,8 +34,8 @@ class HMCInfo(NamedTuple):
     is_accepted: bool
     is_divergent: bool
     energy: float
-    proposal: ProposalState
-    proposal_info: ProposalInfo
+    proposal: HMCProposalState
+    proposal_info: HMCProposalInfo
 
 
 def hmc_kernel(
@@ -129,7 +129,7 @@ def hmc_kernel(
         energy = potential_energy + kinetic_energy(momentum)
 
         proposal, proposal_info = proposal_generator(
-            key_integrator, ProposalState(position, momentum, potential_energy_grad)
+            key_integrator, HMCProposalState(position, momentum, potential_energy_grad)
         )
         new_position, new_momentum, new_potential_energy_grad = proposal
 

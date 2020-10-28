@@ -1,9 +1,10 @@
 import jax
 from jax import numpy as np
 
-from mcx.inference.integrators import hmc_proposal, velocity_verlet
+from mcx.inference.integrators import velocity_verlet
 from mcx.inference.kernels import HMCState, hmc_kernel
 from mcx.inference.metrics import gaussian_euclidean_metric
+from mcx.inference.proposals import hmc_proposal
 from mcx.inference.warmup.step_size_adaptation import find_reasonable_step_size
 
 
