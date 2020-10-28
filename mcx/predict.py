@@ -5,14 +5,18 @@ from jax import numpy as np
 import numpy
 
 import mcx.core as core
-from mcx.model import model as Model
 from mcx.trace import Trace
 
-__all__ = ["predict"]
+__all__ = ["predict", "sample_forward"]
+
+
+# -------------------------------------------------------------------
+#                == PRIOR & POSTERIOR PREDICTIONS ==
+# -------------------------------------------------------------------
 
 
 def predict(
-    rng_key: jax.random.PRNGKey, model: Model, trace: Trace = None
+    rng_key: jax.random.PRNGKey, model, trace: Trace = None
 ) -> Union["prior_predictive", "posterior_predictive"]:
     """Provide a unified interface for prior and posterior predictive sampling."""
     if isinstance(trace, Trace):
@@ -22,7 +26,7 @@ def predict(
 
 
 class posterior_predictive:
-    def __init__(self, rng_key: jax.random.PRNGKey, model: Model, trace: Trace) -> None:
+    def __init__(self, rng_key: jax.random.PRNGKey, model, trace: Trace) -> None:
         artifact = core.compile_to_posterior_sampler(model.graph, model.namespace)
         sampler_fn = jax.jit(artifact.compiled_fn)
 
@@ -107,7 +111,7 @@ class posterior_predictive:
 
 
 class prior_predictive:
-    def __init__(self, rng_key: jax.random.PRNGKey, model: Model) -> None:
+    def __init__(self, rng_key: jax.random.PRNGKey, model) -> None:
         artifact = core.compile_to_prior_sampler(model.graph, model.namespace)
         sampler_fn = artifact.compiled_fn
         sampler_fn = jax.jit(sampler_fn)
@@ -163,3 +167,57 @@ class prior_predictive:
         }
 
         return predictive_trace
+
+
+# -------------------------------------------------------------------
+#                       == FORWARD SAMPLING ==
+# -------------------------------------------------------------------
+
+
+def sample_forward(
+    rng_key: jax.random.PRNGKey, model, num_samples: int = 1, **kwargs
+) -> Dict:
+    """Returns forward samples from the model.
+
+    The samples are returned in a dictionary, with the names of
+    the variables as keys.
+    """
+    model_posargs = model.posargs
+    model_kwargs = tuple(set(model.arguments).difference(model.posargs))
+
+    keys = jax.random.split(rng_key, num_samples)
+    sampler_args: Tuple[Any, ...] = (keys,)
+    in_axes: Tuple[int, ...] = (0,)
+
+    for arg in model_posargs:
+        try:
+            value = kwargs[arg]
+            try:
+                sampler_args += (np.atleast_1d(value),)
+            except RuntimeError:
+                sampler_args += (value,)
+            in_axes += (None,)
+        except KeyError:
+            raise AttributeError(
+                "You need to specify the value of the variable {}".format(arg)
+            )
+
+    for kwarg in model_kwargs:
+        if kwarg in kwargs:
+            value = kwargs[kwarg]
+        else:
+            value = model.nodes[kwarg]["content"].default_value.n
+        sampler_args += (value,)
+        in_axes += (None,)
+
+    artifact = core.compile_to_sampler(model.graph, model.namespace)
+    sampler_fn = artifact.compiled_fn
+    sampler_fn = jax.jit(sampler_fn)
+    samples = jax.vmap(sampler_fn, in_axes=in_axes)(*sampler_args)
+
+    forward_trace = {
+        arg: numpy.asarray(arg_samples).T.squeeze()
+        for arg, arg_samples in zip(model.variables, samples)
+    }
+
+    return forward_trace

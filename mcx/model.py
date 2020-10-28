@@ -1,15 +1,15 @@
 import ast
 import functools
-from typing import Any, Callable, Dict, List, Tuple, Union
+from typing import Callable, List, Union
 
 import jax
-import jax.numpy as np
 import numpy
 
 import mcx.core as core
 from mcx.distributions import Distribution
+from mcx.predict import sample_forward
 
-__all__ = ["model", "forward_sampler", "seed"]
+__all__ = ["model", "seed"]
 
 
 class model(Distribution):
@@ -240,7 +240,7 @@ class model(Distribution):
         return new_model
 
     def forward(self, **kwargs):
-        return forward_sampler(self.rng_key, self, **kwargs)
+        return sample_forward(self.rng_key, self, **kwargs)
 
     @property
     def forward_src(self) -> str:
@@ -327,51 +327,6 @@ class model(Distribution):
     def posterior_variables(self):
         """Return the names of the random variables whose posterior we sample."""
         return self.graph.posterior_variables
-
-
-def forward_sampler(rng_key, model: model, num_samples=1, **kwargs) -> Dict:
-    """Returns forward samples from the model.
-
-    The samples are returned in a dictionary, with the names of
-    the variables as keys.
-    """
-    model_posargs = model.posargs
-    model_kwargs = tuple(set(model.arguments).difference(model.posargs))
-
-    keys = jax.random.split(rng_key, num_samples)
-    sampler_args: Tuple[Any, ...] = (keys,)
-    in_axes: Tuple[int, ...] = (0,)
-
-    for arg in model_posargs:
-        try:
-            value = kwargs[arg]
-            try:
-                sampler_args += (np.atleast_1d(value),)
-            except RuntimeError:
-                sampler_args += (value,)
-            in_axes += (None,)
-        except KeyError:
-            raise AttributeError(f"You need to specify the value of the variable {arg}")
-
-    for kwarg in model_kwargs:
-        if kwarg in kwargs:
-            value = kwargs[kwarg]
-        else:
-            value = model.nodes[kwarg]["content"].default_value.n
-        sampler_args += (value,)
-        in_axes += (None,)
-
-    artifact = core.compile_to_sampler(model.graph, model.namespace)
-    sampler_fn = artifact.compiled_fn
-    sampler_fn = jax.jit(sampler_fn)
-    samples = jax.vmap(sampler_fn, in_axes=in_axes)(*sampler_args)
-
-    trace = {
-        arg: numpy.asarray(arg_samples).T.squeeze()
-        for arg, arg_samples in zip(model.variables, samples)
-    }
-
-    return trace
 
 
 def seed(model: model, rng_key: jax.random.PRNGKey) -> model:

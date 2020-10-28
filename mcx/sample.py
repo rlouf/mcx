@@ -7,7 +7,7 @@ from jax.flatten_util import ravel_pytree as jax_ravel_pytree
 from tqdm import tqdm
 
 import mcx
-from mcx import forward_sampler
+from mcx import sample_forward
 from mcx.core import compile_to_loglikelihoods, compile_to_logpdf
 from mcx.jax import ravel_pytree as mcx_ravel_pytree
 from mcx.trace import Trace
@@ -552,7 +552,7 @@ def get_initial_position(rng_key, model, num_chains, **kwargs):
     model_randvars = set(model.random_variables)
     to_sample_vars = model_randvars.difference(conditioning_vars)
 
-    samples = forward_sampler(rng_key, model, num_samples=num_chains, **kwargs)
+    samples = sample_forward(rng_key, model, num_samples=num_chains, **kwargs)
     initial_positions = dict((var, samples[var]) for var in to_sample_vars)
 
     # A naive way to go about flattening the positions is to transform the
