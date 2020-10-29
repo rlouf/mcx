@@ -203,7 +203,7 @@ class RWMInfo(NamedTuple):
     is_accepted: bool
 
 
-def rwm_kernel(logpdf: Callable, proposal_generator: Callable) -> Callable:
+def rwm_kernel(logpdf: Callable, proposal: Callable) -> Callable:
     """Creates a Random Walk Metropolis transition kernel.
 
     Parameters
@@ -239,19 +239,23 @@ def rwm_kernel(logpdf: Callable, proposal_generator: Callable) -> Callable:
         key_move, key_accept = jax.random.split(rng_key)
 
         position, log_prob = state
-
-        move_proposal = proposal_generator(key_move)
-        new_position = position + move_proposal
+        new_position = proposal(key_move, position)
         new_log_prob = logpdf(new_position)
         new_state = RWMState(new_position, new_log_prob)
 
         delta = new_log_prob - log_prob
         delta = np.where(np.isnan(delta), -np.inf, delta)
         p_accept = np.clip(np.exp(delta), a_max=1)
-
         do_accept = jax.random.bernoulli(key_accept, p_accept)
+
         accept_state = (new_state, RWMInfo(new_state, p_accept, True))
         reject_state = (state, RWMInfo(new_state, p_accept, False))
-        return np.where(do_accept, accept_state, reject_state)
+        return jax.lax.cond(
+            do_accept,
+            accept_state,
+            lambda state: state,
+            reject_state,
+            lambda state: state,
+        )
 
     return kernel

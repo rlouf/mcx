@@ -35,8 +35,10 @@ def normal_proposal(sigma: np.DeviceArray) -> Callable:
     """
 
     @jax.jit
-    def propose(rng_key: jax.random.PRNGKey) -> np.DeviceArray:
-        return jax.random.norm(rng_key, sigma)
+    def propose(rng_key: jax.random.PRNGKey, position: jax.numpy.DeviceArray) -> np.DeviceArray:
+        step = jax.random.normal(rng_key, shape=np.shape(position)) * sigma
+        new_position = position + step
+        return new_position
 
     return propose
 

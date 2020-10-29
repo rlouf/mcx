@@ -127,7 +127,6 @@ class sampler(object):
 
         print("sampler: build and compile the inference kernel")
         kernel_factory = evaluator.kernel_factory(loglikelihood)
-        kernel_factory = jax.jit(kernel_factory, static_argnums=(0, 1, 2))
 
         self.is_warmed_up = False
         self.rng_key = rng_key
@@ -477,7 +476,7 @@ def sample_loop(
 
     _, unravel_fn = get_unravel_fn()
 
-    with tqdm(rng_keys, unit="samples") as progress:
+    with tqdm(rng_keys, unit="samples", mininterval=1) as progress:
         progress.set_description(
             f"Collecting {num_samples:,} samples across {num_chains:,} chains",
             refresh=False,

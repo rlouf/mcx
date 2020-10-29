@@ -1,5 +1,5 @@
 from dataclasses import asdict, dataclass, replace
-from typing import Callable, Dict, List, Optional, Tuple
+from typing import Callable, Dict, List, Optional, Tuple, Union
 
 import jax
 import jax.numpy as np
@@ -161,12 +161,12 @@ class Trace(InferenceData):
     def sample_stats(self):
         info = self.raw.sampling_info
         sample_stats = {
-            "lp": info["potential_energy"],
-            "acceptance_probability": info["acceptance_probability"],
-            "diverging": info["is_divergent"],
-            "energy": info["energy"],
-            "step_size": info["step_size"],
-            "num_integration_steps": info["num_integration_steps"],
+            "lp": info.get("potential_energy", None),
+            "acceptance_probability": info.get("acceptance_probability", None),
+            "diverging": info.get("is_divergent", None),
+            "energy": info.get("energy", None),
+            "step_size": info.get("step_size", None),
+            "num_integration_steps": info.get("num_integration_steps", None),
         }
         return dict_to_dataset(data=sample_stats, library=mcx)
 
@@ -174,12 +174,12 @@ class Trace(InferenceData):
     def warmup_sample_stats(self):
         info = self.raw.warmup_sampling_info
         sample_stats = {
-            "lp": info["potential_energy"],
-            "acceptance_probability": info["acceptance_probability"],
-            "diverging": info["is_divergent"],
-            "energy": info["energy"],
-            "step_size": info["step_size"],
-            "num_integration_steps": info["num_integration_steps"],
+            "lp": info.get("potential_energy", None),
+            "acceptance_probability": info.get("acceptance_probability", None),
+            "diverging": info.get("is_divergent", None),
+            "energy": info.get("energy", None),
+            "step_size": info.get("step_size", None),
+            "num_integration_steps": info.get("num_integration_steps", None),
         }
         return dict_to_dataset(data=sample_stats, library=mcx)
 
@@ -201,6 +201,32 @@ class Trace(InferenceData):
             self.raw.loglikelihoods = loglikelihoods
 
         return dict_to_dataset(data=loglikelihoods, library=mcx)
+
+    def keys(self):
+        """Returns the name of the variables for which we have samples.
+
+        Useful along with `__getitems__` to be able to unpack the trace when
+        calling the `predict` function:
+
+            >>> mcx.predict(model)(rng_key, *args, **kwargs, **trace)
+        """
+
+    def __getitem__(self, key) -> Union["Trace", np.DeviceArray]:
+        if isinstance(key, slice):
+            raise NotImplementedError
+        if isinstance(key, int):
+            raise NotImplementedError
+        if isinstance(key, str):
+            try:
+                return self.raw.samples[key]
+            except KeyError:
+                raise KeyError(f"The variable '{key}' could not be found in the trace.")
+        else:
+            raise KeyError(
+                "You can either access samples for a variable by passing its name, "
+                "get the values of the trace at a specific index or take a slice "
+                "from it."
+            )
 
     # The following methods are used to concatenate two traces or add new samples
     # to a trace.
