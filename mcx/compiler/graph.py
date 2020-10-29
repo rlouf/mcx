@@ -4,7 +4,7 @@ from typing import Dict, List
 import astor
 import networkx as nx
 
-from mcx.core.nodes import Argument, RandVar, Transformation, Var
+from mcx.compiler.nodes import Argument, RandVar, Transformation, Var
 
 
 class GraphicalModel(nx.DiGraph):

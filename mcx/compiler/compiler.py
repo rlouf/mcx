@@ -6,8 +6,8 @@ import astor
 import networkx as nx
 
 import mcx
-from mcx.core.graph import GraphicalModel
-from mcx.core.nodes import Argument, RandVar
+from mcx.compiler.graph import GraphicalModel
+from mcx.compiler.nodes import Argument, RandVar
 
 
 class Artifact(NamedTuple):
@@ -335,7 +335,7 @@ def compile_to_sampler(graph, namespace) -> Artifact:
     returned_vars = [
         ast.Name(id=node.name, ctx=ast.Load())
         for node in ordered_nodes
-        if not isinstance(node, mcx.core.graph.Var)
+        if not isinstance(node, mcx.compiler.graph.Var)
     ]
 
     returned = ast.Return(
@@ -426,7 +426,7 @@ def compile_to_prior_sampler(graph, namespace, jit=False) -> Artifact:
     returned_vars = [
         ast.Name(id=node.name, ctx=ast.Load())
         for node in ordered_nodes
-        if not isinstance(node, mcx.core.graph.Var) and node.is_returned
+        if not isinstance(node, mcx.compiler.graph.Var) and node.is_returned
     ]
     if len(returned_vars) == 1:
         returned = ast.Return(returned_vars[0])
@@ -576,7 +576,7 @@ def compile_to_posterior_sampler(graph, namespace, jit=False) -> Artifact:
     returned_vars = [
         ast.Name(id=node.name, ctx=ast.Load())
         for node in ordered_nodes
-        if not isinstance(node, mcx.core.graph.Var) and node.is_returned
+        if not isinstance(node, mcx.compiler.graph.Var) and node.is_returned
     ]
     if len(returned_vars) == 1:
         returned = ast.Return(returned_vars[0])

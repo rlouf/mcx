@@ -4,7 +4,7 @@ import jax
 import numpy
 from jax import numpy as np
 
-import mcx.core as core
+import mcx.compiler as compiler
 from mcx.trace import Trace
 
 __all__ = ["predict", "sample_forward"]
@@ -55,7 +55,7 @@ def predict(
 class posterior_predictive:
     def __init__(self, rng_key: jax.random.PRNGKey, model, trace: Trace) -> None:
         """Initialize the posterior predictive sampler."""
-        artifact = core.compile_to_posterior_sampler(model.graph, model.namespace)
+        artifact = compiler.compile_to_posterior_sampler(model.graph, model.namespace)
         sampler = jax.jit(artifact.compiled_fn)
 
         self.model = model
@@ -176,7 +176,7 @@ class posterior_predictive:
 
 class prior_predictive:
     def __init__(self, rng_key: jax.random.PRNGKey, model) -> None:
-        artifact = core.compile_to_prior_sampler(model.graph, model.namespace)
+        artifact = compiler.compile_to_prior_sampler(model.graph, model.namespace)
         sampler = jax.jit(artifact.compiled_fn)
 
         self.model = model
@@ -325,7 +325,7 @@ def sample_forward(
     else:
         out_axes = (1,) * len(model.variables)
 
-    artifact = core.compile_to_sampler(model.graph, model.namespace)
+    artifact = compiler.compile_to_sampler(model.graph, model.namespace)
     sampler = jax.jit(artifact.compiled_fn)
     samples = jax.vmap(sampler, in_axes, out_axes)(*sampler_args)
 

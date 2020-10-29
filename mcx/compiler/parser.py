@@ -7,7 +7,7 @@ from typing import Any, Callable, Dict, List, Optional, Union
 import astor
 
 import mcx
-from mcx.core.graph import GraphicalModel
+from mcx.compiler.graph import GraphicalModel
 
 
 def parse_definition(model: Callable, namespace: Dict) -> GraphicalModel:
