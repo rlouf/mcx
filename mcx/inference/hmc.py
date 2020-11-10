@@ -91,12 +91,15 @@ class HMC:
         rng_key: jax.random.PRNGKey,
         initial_state: HMCState,
         kernel_factory: Callable,
-        num_chains,
+        num_chains: int,
         num_warmup_steps: int = 1000,
         accelerate=False,
         initial_step_size: float = 0.1,
     ) -> Tuple[HMCState, HMCParameters, Optional[StanWarmupState]]:
-        """I don't like having a ton of warmup logic in here."""
+        """I don't like having a ton of warmup logic in here.
+
+        TODO: initial_state.position.shape[0] = num_chains
+        """
 
         if not self.needs_warmup:
             parameters = HMCParameters(
@@ -243,7 +246,7 @@ class HMC:
         unravel_chain = jax.vmap(unravel_fn, in_axes=(0,))
         try:
             samples = jax.vmap(unravel_chain, in_axes=(1,))(state.position)
-        except IndexError:  # unravel single samples
+        except IndexError:  # unravel single chain
             samples = unravel_chain(state.position)
 
         # I added all these `type: ignore` because I am getting lazy about types.
@@ -255,7 +258,9 @@ class HMC:
         # We can either create new states (verbose but preferred, I am not sure
         # this distinction is clear for newcomers) or keep silencing the checker.
         # Please keep this comment if the later is chosen.
+        #
         # TODO: Create new HMCChain type.
+        # TODO: See if we can avoid taking the transpose with vmap's out_axes
         sampling_info = {
             "potential_energy": state.potential_energy.T,  # type: ignore
             "acceptance_probability": info.acceptance_probability.T,  # type: ignore
