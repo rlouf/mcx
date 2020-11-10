@@ -1,4 +1,4 @@
-from .compiler import (
+from .compilers import (
     compile_to_loglikelihoods,
     compile_to_logpdf,
     compile_to_posterior_sampler,

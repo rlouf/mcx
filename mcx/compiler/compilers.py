@@ -5,8 +5,7 @@ from typing import Dict, List, NamedTuple, Union
 import astor
 import networkx as nx
 
-import mcx
-from mcx.compiler.graph import GraphicalModel
+from mcx.compiler.graph import GraphicalModel, Var
 from mcx.compiler.nodes import Argument, RandVar
 
 
@@ -335,7 +334,7 @@ def compile_to_sampler(graph, namespace) -> Artifact:
     returned_vars = [
         ast.Name(id=node.name, ctx=ast.Load())
         for node in ordered_nodes
-        if not isinstance(node, mcx.compiler.graph.Var)
+        if not isinstance(node, Var)
     ]
 
     returned = ast.Return(
@@ -426,7 +425,7 @@ def compile_to_prior_sampler(graph, namespace, jit=False) -> Artifact:
     returned_vars = [
         ast.Name(id=node.name, ctx=ast.Load())
         for node in ordered_nodes
-        if not isinstance(node, mcx.compiler.graph.Var) and node.is_returned
+        if not isinstance(node, Var) and node.is_returned
     ]
     if len(returned_vars) == 1:
         returned = ast.Return(returned_vars[0])
@@ -576,7 +575,7 @@ def compile_to_posterior_sampler(graph, namespace, jit=False) -> Artifact:
     returned_vars = [
         ast.Name(id=node.name, ctx=ast.Load())
         for node in ordered_nodes
-        if not isinstance(node, mcx.compiler.graph.Var) and node.is_returned
+        if not isinstance(node, Var) and node.is_returned
     ]
     if len(returned_vars) == 1:
         returned = ast.Return(returned_vars[0])
