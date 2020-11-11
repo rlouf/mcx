@@ -4,10 +4,11 @@ from typing import Callable, Tuple
 import jax
 import jax.numpy as np
 
+from mcx.inference.evaluator import Evaluator
 from mcx.inference.kernels import RWMState, RWMInfo, rwm_kernel
 
 
-class RWMH:
+class RWMH(Evaluator):
     """Random Walk Metropolis Hastings evaluator."""
     def __init__(self, proposal_generator, **parameters):
         self.needs_warmup = True

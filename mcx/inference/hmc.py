@@ -6,6 +6,7 @@ import jax
 from jax import numpy as np
 from tqdm import tqdm
 
+from mcx.inference.evaluator import Evaluator
 from mcx.inference.integrators import velocity_verlet
 from mcx.inference.kernels import HMCInfo, HMCState, hmc_kernel
 from mcx.inference.metrics import gaussian_euclidean_metric
@@ -19,7 +20,7 @@ class HMCParameters(NamedTuple):
     inverse_mass_matrix: Optional[np.DeviceArray]
 
 
-class HMC:
+class HMC(Evaluator):
     def __init__(
         self,
         num_integration_steps: int = 10,
