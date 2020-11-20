@@ -5,11 +5,11 @@ import jax
 import jax.numpy as jnp
 
 from mcx.inference.kernels import HMCInfo, HMCState
-from mcx.inference.warmup.mass_matrix_adaptation import (
+from mcx.inference.adaptation.mass_matrix_adaptation import (
     MassMatrixAdaptationState,
     mass_matrix_adaptation,
 )
-from mcx.inference.warmup.step_size_adaptation import (
+from mcx.inference.adaptation.step_size_adaptation import (
     DualAveragingState,
     dual_averaging,
     find_reasonable_step_size,
