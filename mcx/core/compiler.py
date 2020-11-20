@@ -1,98 +1,60 @@
-from functools import partial
-from typing import Dict
-
 import libcst as cst
 import networkx as nx
 
 from mcx.core.graph import GraphicalModel
-from mcx.core.nodes import Op, Placeholder, Constant, SampleOp
+from mcx.core.nodes import Op, Placeholder, Constant
 
 
-def logpdf(graph: GraphicalModel, namespace: Dict):
-
-    def to_logpdf(to_ast, *args, **kwargs):
-        return cst.Call(
-            func=cst.Attribute(value=to_ast(*args), attr=cst.Name("logpdf")),
-            args=[cst.Arg(value=cst.Name(value=kwargs['var_name']))],
-        )
-
-    placeholders = []
-    sample = []
-    for node in graph.nodes():
-        if not isinstance(node, SampleOp):
-            continue
-
-        logpdf_ast = partial(to_logpdf, node.to_ast)
-        scope = "unefined"
-        new_name = f"logpdf_{scope}_{node.name}"
-
-        # Update the node
-        node.to_ast = logpdf_ast
-        node.name = new_name
-
-        # names become placeholder nodes
-        name_node = Placeholder(node.name, lambda: cst.Name(value=node.name))
-        placeholders.append(name_node)
-        sample.append(node)
-
-    for name_node, node in zip(placeholders, sample):
-        graph.add_node(name_node)
-        graph.add_edge(name_node, node, type="kwarg")
-
-    compile_cst(graph, namespace)
-
-
-def compile(graph, namespace):
-    return compile_cst(graph, namespace)
-
-def compile_cst(graph: GraphicalModel, namespace):
-    """Compile MCX's graph into a python function.
-
-    TODO
-    - support function kwargs
-    - support kwargs in ops
-    """
+def compile_graph(graph: GraphicalModel, namespace):
+    """Compile MCX's graph into a python (executable) function."""
 
     args = []
     stmts = []
     returns = []
+
+    # Model arguments. Random variables (if logpdf) first then the model's arguments
+    maybe_random_variables = [node for node in graph.nodes if isinstance(node, Placeholder) and node.rv]
+    model_args = [node for node in graph.nodes if isinstance(node, Placeholder) and not node.rv]
+    args = [placeholder.to_ast() for placeholder in maybe_random_variables] + [placeholder.to_ast() for placeholder in model_args]
+
+    # Every statement in the function corresponds to either a constant definition or
+    # a variable assignment. We use a topological sort to respect the
+    # dependency order.
     for node in nx.topological_sort(graph):
 
-        if isinstance(node, Placeholder):
-            arg = node.to_ast()
-            args.append(arg)
+        if node.name is None:
+            continue
 
         if isinstance(node, Constant):
-            if node.name is not None:
-                stmts.append(node.to_ast())
+            stmt = cst.SimpleStatementLine(body=[node.to_ast()])
+            stmts.append(stmt)
 
         if isinstance(node, Op):
-            if node.name is not None:
-                stmts.append(
+            stmt = cst.SimpleStatementLine(
+                body=[
                     cst.Assign(
-                        targets=[cst.AssignTarget(target=cst.Name(value=node.name))],
+                        targets=[
+                            cst.AssignTarget(target=cst.Name(value=node.name))
+                        ],
                         value=compile_op(node, graph),
                     )
-                )
+                ]
+            )
+            stmts.append(stmt)
 
-        # if a named node has no successor it has to be returned.  The
+        # We return nodes that do not have a successor in the graph. The
         # following only works if 'successors' does not return 'None' (which it
         # shouldn't).
         if next(graph.successors(node), None) is None:
-            returns.append(cst.Return(value=cst.Name(value=node.name)))
+            returns.append(cst.SimpleStatementLine(body=[cst.Return(value=cst.Name(value=node.name))]))
 
-    # Build function using the previously compiled nodes
-    args.reverse()
+    # Assemble the function's CST using the previously translated nodes.
     ast_fn = cst.Module(
         body=[
             cst.FunctionDef(
                 name=cst.Name(value=graph.name),
                 params=cst.Parameters(params=args),
-                body=cst.IndentedBlock(
-                    body=[
-                        cst.SimpleStatementLine(body=[stmt]) for stmt in stmts + returns
-                    ]
-                ),
+                body=cst.IndentedBlock(body=stmts + returns),
             )
         ]
     )
@@ -106,19 +68,41 @@ def compile_cst(graph: GraphicalModel, namespace):
 
 
 def compile_op(node: Op, graph: GraphicalModel):
+    """Compile an Op by recursively compiling and including its
+    upstream nodes.
+    """
     op_args = []
     op_kwargs = {}
     for predecessor in graph.predecessors(node):
+
+        # I am not sure what this is about, consider deleting.
         if graph[predecessor][node] == {}:
             pass
+
+        # If a predecessor has a name, it is either a random or
+        # a deterministic variable. We only need to reference its
+        # name here.
         if predecessor.name is not None:
             pred_ast = cst.Name(value=predecessor.name)
         else:
             pred_ast = compile_op(predecessor, graph)
 
+        # To rebuild the node's CST we need to pass the compiled
+        # CST of the arguments as arguments to the generator function.
+        #
+        # !! Important !!
+        #
+        # The compiler feeds the arguments in the order in which they
+        # were added to the graph, not the order in which they were
+        # given to `graph.add`. This is a potential source of mysterious
+        # bugs and should be corrected.
+        # This also means we do not feed repeated arguments several times
+        # when we should.
         if graph[predecessor][node]["type"] == "arg":
             op_args.append(pred_ast)
         else:
-            op_kwargs[graph[predecessor][node]["key"][0]] = pred_ast
+            for key in graph[predecessor][node]["key"]:
+                op_kwargs[key] = pred_ast
 
+    print(node, op_args, op_kwargs)
     return node.to_ast(*op_args, **op_kwargs)

@@ -1,4 +1,4 @@
-from typing import Callable
+from typing import Callable, Optional
 
 
 class Constant(object):
@@ -32,9 +32,10 @@ class Placeholder(object):
     arguments to the function.
     """
 
-    def __init__(self, name: str, ast_generator: Callable) -> None:
+    def __init__(self, name: str, ast_generator: Callable, rv=False) -> None:
         self.name = name
         self.to_ast = ast_generator
+        self.rv = rv
 
 
 class Op(object):
@@ -62,9 +63,10 @@ class Op(object):
     """
 
     def __init__(
-        self, ast_generator, name: str = None, do_sample: bool = False
+        self, ast_generator, scope: Optional[str], name: Optional[str] = None, do_sample: bool = False
     ) -> None:
         self.name = name
+        self.scope = scope
         self.to_ast = ast_generator
         self.do_sample = False
 
@@ -76,6 +78,7 @@ class SampleOp(Op):
     are necessarily named.
     """
 
-    def __init__(self, name: str, ast_generator: Callable) -> None:
+    def __init__(self, name: str, scope: str, ast_generator: Callable) -> None:
         self.name = name
+        self.scope = scope
         self.to_ast = ast_generator

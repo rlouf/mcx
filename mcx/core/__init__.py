@@ -1,8 +1,8 @@
 from .parser import parse
-from .compiler import compile, logpdf
-from . import logpdf
+from .representations import logpdf, logpdf_contributions
 
 __all__ = [
-    "compile",
+    "logpdf",
+    "logpdf_contributions",
     "parse",
 ]
