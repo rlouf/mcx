@@ -30,26 +30,21 @@ Note that there are still many moving pieces in `mcx` and the API may change
 slightly.
 
 ```python
-from jax import numpy as np
 import jax
-import numpy as onp
+import jax.numpy as np
 import mcx
-from mcx.distributions import Exponential, Normal
+import mcx.distributions as dist
 
 rng_key = jax.random.PRNGKey(0)
-x_data = onp.random.normal(0, 5, size=1000).reshape(-1, 1)
-
-observations = {'x': x_data,
-                'predictions': 3 * x_data + onp.random.normal(size=x_data.shape),
-                'lmbda': 3.}
+observations = {'x': x_data, 'predictions': y_data}
 
 @mcx.model
 def linear_regression(x, lmbda):
-    sigma <~ Exponential(lmbda)
+    sigma <~ dist.Exponential(lmbda)
     coeffs_init = np.ones(x.shape[-1])
-    coeffs <~ Normal(coeffs_init, sigma)
+    coeffs <~ dist.Normal(coeffs_init, sigma)
     y = np.dot(x, coeffs)
-    predictions <~ Normal(y, sigma)
+    predictions <~ dist.Normal(y, sigma)
     return predictions
 
 
