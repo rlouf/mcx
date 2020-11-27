@@ -35,7 +35,7 @@ def longest_batch_before_turn(integrator_step: Callable) -> Callable:
             arXiv:1810.04449 (2018).
     """
 
-    @partial(jax.jit, static_argnums=(0, 1, 2, 3))
+    @partial(jax.jit, static_argnums=(2, 3))
     def run(
         initial_position: np.DeviceArray,
         initial_momentum: np.DeviceArray,
@@ -61,7 +61,7 @@ def longest_batch_before_turn(integrator_step: Callable) -> Callable:
     return run
 
 
-@partial(jax.jit, static_argnums=(0, 2))
+@jax.jit
 def is_u_turn(
     initial_position: np.DeviceArray,
     position: np.DeviceArray,
