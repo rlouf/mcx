@@ -1,7 +1,7 @@
 <h2 align="center">
   /ˈmɪks/   
 </h2>
-   
+
 <h3 align="center">
  XLA-rated Bayesian inference
 </h3>
@@ -31,19 +31,27 @@ slightly.
 
 ```python
 from jax import numpy as np
+import jax
+import numpy as onp
 import mcx
 from mcx.distributions import Exponential, Normal
 
 rng_key = jax.random.PRNGKey(0)
+
+x_data = onp.random.normal(0, 5, size=1000).reshape(-1, 1)
+y_data = 3 * x_data + onp.random.normal(size=x_data.shape)
+
 observations = {'x': x_data, 'predictions': y_data, 'lmbda': 3.}
 
 @mcx.model
-def linear_regression(x, lmbda=1.):
-    scale <~ Exponential(lmbda)
-    coefs <~ Normal(np.zeros(np.shape(x)[-1]))
-    y = np.dot(x, coefs)
-    preds <~ Normal(y, scale)
-    return preds
+def linear_regression(x, lmbda=1.0):
+    sigma <~ Exponential(lmbda)
+    coeffs_init = np.ones(x.shape[-1])
+    coeffs <~ Normal(coeffs_init, sigma)
+    y = np.dot(x, coeffs)
+    predictions <~ Normal(y, sigma)
+    return predictions
+
 
 kernel = mcx.HMC(100)
 sampler = mcx.sampler(
@@ -131,7 +139,7 @@ samples = mcx.sampler(
 trace = mcx.Trace()
 for sample in samples:
   trace.append(sample)
-  
+
 iter(sampler)
 next(sampler)
 ```
