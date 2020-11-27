@@ -127,7 +127,6 @@ class sampler(object):
 
         print("sampler: build and compile the inference kernel")
         kernel_factory = evaluator.kernel_factory(loglikelihood)
-        kernel_factory = jax.jit(kernel_factory, static_argnums=(0, 1, 2))
 
         self.is_warmed_up = False
         self.rng_key = rng_key

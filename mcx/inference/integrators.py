@@ -1,5 +1,4 @@
 """Integrate hamiltonian trajectories on euclidean and riemannian manifolds."""
-from functools import partial
 from typing import Callable, NamedTuple
 
 import jax
@@ -55,7 +54,7 @@ def velocity_verlet(potential_fn: Callable, kinetic_energy_fn: Callable) -> Inte
     potential_grad_fn = jax.jit(jax.grad(potential_fn))
     kinetic_energy_grad_fn = jax.jit(jax.grad(kinetic_energy_fn))
 
-    @partial(jax.jit, static_argnums=(1,))
+    @jax.jit
     def one_step(state: IntegratorState, step_size: float) -> IntegratorState:
         position, momentum, log_prob_grad = state
 
@@ -100,7 +99,7 @@ def mclachlan_integrator(
     potential_grad_fn = jax.jit(jax.grad(potential_fn))
     kinetic_energy_grad_fn = jax.jit(jax.grad(kinetic_energy_fn))
 
-    @partial(jax.jit, static_argnums=(1,))
+    @jax.jit
     def one_step(state: IntegratorState, step_size: float) -> IntegratorState:
         position, momentum, log_prob_grad = state
 
@@ -150,7 +149,7 @@ def yoshida_integrator(
     potential_grad_fn = jax.jit(jax.grad(potential_fn))
     kinetic_energy_grad_fn = jax.jit(jax.grad(kinetic_energy_fn))
 
-    @partial(jax.jit, static_argnums=(1,))
+    @jax.jit
     def one_step(state: IntegratorState, step_size: float) -> IntegratorState:
         position, momentum, log_prob_grad = state
 
@@ -207,7 +206,7 @@ def four_stages_integrator(
     potential_grad_fn = jax.jit(jax.grad(potential_fn))
     kinetic_energy_grad_fn = jax.jit(jax.grad(kinetic_energy_fn))
 
-    @partial(jax.jit, static_argnums=(1,))
+    @jax.jit
     def one_step(state: IntegratorState, step_size: float) -> IntegratorState:
         position, momentum, log_prob_grad = state
 
