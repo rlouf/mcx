@@ -24,6 +24,5 @@ jobs:
 
       - name: Run the tests with pytest
         run: |
-          pip install pytest
-          pip install pytest-xdist
+          pip install -r requirements-dev.txt
           pytest -n 4 tests 
