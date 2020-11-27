@@ -37,14 +37,14 @@ import mcx
 from mcx.distributions import Exponential, Normal
 
 rng_key = jax.random.PRNGKey(0)
-
 x_data = onp.random.normal(0, 5, size=1000).reshape(-1, 1)
-y_data = 3 * x_data + onp.random.normal(size=x_data.shape)
 
-observations = {'x': x_data, 'predictions': y_data, 'lmbda': 3.}
+observations = {'x': x_data,
+                'predictions': 3 * x_data + onp.random.normal(size=x_data.shape),
+                'lmbda': 3.}
 
 @mcx.model
-def linear_regression(x, lmbda=1.0):
+def linear_regression(x, lmbda):
     sigma <~ Exponential(lmbda)
     coeffs_init = np.ones(x.shape[-1])
     coeffs <~ Normal(coeffs_init, sigma)
