@@ -201,7 +201,7 @@ class model(Distribution):
         """
         return self.sample_fn(rng_key, *args, **kwargs)
 
-    def forward(self, args, num_samples=1):
+    def forward(self, rng_key, args, num_samples=1):
         """Returns forward samples from the prior distribution."""
         pass
 
@@ -210,16 +210,31 @@ class model(Distribution):
 
 
 def seed(model: 'model', rng_key: jax.random.PRNGKey):
-    """Wrap the model's calling function to do the rng splitting automatically."""
-    rng_key = rng_key
-    call = model.__call__
+    """Wrap the model's calling function to do the rng splitting automatically.
 
-    def wrapped(*args, **kwargs):
-        _, rng_key = jax.random.split(rng_key)
-        return call(rng_key, call)
+    TODO: Extend this to all methods in `linear_regression` that require a rng_key:
+    - call
+    - sample
+    - forward
 
-    model.__call__ = types.MethodType(wrapped, model)
+    """
+    def key_splitter(rng_key):
+        while True:
+            _, rng_key = jax.random.split(rng_key)
+            yield rng_key
+
+    keys = key_splitter(rng_key)
+
+    def seeded_call(*args, **kwargs):
+        rng_key = next(keys)
+        return model.call_fn(rng_key, *args, **kwargs)
+
+    return seeded_call
 
 
 def evaluate(model: 'model', trace: mcx.Trace):
+    pass
+
+
+def sampler(rng_key, model: 'model', args):
     pass
