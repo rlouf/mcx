@@ -443,11 +443,12 @@ class ModelDefinitionParser(cst.CSTVisitor):
             func = self.recursive_visit(node.func)
             args = [self.recursive_visit(arg) for arg in node.args]
 
-            def to_call_ast(func, *args):
+            def to_call_ast(*args, **kwargs):
+                func = kwargs["__name__"]
                 return cst.Call(func, args)
 
             op = Op(to_call_ast, self.scope)
-            self.graph.add(op, func, *args)
+            self.graph.add(op, *args, __name__=func)
 
             return op
 
