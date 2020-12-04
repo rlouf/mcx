@@ -146,19 +146,13 @@ class GraphicalModel(nx.DiGraph):
 
     @property
     def args(self):
-        return tuple(
-            [
-                node
-                for node in self.placeholders
-                if not next(self.predecessors(node), None)
-            ]
-        )
+        is_arg = lambda node: next(self.predecessors(node), None) is None
+        return tuple([node for node in self.placeholders if is_arg(node)])
 
     @property
     def kwargs(self):
-        return tuple(
-            [node for node in self.placeholders if next(self.predecessors(node), None)]
-        )
+        is_kwarg = lambda node: next(self.predecessors(node), None) is not None
+        return tuple([node for node in self.placeholders if is_kwarg(node)])
 
     @property
     def random_variables(self):
