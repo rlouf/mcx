@@ -1,5 +1,6 @@
 import functools
 from typing import Callable, Dict, Tuple
+from types import FunctionType, MethodType
 
 import jax
 import jax.numpy as jnp
@@ -172,8 +173,9 @@ class model(Distribution):
            Framework." (2019).
     """
 
-    def __init__(self, model_fn: Callable) -> None:
+    def __init__(self, model_fn: FunctionType) -> None:
         self.ir = mcx.core.parse(model_fn)
+        self.model_fn = model_fn
 
         self.logpdf_fn, self.logpdf_src = mcx.core.logpdf(self.ir)
         self.sample_fn, self.sample_src = mcx.core.sample_forward(self.ir)
@@ -186,6 +188,14 @@ class model(Distribution):
 
     def __call__(self, rng_key, *args, **kwargs) -> jnp.DeviceArray:
         """Call the model as a generative function."""
+        return self.call(rng_key, *args, **kwargs)
+
+    def call(self, rng_key, *args, **kwargs) -> jnp.DeviceArray:
+        """We redirect the call to __call__ to allows monkey-patching
+        when seeding the function. Indeed, special methods are attached
+        to the class and not on particular instances so it is impossible
+        to monkey patch them.
+        """
         return self.call_fn(rng_key, *args, **kwargs)
 
     def logpdf(self, *rv_and_args, **kwargs) -> float:
@@ -193,12 +203,37 @@ class model(Distribution):
         return self.logpdf_fn(*rv_and_args, **kwargs)
 
     def sample(self, rng_key, *args, **kwargs) -> Dict:
-        """Sample from the multivariate distribution."""
+        """Sample from the predictive distribution."""
         return self.sample_fn(rng_key, *args, **kwargs)
 
-    def forward(self, rng_key, args, num_samples=1):
-        """Returns forward samples from the prior distribution."""
-        pass
+    def seed(self, rng_key):
+        """Seed the model with a PRNGKey.
+
+        It can be cumbersome to have to split the rng each time the
+        sampling methods are called when doing exploratory analysis.
+        We thus provide a convenience method that allows to seed
+        these methods with keys that are split at every call.
+
+        """
+        def key_splitter(rng_key):
+            while True:
+                _, rng_key = jax.random.split(rng_key)
+                yield rng_key
+
+        keys = key_splitter(rng_key)
+        old_sample = self.sample
+        old_call = self.call
+
+        def seeded_call(self, *args, **kwargs):
+            rng_key = next(keys)
+            return old_call(rng_key, *args, **kwargs)
+
+        def seeded_sample(self, *args, **kwargs):
+            rng_key = next(keys)
+            return old_sample(rng_key, *args, **kwargs)
+
+        self.call = MethodType(seeded_call, self)
+        self.sample = MethodType(seeded_sample, self)
 
     def do(self, **kwargs) -> "model":
         pass
@@ -218,31 +253,12 @@ class model(Distribution):
 
 def seed(model: "model", rng_key: jax.random.PRNGKey):
     """Wrap the model's calling function to do the rng splitting automatically.
-
-    TODO: Extend this to all methods in `linear_regression` that require a rng_key:
-    - call
-    - sample
-    - forward
-
     """
-
-    def key_splitter(rng_key):
-        while True:
-            _, rng_key = jax.random.split(rng_key)
-            yield rng_key
-
-    keys = key_splitter(rng_key)
-
-    def seeded_call(*args, **kwargs):
-        rng_key = next(keys)
-        return model.call_fn(rng_key, *args, **kwargs)
-
-    return seeded_call
+    seeded_model = mcx.model(model.model_fn)
+    seeded_model.seed(rng_key)
+    print("AH")
+    return seeded_model
 
 
 def evaluate(model: "model", trace: mcx.Trace):
-    pass
-
-
-def sampler(rng_key, model: "model", args):
     pass
