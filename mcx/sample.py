@@ -254,7 +254,7 @@ class sampler(object):
         new_state = next(self.sample_generator)
         self.state, info = new_state
         sample, sampling_info = self.evaluator.make_trace(
-            chain=new_state, ravel_fn=self.unravel_fn
+            chain=new_state, unravel_fn=self.unravel_fn
         )
         return sample, sampling_info
 
