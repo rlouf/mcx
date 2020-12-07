@@ -1,5 +1,5 @@
 import functools
-from typing import Callable, Dict, Tuple
+from typing import Dict, Tuple
 from types import FunctionType, MethodType
 
 import jax
@@ -174,12 +174,12 @@ class model(Distribution):
     """
 
     def __init__(self, model_fn: FunctionType) -> None:
-        self.ir = mcx.core.parse(model_fn)
+        self.graph, self.namespace = mcx.core.parse(model_fn)
         self.model_fn = model_fn
 
-        self.logpdf_fn, self.logpdf_src = mcx.core.logpdf(self.ir)
-        self.sample_fn, self.sample_src = mcx.core.sample_forward(self.ir)
-        self.call_fn, self.src = mcx.core.sample(self.ir)
+        self.logpdf_fn, self.logpdf_src = mcx.core.logpdf(self.graph, self.namespace)
+        self.sample_fn, self.sample_src = mcx.core.sample_joint(self.graph, self.namespace)
+        self.call_fn, self.src = mcx.core.generate(self.graph, self.namespace)
 
         self.sample_fn = jax.jit(self.sample_fn)
         self.call_fn = jax.jit(self.call_fn)
@@ -195,6 +195,7 @@ class model(Distribution):
         when seeding the function. Indeed, special methods are attached
         to the class and not on particular instances so it is impossible
         to monkey patch them.
+
         """
         return self.call_fn(rng_key, *args, **kwargs)
 
@@ -240,15 +241,15 @@ class model(Distribution):
 
     @property
     def args(self) -> Tuple[str]:
-        return self.ir.graph.names['args']
+        return self.graph.names['args']
 
     @property
     def kwargs(self) -> Tuple[str]:
-        return self.ir.graph.names['kwargs']
+        return self.graph.names['kwargs']
 
     @property
     def random_variables(self) -> Tuple[str]:
-        return self.ir.graph.names['random_variables']
+        return self.graph.names['random_variables']
 
 
 def seed(model: "model", rng_key: jax.random.PRNGKey):
@@ -256,7 +257,6 @@ def seed(model: "model", rng_key: jax.random.PRNGKey):
     """
     seeded_model = mcx.model(model.model_fn)
     seeded_model.seed(rng_key)
-    print("AH")
     return seeded_model
 
 

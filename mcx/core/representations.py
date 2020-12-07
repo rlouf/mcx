@@ -13,20 +13,20 @@ from typing import Dict
 import libcst as cst
 
 from mcx.core.compiler import compile_graph
-from mcx.core.parser import IR
 from mcx.core.graph import GraphicalModel
 from mcx.core.nodes import Op, Placeholder, SampleOp
 import mcx.core.translation as t
 
+__all__ = ["logpdf", "logpdf_contributions", "generate", "sample_joint"]
 
 # -------------------------------------------------------
 #                    == LOGPDF ==
 # --------------------------------------------------------
 
 
-def logpdf(ir: GraphicalModel):
+def logpdf(graph: GraphicalModel, namespace: Dict):
     """Returns a function that compute the model's logpdf."""
-    graph = copy.deepcopy(ir.graph)
+    graph = copy.deepcopy(graph)
 
     # Create a new 'logpdf' node that is the sum of the individual variables'
     # contributions.
@@ -62,10 +62,10 @@ def logpdf(ir: GraphicalModel):
     logpdf_contribs = [node for node in graph if isinstance(node, SampleOp)]
     graph.add(sum_node, *logpdf_contribs)
 
-    return compile_graph(IR(graph, ir.namespace), f"{graph.name}_logpdf")
+    return compile_graph(graph, namespace, f"{graph.name}_logpdf")
 
 
-def logpdf_contributions(graph: GraphicalModel):
+def logpdf_contributions(graph: GraphicalModel, namespace: Dict):
     """Return the variables' individual constributions to the logpdf.
 
     The function returns a dictionary {'var_name': logpdf_contribution}. When
@@ -129,7 +129,7 @@ def logpdf_contributions(graph: GraphicalModel):
     graph = _logpdf_core(graph)
     graph.add(tuple_node, *logpdf_contribs)
 
-    return compile_graph(graph, f"{graph.name}_logpdf_contribs")
+    return compile_graph(graph, namespace, f"{graph.name}_logpdf_contribs")
 
 
 def _logpdf_core(graph: GraphicalModel):
@@ -188,16 +188,16 @@ def _logpdf_core(graph: GraphicalModel):
 # --------------------------------------------------------
 
 
-def sample(ir):
+def generate(graph: GraphicalModel, namespace: Dict):
     """Execute the generative model."""
-    graph = copy.deepcopy(ir.graph)
+    graph = copy.deepcopy(graph)
     graph = _sampler_core(graph)
-    return compile_graph(IR(graph, ir.namespace), f"{graph.name}_sample")
+    return compile_graph(graph, namespace, f"{graph.name}_sample")
 
 
-def sample_forward(ir: GraphicalModel):
-    """Obtain forward samples from the multivariate distribution implied by the model."""
-    graph = copy.deepcopy(ir.graph)
+def sample_joint(graph: GraphicalModel, namespace: Dict):
+    """Obtain forward samples from the joint distribution defined by the model."""
+    graph = copy.deepcopy(graph)
 
     random_variables = graph.random_variables
 
@@ -252,7 +252,7 @@ def sample_forward(ir: GraphicalModel):
 
     graph = _sampler_core(graph)
     graph.add(tuple_node, *random_variables)
-    return compile_graph(IR(graph, ir.namespace), f"{graph.name}_sample_forward")
+    return compile_graph(graph, namespace, f"{graph.name}_sample_forward")
 
 
 def _sampler_core(graph: GraphicalModel):

@@ -1,15 +1,12 @@
 import libcst as cst
 import networkx as nx
 
-from mcx.core.parser import IR
 from mcx.core.graph import GraphicalModel
 from mcx.core.nodes import Op, Placeholder, Constant
 
 
-def compile_graph(ir: IR, fn_name):
+def compile_graph(graph: GraphicalModel, namespace: dict, fn_name):
     """Compile MCX's graph into a python (executable) function."""
-    graph = ir.graph
-    namespace = ir.namespace
 
     # Model arguments.
     #

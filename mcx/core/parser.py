@@ -14,14 +14,22 @@ import inspect
 import textwrap
 from collections import defaultdict
 from functools import partial
-from typing import Any, Dict, List, NamedTuple, Optional, Union
+from typing import Dict, List, Optional, Union, Tuple
+from types import FunctionType
 
 import libcst as cst
 import mcx
 import networkx as nx
 from mcx.core.graph import GraphicalModel
-from mcx.core.nodes import (Constant, FunctionOp, ModelOp, Name, Op,
-                            Placeholder, SampleOp)
+from mcx.core.nodes import (
+    Constant,
+    FunctionOp,
+    ModelOp,
+    Name,
+    Op,
+    Placeholder,
+    SampleOp,
+)
 
 MODEL_BADLY_FORMED_ERROR = SyntaxError(
     "A MCX model should be defined in a single function. This exception is completely unexpected."
@@ -34,12 +42,7 @@ MULTIPLE_RETURNED_VALUES_ERROR = SyntaxError(
 )
 
 
-class IR(NamedTuple):
-    graph: GraphicalModel
-    namespace: Dict
-
-
-def parse(model_fn: Any) -> IR:
+def parse(model_fn: FunctionType) -> Tuple[GraphicalModel, dict]:
     """Parse the model definition to build a graphical model.
 
     Parameter
@@ -60,9 +63,9 @@ def parse(model_fn: Any) -> IR:
 
     definition_visitor = ModelDefinitionParser(namespace)
     tree.visit(definition_visitor)
-    graph = definition_visitor.graph
+    graph: GraphicalModel = definition_visitor.graph
 
-    return IR(graph, namespace)
+    return graph, namespace
 
 
 class ModelDefinitionParser(cst.CSTVisitor):
