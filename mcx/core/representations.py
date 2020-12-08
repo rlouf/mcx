@@ -1,23 +1,26 @@
-"""Functions that transform probabilistic programs into their
-various representations.
+"""Return the different representations of the probabilistic program.
 
 Transformations are performed on the graphical model, which is then
-compiled to the CST.
+compiled to the CST by the (universal) compiler.
 
 """
-from collections import defaultdict
 import copy
+from collections import defaultdict
 from functools import partial
-from typing import Dict
 
 import libcst as cst
-
+import mcx.core.translation as t
 from mcx.core.compiler import compile_graph
 from mcx.core.graph import GraphicalModel
 from mcx.core.nodes import Op, Placeholder, SampleOp
-import mcx.core.translation as t
 
-__all__ = ["logpdf", "logpdf_contributions", "generate", "sample_joint"]
+__all__ = [
+    "logpdf",
+    "logpdf_contributions",
+    "sample",
+    "sample_joint",
+    "sample_posterior_predictive",
+]
 
 # -------------------------------------------------------
 #                    == LOGPDF ==
@@ -192,8 +195,8 @@ def _logpdf_core(graph: GraphicalModel):
 # --------------------------------------------------------
 
 
-def generate(model):
-    """Execute the generative model."""
+def sample(model):
+    """Sample from the predictive model."""
     graph = copy.deepcopy(model.graph)
     graph = _sampler_core(graph)
     return compile_graph(graph, model.namespace, f"{graph.name}_sample")
@@ -298,10 +301,81 @@ def _sampler_core(graph: GraphicalModel):
 def sample_posterior_predictive(model):
     """Sample from the posterior predictive distribution.
 
-    Any SampleOp whose output value is not returned (i.e. is not observed)is
-    removed from the graph, and Ops with a degree equal to 0 subsequently.
+    Posterior sampling consists in choosing one of the samples
+    at random, replacing each SampleOp with its value and
+    propagate forward.
+
+    `sample_posterior_predictive` can be seen as a particular case
+    of `sample` where all variables are being conditioned on. It would
+    thus make sense to merge both function by getting a list of variables
+    we are conditioning on as an input.
+
     """
     graph = copy.deepcopy(model.graph)
 
+    # Add `rng_key`, `num_samples` as arguments and sample choice Op
+    def choice_ast(rng_key, num_samples):
+        return t.call(
+            cst.Attribute(
+                attr=cst.Name("jax"),
+                value=cst.Attribute(attr=cst.Name("random"), value=cst.Name("choice")),
+            ),
+            [rng_key, num_samples],
+        )
+
     rng_node = Placeholder("rng_key", lambda: cst.Param(name=cst.Name(value="rng_key")))
+    num_samples_node = Placeholder(
+        "num_samples", lambda: cst.Param(name=cst.Name(value="num_samples"))
+    )
+    choice_node = Op(choice_ast, graph.name, "sample_id")
+    graph.add(choice_node, rng_node, num_samples_node)
+
+    # Modify `SampleOp` so it returns the value of sample `sample_id`
+    def to_slicing(name, sample_id):
+        """ get the `sample_id`th sample, name[:sample_id] """
+        return cst.Subscript(
+            cst.Name(name),
+            slice=[
+                cst.SubscriptElement(
+                    lower=None, upper=cst.Name(sample_id), first_colon=cst.Colon()
+                )
+            ],
+        )
+
+    def placeholder_to_param(name: str):
+        return t.param(name)
+
+    random_variables = []
+    placeholders = []
+    for node in reversed(list(graph.nodes())):
+        if not isinstance(node, SampleOp):
+            continue
+        node.to_ast = partial(to_slicing, node.name)
+        random_variables.append(node)
+
+        # Create a new placeholder node with the random variable's name
+        rv_name = node.name
+        name_node = Placeholder(
+            rv_name, partial(placeholder_to_param, rv_name), rv=True
+        )
+        placeholders.append(name_node)
+
+    # Add the `rng_key` and random variables as placeholders to the graph
     graph.add(rng_node)
+    for name_var, var in zip(placeholders, random_variables):
+        graph.add_edge(var, choice_node)
+        graph.add_node(name_var)
+        graph.add_edge(name_node, node, type="kwargs", key=["var_name"])
+
+        # remove edges from the former SampleOp and replace by new placeholder
+        to_remove = []
+        for e in graph.out_edges(node):
+            data = graph.get_edge_data(*e)
+            to_remove.append(e)
+            graph.add_edge(name_node, e[1], **data)
+
+        for e in to_remove:
+            graph.remove_edge(*e)
+
+
+    return compile_graph(graph, model.namespace, f"{graph.name}_sample_posterior_predictive")

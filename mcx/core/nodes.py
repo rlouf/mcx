@@ -86,11 +86,12 @@ class SampleOp(Op):
     """
 
     def __init__(
-        self, name: str, scope: str, ast_generator: Callable, is_returned=False
+            self, name: str, scope: str, ast_generator: Callable, distribution, is_returned=False
     ) -> None:
         self.name = name
         self.scope = scope
         self.to_ast = ast_generator
+        self.distribution = distribution
         self.is_returned = False
 
 

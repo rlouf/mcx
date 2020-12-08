@@ -1,9 +1,16 @@
 from .parser import parse
-from .representations import logpdf, logpdf_contributions, generate, sample_joint
+from .representations import (
+    logpdf,
+    logpdf_contributions,
+    sample,
+    sample_joint,
+    sample_posterior_predictive,
+)
 
 __all__ = [
-    "generate",
+    "sample",
     "sample_joint",
+    "sample_posterior_predictive",
     "logpdf",
     "logpdf_contributions",
     "parse",

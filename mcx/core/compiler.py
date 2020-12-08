@@ -53,6 +53,7 @@ def compile_graph(graph: GraphicalModel, namespace: dict, fn_name):
             stmts.append(stmt)
 
         if isinstance(node, Op):
+            print(node)
             stmt = cst.SimpleStatementLine(
                 body=[
                     cst.Assign(

@@ -1,11 +1,12 @@
 import functools
-from typing import Dict, Tuple
 from types import FunctionType, MethodType
+from typing import Dict, Tuple
 
 import jax
 import jax.numpy as jnp
 import mcx
 from mcx.distributions import Distribution
+from mcx.trace import Trace
 
 __all__ = ["model"]
 
@@ -178,10 +179,11 @@ class model(Distribution):
         self.model_fn = model_fn
 
         self.logpdf_fn, self.logpdf_src = mcx.core.logpdf(self)
-        self.sample_fn, self.sample_src = mcx.core.sample_joint(self)
-        self.call_fn, self.src = mcx.core.generate(self)
 
-        self.sample_fn = jax.jit(self.sample_fn)
+        self.sample_joint_fn, self.sample_src = mcx.core.sample_joint(self)
+        self.sample_joint_fn = jax.jit(self.sample_joint_fn)
+
+        self.call_fn, self.src = mcx.core.sample(self)
         self.call_fn = jax.jit(self.call_fn)
 
         functools.update_wrapper(self, model_fn)
@@ -205,7 +207,7 @@ class model(Distribution):
 
     def sample(self, rng_key, *args, **kwargs) -> Dict:
         """Sample from the predictive distribution."""
-        return self.sample_fn(rng_key, *args, **kwargs)
+        return self.sample_joint_fn(rng_key, *args, **kwargs)
 
     def seed(self, rng_key):
         """Seed the model with a PRNGKey.
@@ -216,6 +218,7 @@ class model(Distribution):
         these methods with keys that are split at every call.
 
         """
+
         def key_splitter(rng_key):
             while True:
                 _, rng_key = jax.random.split(rng_key)
@@ -242,27 +245,50 @@ class model(Distribution):
 
     @property
     def args(self) -> Tuple[str]:
-        return self.graph.names['args']
+        return self.graph.names["args"]
 
     @property
     def kwargs(self) -> Tuple[str]:
-        return self.graph.names['kwargs']
+        return self.graph.names["kwargs"]
 
     @property
     def random_variables(self) -> Tuple[str]:
-        return self.graph.names['random_variables']
+        return self.graph.names["random_variables"]
+
+
+class generative_function(object):
+    def __init__(self, model_fn: FunctionType, trace: Trace) -> None:
+        """Create a generative function.
+
+        TODO: Uniformize the API between prior and posterior generative function.
+              This can be achieved by passing the name of the variables on which
+              we condition the predictive distribution to the compiler. Prior
+              predictive would not be conditioned, while posterior predictive
+              would be conditioned on all values from the posterior.
+        """
+        self.graph, self.namespace = mcx.core.parse(model_fn)
+        self.model_fn = model_fn
+        self.conditioning = trace
+
+        self.call_fn, self.src = mcx.core.sample_posterior_predictive(self)
+        self.call_fn = jax.jit(self.call_fn)
+
+    def __call__(self, rng_key, *args, **kwargs) -> jnp.DeviceArray:
+        """Call the model as a generative function."""
+        return self.call_fn(rng_key, *args, **kwargs)
 
 
 def seed(model: "model", rng_key: jax.random.PRNGKey):
-    """Wrap the model's calling function to do the rng splitting automatically.
-    """
+    """Wrap the model's calling function to do the rng splitting automatically."""
     seeded_model = mcx.model(model.model_fn)
     seeded_model.seed(rng_key)
     return seeded_model
 
 
-def evaluate(model: "model", trace: mcx.Trace):
-    pass
+def evaluate(model: "model", trace: Trace):
+    """Evaluate the model at the posterior distribution."""
+    evaluated_model = mcx.generative_function(model.model_fn, trace)
+    return evaluated_model
 
 
 # -----------------------------------------------
@@ -286,5 +312,5 @@ def joint_sampler(model) -> FunctionType:
 
 
 def predictive_sampler(model) -> FunctionType:
-    call_fn, _ = mcx.core.generate(model)
+    call_fn = model.sample_fn
     return call_fn
