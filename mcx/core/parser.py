@@ -393,7 +393,7 @@ class ModelDefinitionParser(cst.CSTVisitor):
                 )
             else:
                 op = self.recursive_visit(comparator.expression)
-                sample_op = SampleOp(variable_name, self.scope, op.to_ast)
+                sample_op = SampleOp(variable_name, self.scope, op.to_ast, fn_obj)
                 self.graph = nx.relabel_nodes(self.graph, {op: sample_op})
 
             self.named_variables[variable_name] = sample_op

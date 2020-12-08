@@ -236,6 +236,10 @@ class model(Distribution):
         self.call = MethodType(seeded_call, self)
         self.sample = MethodType(seeded_sample, self)
 
+    def __getitem__(self, name):
+        """Returns `name`'s distribution."""
+        return self.graph.distribution[name]
+
     @property
     def args(self) -> Tuple[str]:
         return self.graph.names['args']

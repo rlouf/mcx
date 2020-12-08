@@ -159,6 +159,10 @@ class GraphicalModel(nx.DiGraph):
         return tuple([node for node in self.nodes() if isinstance(node, SampleOp)])
 
     @property
+    def distributions(self):
+        return {node.name: node.distribution for node in self.random_variables}
+
+    @property
     def names(self):
         return {
             "args": tuple([n.name for n in self.args]),
