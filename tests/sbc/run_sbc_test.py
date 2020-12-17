@@ -1,10 +1,13 @@
-from jax import random
+import time
+
 import jax.numpy as np
-import numpy as onp
 import mcx
 import mcx.distributions as dist
+import numpy as onp
+from jax import random
+
 from sbc_test import run_sbc_test
-import time
+
 
 @mcx.model
 def linear_regression(x, lmbda=1.):

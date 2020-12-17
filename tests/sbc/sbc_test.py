@@ -1,11 +1,11 @@
-from jax import random
-import jax.numpy as np
-import numpy as onp
-import mcx
-import mcx.distributions as dist
 import time
 
+import jax.numpy as np
+import mcx
+import mcx.distributions as dist
+import numpy as onp
 from emcee.autocorr import integrated_time
+from jax import random
 
 
 def effective_sample_size(chain):

@@ -1,8 +1,8 @@
-from jax import random
 import jax.numpy as np
-import numpy as onp
 import mcx
 import mcx.distributions as dist
+import numpy as onp
+from jax import random
 
 
 @mcx.model
