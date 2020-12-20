@@ -30,11 +30,16 @@ __all__ = [
 def logpdf(model):
     """Returns a function that compute the model's logpdf."""
     graph = copy.deepcopy(model.graph)
-    namespace = model.namespace
+    graph = _logpdf_core(graph)
+
+    # no node besides the logpdf is returned
+    for node in graph.nodes():
+        if isinstance(node, Op):
+            node.is_returned = False
 
     # Create a new 'logpdf' node that is the sum of the individual variables'
     # contributions.
-    def to_ast(*args):
+    def to_sum_of_logpdf(*args):
         def add(left, right):
             return cst.BinaryOperation(left, cst.Add(), right)
 
@@ -55,18 +60,11 @@ def logpdf(model):
 
         return expr
 
-    # no node is returned anymore
-    for node in graph.nodes():
-        if isinstance(node, Op):
-            node.is_returned = False
-
-    sum_node = Op(to_ast, graph.name, "logpdf", is_returned=True)
-
-    graph = _logpdf_core(graph)
     logpdf_contribs = [node for node in graph if isinstance(node, SampleOp)]
+    sum_node = Op(to_sum_of_logpdf, graph.name, "logpdf", is_returned=True)
     graph.add(sum_node, *logpdf_contribs)
 
-    return compile_graph(graph, namespace, f"{graph.name}_logpdf")
+    return compile_graph(graph, model.namespace, f"{graph.name}_logpdf")
 
 
 def logpdf_contributions(model):
@@ -84,11 +82,18 @@ def logpdf_contributions(model):
 
     """
     graph = copy.deepcopy(model.graph)
-    namespace = model.namespace
+    graph = _logpdf_core(graph)
 
+    # no node besides the logpdf is returned
+    for node in graph.nodes():
+        if isinstance(node, Op):
+            node.is_returned = False
+
+    # add a new node, a dictionary that contains the contribution of each
+    # variable to the log-probability.
     logpdf_contribs = [node for node in graph if isinstance(node, SampleOp)]
 
-    def to_ast(*_):
+    def to_dictionary_of_contributions(*_):
         scopes = [contrib.scope for contrib in logpdf_contribs]
         contrib_names = [contrib.name for contrib in logpdf_contribs]
         var_names = [
@@ -124,17 +129,15 @@ def logpdf_contributions(model):
             }
         )
 
-    # no node is returned anymore
-    for node in graph.nodes():
-        if isinstance(node, Op):
-            node.is_returned = False
-
-    tuple_node = Op(to_ast, graph.name, "logpdf_contributions", is_returned=True)
-
-    graph = _logpdf_core(graph)
+    tuple_node = Op(
+        to_dictionary_of_contributions,
+        graph.name,
+        "logpdf_contributions",
+        is_returned=True,
+    )
     graph.add(tuple_node, *logpdf_contribs)
 
-    return compile_graph(graph, namespace, f"{graph.name}_logpdf_contribs")
+    return compile_graph(graph, model.namespace, f"{graph.name}_logpdf_contribs")
 
 
 def _logpdf_core(graph: GraphicalModel):
@@ -313,6 +316,27 @@ def sample_posterior_predictive(model):
     """
     graph = copy.deepcopy(model.graph)
 
+    graph = _sampler_core(graph)
+
+    def placeholder_to_param(name: str):
+        return t.param(name)
+
+    # Add all random variables that are not returned as placeholders
+    placeholders = []
+    for node in reversed(list(graph.nodes())):
+        if not isinstance(node, SampleOp):
+            continue
+
+        if node.is_returned:
+            continue
+
+        # Create a new placeholder node with the random variable's name
+        rv_name = node.name
+        name_node = Placeholder(
+            rv_name, partial(placeholder_to_param, rv_name), rv=True
+        )
+        placeholders.append(name_node)
+
     # Add `rng_key`, `num_samples` as arguments and sample choice Op
     def choice_ast(rng_key, num_samples):
         return t.call(
@@ -341,9 +365,6 @@ def sample_posterior_predictive(model):
                 )
             ],
         )
-
-    def placeholder_to_param(name: str):
-        return t.param(name)
 
     random_variables = []
     placeholders = []
@@ -377,5 +398,6 @@ def sample_posterior_predictive(model):
         for e in to_remove:
             graph.remove_edge(*e)
 
-
-    return compile_graph(graph, model.namespace, f"{graph.name}_sample_posterior_predictive")
+    return compile_graph(
+        graph, model.namespace, f"{graph.name}_sample_posterior_predictive"
+    )
