@@ -13,8 +13,7 @@ inference for bayesian updating.
 
 **The best of usability and modularity**
 MCX reconciles modularity with usability. It does offer "turn key" algorithms
-for users who just want something that works. But it also allows users to
-compose their own inference kernel from multiple parts.
+for users who just want something that works. Or you can go your own way, and use MCX's expressive modeling language to compile a model's logpdf as a python function. Which you can then use with your algorithms or those of libraries like `BlackJAX <https://github.com/blackjax-devs/blackjax>`_.
 
 
 MCX by example
@@ -42,41 +41,27 @@ MCX by example
   # Sample from the model posterior distribution using HMC    
   hmc_kernel = mcx.HMC(num_integration_steps=100)
         
-  observations = {'x': X, 'predictions': y, 'lmbda': 3.}
-  sampler = mcx.sample(rng_key, linear_regression, hmc_kernel, **observations)
+  args = (X, 3.)
+  observations = {'predictions': y}
+  sampler = mcx.sample(
+     rng_key, 
+     linear_regression,
+     args,
+     observations,
+     hmc_kernel
+  )
   trace = sampler.run()
 
 
 Features
 ========
 
-* The HMC and empirical HMC algorithms with Stan warmup;
+* HMC and NUTS algorithms with window adaptation;
 * A dozen distributions;
 * Batch sampling;
 * Iterative sampling for more complex workflows;
-* Sequential inference for bayesian updating;
-* Sample millions of chains in parallel;
+* Sample hundreds of thousands of chains in parallel;
 * Fast inference on GPU.
-
-
-From practice to research
-=========================
-
-MCX is highly flexible and can be seen as the combination of two decoupled
-libraries:
-
-1. *A probabilistic modeling language*; MCX models can be exported as a forward
-   sampling function and a log-probability density functions which may be used
-   with custom inference algorithms.
-2. *An inference library*; MCX's inference module is purposefully designed as a
-   collection of loosely coupled elements. Advanced users are free to compose
-   these elements in any way they see fit. It is not necessary to use the
-   modeling language to build the log-probability density function, any python
-   function will do. 
-
-MCX tries to strike the right balance between customizability (for researchers)
-and sane defaults for people who want the benefits of inference without having
-to dig in the literature.
 
 
 Quickstart
