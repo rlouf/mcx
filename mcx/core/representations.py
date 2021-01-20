@@ -301,6 +301,59 @@ def _sampler_core(graph: GraphicalModel):
 # --------------------------------------------------------
 
 
+def intervene(graph, nodes):
+    """Intervene on the graph by setting the value of the nodes
+    passed as an input.
+    """
+
+    # first remove all incoming edges
+    edges_to_remove = graph.in_edges(nodes)
+    for edge in edges_to_remove:
+        graph.remove_edge(*edge)
+
+    # every node becomes a placeholder
+    for node in nodes:
+        rv_name = node.name
+        placeholder = Placeholder(
+            rv_name, partial(lambda name: t.param(name), rv_name), rv=True
+        )
+        graph.add_node(placeholder)
+
+        original_edges = []
+        for e in graph.out_edges(node):
+            data = graph.get_edge_data(*e)
+            original_edges.append(e)
+            graph.add_edge(placeholder, e[1], **data)
+
+        for e in original_edges:
+            graph.remove_edge(*e)
+
+        graph.remove_node(node)
+
+    # recursively remove every node that has no outgoing edge and is not
+    # returned
+    graph = remove_dangling_nodes(graph)
+
+    return graph
+
+
+def is_dangling(graph, node):
+    if len(graph.outedges(node)) != 0:
+        return False
+    elif isinstance(node, Op) and node.is_returned:
+        return False
+    return True
+
+
+def remove_dangling_nodes(graph):
+    dangling_nodes = [node for node in graph.nodes() if is_dangling(graph, node)]
+    if dangling_nodes:
+        graph.remove_nodes(dangling_nodes)
+        remove_dangling_nodes(graph)
+    else:
+        return graph
+
+
 def sample_posterior_predictive(model):
     """Sample from the posterior predictive distribution.
 
@@ -313,8 +366,28 @@ def sample_posterior_predictive(model):
     thus make sense to merge both function by getting a list of variables
     we are conditioning on as an input.
 
+    we should remove every Op that is "blocked" by the values we
+    pass to the function, a bit like for the "do" function. I.e. every
+    upstream Op.
+
+
+    def linear_regression(X, lmbda=1.):
+        scale <~ Exponential(lmbda)
+        coef <~ Normal(jnp.zeros(X.shape[0]), 1)
+        y = jnp.dot(X, coef)
+        pred <~ Normal(y, scale)
+        return pred
+
+    def linear_regression_pred(rng_key, X, **trace, lambda=1.):
+        scale = jax.random.choice(rng_key, scale)
+        coef = jax.random.choice(rng_key, coef)
+        y = jnp.dot(X, coef)
+        pred = Normal(y, scale).sample(rng_key)
+        return pred
     """
     graph = copy.deepcopy(model.graph)
+
+
 
     graph = _sampler_core(graph)
 
