@@ -8,31 +8,96 @@ import mcx
 from mcx.distributions import Distribution
 from mcx.trace import Trace
 
-__all__ = ["model"]
+__all__ = [
+    "model",
+    "generative_function",
+    "log_prob",
+    "log_prob_contributions",
+    "joint_sampler",
+    "predictive_sampler",
+]
+
+
+# --------------------------------------------------------------------
+#                        == TARGET FUNCTIONS ==
+#
+# The functions into which a MCX model can be compiled to sample from
+# the different distributions it defines.
+# --------------------------------------------------------------------
+
+
+def log_prob(model: "model") -> FunctionType:
+    logpdf_fn, _ = mcx.core.logpdf(model)
+    return logpdf_fn
+
+
+def log_prob_contributions(model: "model") -> FunctionType:
+    logpdf_fn, _ = mcx.core.logpdf_contributions(model)
+    return logpdf_fn
+
+
+def joint_sampler(model: "model") -> FunctionType:
+    sample_fn, _ = mcx.core.sample_joint(model)
+    return sample_fn
+
+
+def predictive_sampler(model: "model") -> FunctionType:
+    call_fn, _ = mcx.core.sample(model)
+    return call_fn
+
+
+# -------------------------------------------------------------------
+#                             == MODEL ==
+# -------------------------------------------------------------------
 
 
 class model(Distribution):
-    """Representation of a model.
+    """MCX representation of a probabilistic model (or program).
+
+    Models are expressed as generative functions. The expression of the model
+    within the function should be as close to the mathematical expression as
+    possible. The only difference with standard python code is the use of the
+    "<~" operator for random variable assignments. Model definitions are python
+    functions decorated with the `@mcx.model` decorator. Calling the model returns
+    samples from the prior predictive distribution.
+
+    A model is a representation of a probabilistic graphical model, and as such
+    implicitly defines a multivariate probability distribution. The class
+    `model` thus inherits from the `Distribution` class and implements the
+    `logpdf` and `sample` method. The `sample` method returns samples from the
+    joint probability distribution.
 
     Since it represents a probability graphical model, the `model` instance is
     a (multivariate) probability distribution, and as such inherits from the
     `Distribution` class. It implements the `sample` and `logpdf` methods.
 
-    Models are expressed as generative functions. The expression of the model
-    within the function should be as close to the mathematical expression as
-    possible. The only difference with standard python code is the use of the
-    "<~" operator for random variable assignments.
-
-    The models are then parsed into an internal graph representation that can
+    Model expressions are parsed into an internal graph representation that can
     be conditioned on data, compiled into a logpdf or a forward sampler. The
     result is pure functions that can be further JIT-compiled with JAX,
-    differentiated and dispatched on GPUs and TPUs.
+    differentiated and dispatched on GPUs and TPUs. The graph can be inspected
+    and modified at runtime.
 
-    The graph can be inspected and modified at runtime.
-
-    Parameters
+    Attributes
     ----------
-    model: A function that contains `mcx` model definition.
+    model_fn:
+        The function that contains `mcx` model definition.
+    graph:
+        The internal representation of the model as a graphical model.
+    namespace:
+        The namespace in which the function is called.
+
+    Methods
+    -------
+    __call__:
+        Return a sample from the prior predictive distribution.
+    sample:
+        Return a sampler from the joint probability distribution.
+    logpdf:
+        Return the value of the log-probability density function of the
+        implied multivariate probability distribution.
+    seed:
+        Seed the model with an auto-updating PRNGKey so the sampling methods do
+        not need to be called with a new key each time.
 
     Examples
     --------
@@ -175,16 +240,12 @@ class model(Distribution):
     """
 
     def __init__(self, model_fn: FunctionType) -> None:
-        self.graph, self.namespace = mcx.core.parse(model_fn)
         self.model_fn = model_fn
+        self.graph, self.namespace = mcx.core.parse(model_fn)
 
         self.logpdf_fn, self.logpdf_src = mcx.core.logpdf(self)
-
-        self.sample_joint_fn, self.sample_src = mcx.core.sample_joint(self)
-        self.sample_joint_fn = jax.jit(self.sample_joint_fn)
-
-        self.call_fn, self.src = mcx.core.sample(self)
-        self.call_fn = jax.jit(self.call_fn)
+        self.sample_joint_fn, self.sample_joint_src = mcx.core.sample_joint(self)
+        self.call_fn, self.call_src = mcx.core.sample(self)
 
         functools.update_wrapper(self, model_fn)
 
@@ -193,21 +254,26 @@ class model(Distribution):
         return self.call(rng_key, *args, **kwargs)
 
     def call(self, rng_key, *args, **kwargs) -> jnp.DeviceArray:
-        """We redirect the call to __call__ to allows monkey-patching
-        when seeding the function. Indeed, special methods are attached
-        to the class and not on particular instances so it is impossible
+        """Returns a sample from the prior predictive distribution.
+
+        We redirect the call to __call__ to be able to seed the function
+        with a PRNG key. Indeed, special methods in python are attached
+        to the class and not on particular instances making it impossible
         to monkey patch them.
 
         """
         return self.call_fn(rng_key, *args, **kwargs)
 
-    def logpdf(self, *rv_and_args, **kwargs) -> jnp.DeviceArray:
-        """Logpdf of the multivariate distribution defined by the model."""
-        return self.logpdf_fn(*rv_and_args, **kwargs)
-
     def sample(self, rng_key, *args, **kwargs) -> Dict:
-        """Sample from the predictive distribution."""
+        """Sample from the joint distribution."""
         return self.sample_joint_fn(rng_key, *args, **kwargs)
+
+    def logpdf(self, *rv_and_args, **kwargs) -> jnp.DeviceArray:
+        """Value of the log-probability density function of the distribution.
+
+        TODO: Figure out the right interface for the logpdf, and document it.
+        """
+        return self.logpdf_fn(*rv_and_args, **kwargs)
 
     def seed(self, rng_key):
         """Seed the model with a PRNGKey.
@@ -239,10 +305,6 @@ class model(Distribution):
         self.call = MethodType(seeded_call, self)
         self.sample = MethodType(seeded_sample, self)
 
-    def __getitem__(self, name):
-        """Returns `name`'s distribution."""
-        return self.graph.distribution[name]
-
     @property
     def args(self) -> Tuple[str]:
         return self.graph.names["args"]
@@ -256,61 +318,44 @@ class model(Distribution):
         return self.graph.names["random_variables"]
 
 
+def seed(model: "model", rng_key: jax.random.PRNGKey):
+    """Wrap the model's calling function to do the rng splitting automatically."""
+    seeded_model = mcx.model(model.model_fn)  # type: ignore
+    seeded_model.seed(rng_key)
+    return seeded_model
+
+
+# -------------------------------------------------------------------
+#                  == GENERATIVE FUNCTION ==
+# -------------------------------------------------------------------
+
+
 class generative_function(object):
     def __init__(self, model_fn: FunctionType, trace: Trace) -> None:
         """Create a generative function.
 
-        TODO: Uniformize the API between prior and posterior generative function.
-              This can be achieved by passing the name of the variables on which
-              we condition the predictive distribution to the compiler. Prior
-              predictive would not be conditioned, while posterior predictive
-              would be conditioned on all values from the posterior.
+        We create a generative function, or stochastic program, by conditioning
+        the values of a model's random variables. A typical application is to
+        create a function that returns samples from the posterior predictive
+        distribution.
+
         """
         self.graph, self.namespace = mcx.core.parse(model_fn)
         self.model_fn = model_fn
         self.conditioning = trace
 
-        self.call_fn, self.src = mcx.core.sample_posterior_predictive(self)
-        self.call_fn = jax.jit(self.call_fn)
+        self.call_fn, self.call_src = mcx.core.sample_posterior_predictive(
+            self, trace.keys()
+        )
+        self.trace = trace
 
     def __call__(self, rng_key, *args, **kwargs) -> jnp.DeviceArray:
         """Call the model as a generative function."""
-        return self.call_fn(rng_key, *args, **kwargs)
-
-
-def seed(model: "model", rng_key: jax.random.PRNGKey):
-    """Wrap the model's calling function to do the rng splitting automatically."""
-    seeded_model = mcx.model(model.model_fn)
-    seeded_model.seed(rng_key)
-    return seeded_model
+        print(args, kwargs, self.trace)
+        return self.call_fn(rng_key, *args, **kwargs, **self.trace)
 
 
 def evaluate(model: "model", trace: Trace):
     """Evaluate the model at the posterior distribution."""
-    evaluated_model = mcx.generative_function(model.model_fn, trace)
+    evaluated_model = mcx.generative_function(model.model_fn, trace)  # type: ignore
     return evaluated_model
-
-
-# -----------------------------------------------
-#             == RAW FUNCTIONS ==
-# -----------------------------------------------
-
-
-def log_prob(model) -> FunctionType:
-    logpdf_fn, _ = mcx.core.logpdf(model)
-    return logpdf_fn
-
-
-def log_prob_contribs(model) -> FunctionType:
-    logpdf_fn, _ = mcx.core.logpdf_contributions(model)
-    return logpdf_fn
-
-
-def joint_sampler(model) -> FunctionType:
-    sample_fn, _ = mcx.core.sample_joint(model)
-    return sample_fn
-
-
-def predictive_sampler(model) -> FunctionType:
-    call_fn = model.sample_fn
-    return call_fn

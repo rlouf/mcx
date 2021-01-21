@@ -301,75 +301,8 @@ def _sampler_core(graph: GraphicalModel):
 # --------------------------------------------------------
 
 
-def intervene(graph, nodes):
-    """Intervene on the graph by setting the value of the nodes
-    passed as an input.
-    """
-
-    # first remove all incoming edges
-    edges_to_remove = graph.in_edges(nodes)
-    for edge in edges_to_remove:
-        graph.remove_edge(*edge)
-
-    # every node becomes a placeholder
-    for node in nodes:
-        rv_name = node.name
-        placeholder = Placeholder(
-            rv_name, partial(lambda name: t.param(name), rv_name), rv=True
-        )
-        graph.add_node(placeholder)
-
-        original_edges = []
-        for e in graph.out_edges(node):
-            data = graph.get_edge_data(*e)
-            original_edges.append(e)
-            graph.add_edge(placeholder, e[1], **data)
-
-        for e in original_edges:
-            graph.remove_edge(*e)
-
-        graph.remove_node(node)
-
-    # recursively remove every node that has no outgoing edge and is not
-    # returned
-    graph = remove_dangling_nodes(graph)
-
-    return graph
-
-
-def is_dangling(graph, node):
-    if len(graph.outedges(node)) != 0:
-        return False
-    elif isinstance(node, Op) and node.is_returned:
-        return False
-    return True
-
-
-def remove_dangling_nodes(graph):
-    dangling_nodes = [node for node in graph.nodes() if is_dangling(graph, node)]
-    if dangling_nodes:
-        graph.remove_nodes(dangling_nodes)
-        remove_dangling_nodes(graph)
-    else:
-        return graph
-
-
-def sample_posterior_predictive(model):
+def sample_posterior_predictive(model, node_names):
     """Sample from the posterior predictive distribution.
-
-    Posterior sampling consists in choosing one of the samples
-    at random, replacing each SampleOp with its value and
-    propagate forward.
-
-    `sample_posterior_predictive` can be seen as a particular case
-    of `sample` where all variables are being conditioned on. It would
-    thus make sense to merge both function by getting a list of variables
-    we are conditioning on as an input.
-
-    we should remove every Op that is "blocked" by the values we
-    pass to the function, a bit like for the "do" function. I.e. every
-    upstream Op.
-
 
     def linear_regression(X, lmbda=1.):
         scale <~ Exponential(lmbda)
@@ -387,90 +320,96 @@ def sample_posterior_predictive(model):
     """
     graph = copy.deepcopy(model.graph)
 
+    nodes = [graph.find_node(name) for name in node_names]
 
+    # first remove all incoming edges
+    to_remove = []
+    for e in graph.in_edges(nodes):
+        to_remove.append(e)
 
-    graph = _sampler_core(graph)
+    for edge in to_remove:
+        graph.remove_edge(*edge)
 
-    def placeholder_to_param(name: str):
-        return t.param(name)
-
-    # Add all random variables that are not returned as placeholders
-    placeholders = []
-    for node in reversed(list(graph.nodes())):
-        if not isinstance(node, SampleOp):
-            continue
-
-        if node.is_returned:
-            continue
-
-        # Create a new placeholder node with the random variable's name
-        rv_name = node.name
-        name_node = Placeholder(
-            rv_name, partial(placeholder_to_param, rv_name), rv=True
-        )
-        placeholders.append(name_node)
-
-    # Add `rng_key`, `num_samples` as arguments and sample choice Op
-    def choice_ast(rng_key, num_samples):
-        return t.call(
-            cst.Attribute(
-                attr=cst.Name("jax"),
-                value=cst.Attribute(attr=cst.Name("random"), value=cst.Name("choice")),
-            ),
-            [rng_key, num_samples],
-        )
-
+    # Add a rng placeholder
     rng_node = Placeholder("rng_key", lambda: cst.Param(name=cst.Name(value="rng_key")))
-    num_samples_node = Placeholder(
-        "num_samples", lambda: cst.Param(name=cst.Name(value="num_samples"))
-    )
-    choice_node = Op(choice_ast, graph.name, "sample_id")
-    graph.add(choice_node, rng_node, num_samples_node)
+    graph.add_node(rng_node)
 
-    # Modify `SampleOp` so it returns the value of sample `sample_id`
-    def to_slicing(name, sample_id):
-        """ get the `sample_id`th sample, name[:sample_id] """
-        return cst.Subscript(
-            cst.Name(name),
-            slice=[
-                cst.SubscriptElement(
-                    lower=None, upper=cst.Name(sample_id), first_colon=cst.Colon()
-                )
-            ],
+    # Every node is replaced by a placeholder for the posterior samples
+    # and a sampling function.
+    for node in nodes:
+        rv_name = node.name
+
+        # Add the placeholder
+        placeholder = Placeholder(
+            rv_name, partial(lambda name: t.param(name), rv_name), rv=True
+        )
+        graph.add_node(placeholder)
+
+        # Add the sampling node
+        def choice_ast(rng_key, placeholder):
+            return t.call(
+                cst.Attribute(
+                    value=cst.Name("jax"),
+                    attr=cst.Attribute(value=cst.Name("random"), attr=cst.Name("choice")),
+                ),
+                [rng_key, placeholder],
+            )
+
+        choice_node = Op(choice_ast, graph.name, rv_name)
+        graph.add(choice_node, rng_node, placeholder)
+
+        original_edges = []
+        for e in graph.out_edges(node):
+            data = graph.get_edge_data(*e)
+            original_edges.append(e)
+            graph.add_edge(choice_node, e[1], **data)
+
+        for e in original_edges:
+            graph.remove_edge(*e)
+
+        graph.remove_node(node)
+
+    # recursively remove every node that has no outgoing edge and is not
+    # returned
+    graph = remove_dangling_nodes(graph)
+
+    # replace SampleOps by sampling instruction
+    def to_sampler(to_ast, *args, **kwargs):
+        rng_key = kwargs.pop("rng_key")
+        return cst.Call(
+            func=cst.Attribute(value=to_ast(*args, **kwargs), attr=cst.Name("sample")),
+            args=[cst.Arg(value=rng_key)],
         )
 
     random_variables = []
-    placeholders = []
     for node in reversed(list(graph.nodes())):
         if not isinstance(node, SampleOp):
             continue
-        node.to_ast = partial(to_slicing, node.name)
+        node.to_ast = partial(to_sampler, node.to_ast)
         random_variables.append(node)
 
-        # Create a new placeholder node with the random variable's name
-        rv_name = node.name
-        name_node = Placeholder(
-            rv_name, partial(placeholder_to_param, rv_name), rv=True
-        )
-        placeholders.append(name_node)
-
-    # Add the `rng_key` and random variables as placeholders to the graph
-    graph.add(rng_node)
-    for name_var, var in zip(placeholders, random_variables):
-        graph.add_edge(var, choice_node)
-        graph.add_node(name_var)
-        graph.add_edge(name_node, node, type="kwargs", key=["var_name"])
-
-        # remove edges from the former SampleOp and replace by new placeholder
-        to_remove = []
-        for e in graph.out_edges(node):
-            data = graph.get_edge_data(*e)
-            to_remove.append(e)
-            graph.add_edge(name_node, e[1], **data)
-
-        for e in to_remove:
-            graph.remove_edge(*e)
+    # Add the placeholders to the graph
+    for var in random_variables:
+        graph.add_edge(rng_node, var, type="kwargs", key=["rng_key"])
 
     return compile_graph(
         graph, model.namespace, f"{graph.name}_sample_posterior_predictive"
     )
+
+
+def is_dangling(graph, node):
+    if len(graph.out_edges(node)) != 0:
+        return False
+    elif isinstance(node, Op) and node.is_returned:
+        return False
+    return True
+
+
+def remove_dangling_nodes(graph) -> GraphicalModel:
+    dangling_nodes = [node for node in graph.nodes() if is_dangling(graph, node)]
+    if dangling_nodes:
+        for n in dangling_nodes:
+            graph.remove_node(n)
+        return remove_dangling_nodes(graph)
+    else:
+        return graph

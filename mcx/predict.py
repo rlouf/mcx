@@ -12,7 +12,7 @@ def predict(
     rng_key: jax.random.PRNGKey,
     model: mcx.model,
     model_args: Tuple[Any],
-    num_samples: int = 1000,
+    num_samples: int = 100,
 ):
     """Provides a unified interface to sample from the prior and posterior
     predictive distributions.

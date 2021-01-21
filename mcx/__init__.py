@@ -1,12 +1,12 @@
-import mcx.core
-import mcx.distributions
-import mcx.inference
+from . import core
+from . import distributions
+from . import inference
 from mcx.model import (
     evaluate,
     generative_function,
     joint_sampler,
     log_prob,
-    log_prob_contribs,
+    log_prob_contributions,
     model,
     predictive_sampler,
     seed,
@@ -18,6 +18,9 @@ from mcx.trace import Trace
 __version__ = "0.0.1"
 
 __all__ = [
+    "core",
+    "distributions",
+    "inference",
     "model",
     "generative_function",
     "seed",
@@ -25,7 +28,7 @@ __all__ = [
     "predict",
     "sample_joint",
     "log_prob",
-    "log_prob_contribs",
+    "log_prob_contributions",
     "predictive_sampler",
     "joint_sampler",
     "sampler",

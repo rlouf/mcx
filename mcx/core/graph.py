@@ -121,14 +121,11 @@ class GraphicalModel(nx.DiGraph):
 
         return merged_graph, return_node
 
-    def do(self, **kwargs):
-        """Apply the do-operator to the graph:
-
-        1. Simplify the graph by removing parent nodes. Send warning when one
-           of the variables disappear because of another one.
-        2. Add partial application logic for when the function is compiled.
-        """
-        pass
+    def find_node(self, name: str):
+        """Find a random variable by its name."""
+        node = [node for node in self.random_variables if node.name == name]
+        if node:
+            return node[0]
 
     @property
     def leaf(self):
