@@ -418,6 +418,8 @@ def is_dangling(graph, node):
         return False
     elif isinstance(node, Op) and node.is_returned:
         return False
+    elif isinstance(node, Placeholder):
+        return False
     return True
 
 
