@@ -430,16 +430,3 @@ def remove_dangling_nodes(graph) -> GraphicalModel:
         return remove_dangling_nodes(graph)
     else:
         return graph
-
-
-# -------------------------------------------------------
-#         == SAMPLE DETERMINISTIC VARIABLES ==
-# --------------------------------------------------------
-
-
-def sample_deterministic(model):
-    """Return the value of the deterministic variables in the model.
-
-    Every random variable becomes
-    """
-    pass
