@@ -626,8 +626,7 @@ def build_loglikelihoods(model, args, observations):
     """Function to compute the loglikelihood contribution
     of each variable.
     """
-    logpdfs, _ = mcx.core.logpdf_contributions(model)
-    loglikelihoods = jax.partial(mcx.log_prob_contribs(model), **observations, **args)
+    loglikelihoods = jax.partial(mcx.log_prob_contributions(model), **observations, **args)
     return loglikelihoods
 
 

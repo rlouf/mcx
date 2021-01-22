@@ -1,6 +1,7 @@
 from . import core
 from . import distributions
 from . import inference
+from mcx.inference import HMC
 from mcx.model import (
     evaluate,
     generative_function,
@@ -32,5 +33,6 @@ __all__ = [
     "predictive_sampler",
     "joint_sampler",
     "sampler",
+    "HMC",
     "Trace",
 ]
