@@ -1,5 +1,6 @@
 """Sample from the multivariate distribution defined by the model."""
 from typing import Any, Callable, Dict, Iterator, Optional, Tuple
+import warnings
 
 import numpy as np
 from tqdm import tqdm
@@ -553,6 +554,11 @@ def validate_model_args(model, args):
     model_args = model.args
     model_kwargs = model.kwargs
     num_passed_args = len(args)
+
+    if not isinstance(args, tuple):
+        raise TypeError(
+            "Model arguments, even when there is only one, must be passed in a tuple."
+        )
 
     if num_passed_args < len(model_args):
         num_missing = len(model_args) - num_passed_args

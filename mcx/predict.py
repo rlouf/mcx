@@ -36,7 +36,8 @@ def predict(
     model
         The model that is used for predictions.
     model_args
-        The arguments passed to the model. Input data, for instance.
+        A tuple that contains the arguments passed to the model. It can either
+        be input data or parameters.
     num_samples
         The number of samples to take from the predictive distribution.
 
@@ -58,7 +59,7 @@ def predict(
 
     # TODO(remi): Handle the case where multiple values are returned.
 
-    samples = jax.vmap(mcx.predictive_sampler(model), in_axes, out_axes=0)(
+    samples = jax.vmap(model, in_axes, out_axes=0)(
         *sampler_args
     )
 
