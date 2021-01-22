@@ -351,8 +351,15 @@ class generative_function(object):
 
     def __call__(self, rng_key, *args, **kwargs) -> jnp.DeviceArray:
         """Call the model as a generative function."""
-        print(args, kwargs, self.trace)
-        return self.call_fn(rng_key, *args, **kwargs, **self.trace)
+        return self.call_fn(rng_key, *self.trace.values(), *args, **kwargs)
+
+    @property
+    def args(self) -> Tuple[str]:
+        return self.graph.names["args"]
+
+    @property
+    def kwargs(self) -> Tuple[str]:
+        return self.graph.names["kwargs"]
 
 
 def evaluate(model: "model", trace: Trace):

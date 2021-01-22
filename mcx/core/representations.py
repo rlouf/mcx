@@ -334,9 +334,30 @@ def sample_posterior_predictive(model, node_names):
     rng_node = Placeholder("rng_key", lambda: cst.Param(name=cst.Name(value="rng_key")))
     graph.add_node(rng_node)
 
+    # Choose a sample id at random
+    def choice_ast(rng_key):
+        return cst.Call(
+            func=cst.Attribute(
+                value=cst.Attribute(cst.Name("jax"), cst.Name("random")),
+                attr=cst.Name("choice"),
+            ),
+            args=[
+                cst.Arg(rng_key),
+                cst.Arg(
+                    cst.Subscript(
+                        cst.Attribute(cst.Name(nodes[0].name), cst.Name("shape")),
+                        [cst.SubscriptElement(cst.Index(cst.Integer("0")))],
+                    )
+                ),
+            ],
+        )
+
+    choice_node = Op(choice_ast, graph.name, "idx")
+    graph.add(choice_node, rng_node)
+
     # Every node is replaced by a placeholder for the posterior samples
     # and a sampling function.
-    for node in nodes:
+    for node in reversed(nodes):
         rv_name = node.name
 
         # Add the placeholder
@@ -345,24 +366,19 @@ def sample_posterior_predictive(model, node_names):
         )
         graph.add_node(placeholder)
 
-        # Add the sampling node
-        def choice_ast(rng_key, placeholder):
-            return t.call(
-                cst.Attribute(
-                    value=cst.Name("jax"),
-                    attr=cst.Attribute(value=cst.Name("random"), attr=cst.Name("choice")),
-                ),
-                [rng_key, placeholder],
+        def choose_ast(placeholder, idx):
+            return cst.Subscript(
+                placeholder, [cst.SubscriptElement(cst.Index(idx))]
             )
 
-        choice_node = Op(choice_ast, graph.name, rv_name)
-        graph.add(choice_node, rng_node, placeholder)
+        chosen_sample = Op(choose_ast, graph.name, rv_name + "_sample")
+        graph.add(chosen_sample, placeholder, choice_node)
 
         original_edges = []
         for e in graph.out_edges(node):
             data = graph.get_edge_data(*e)
             original_edges.append(e)
-            graph.add_edge(choice_node, e[1], **data)
+            graph.add_edge(chosen_sample, e[1], **data)
 
         for e in original_edges:
             graph.remove_edge(*e)

@@ -253,7 +253,7 @@ class sampler(object):
 
         """
         new_state = next(self.sample_generator)
-        self.state, info = new_state
+        self.state, _ = new_state
         sample, sampling_info = self.evaluator.make_trace(
             chain=new_state, unravel_fn=self.unravel_fn
         )
@@ -537,7 +537,7 @@ def sample_loop(
         )
         chain = []
         state = init_state
-        for i, key in enumerate(progress):
+        for _, key in enumerate(progress):
             state, _, ravelled_state = update_loop(state, key)
             chain.append(ravelled_state)
 
