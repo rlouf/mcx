@@ -105,7 +105,7 @@ class GraphicalModel(nx.DiGraph):
                 else:
                     default = list(model.predecessors(placeholder))[0]
                     mapping[placeholder] = Constant(
-                        lambda: default.to_ast(), placeholder.name
+                        lambda: default.to_cst(), placeholder.name
                     )
 
         if len(missing_arguments) > 0:

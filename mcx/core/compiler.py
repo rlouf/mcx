@@ -46,7 +46,7 @@ def compile_graph(graph: GraphicalModel, namespace: dict, fn_name):
                 body=[
                     cst.Assign(
                         targets=[cst.AssignTarget(target=cst.Name(value=node.name))],
-                        value=node.to_ast(),
+                        value=node.to_cst(),
                     )
                 ]
             )
@@ -125,13 +125,13 @@ def compile_op(node: Op, graph: GraphicalModel):
             for key in graph[predecessor][node]["key"]:
                 op_kwargs[key] = pred_ast
 
-    return node.to_ast(*op_args, **op_kwargs)
+    return node.to_cst(*op_args, **op_kwargs)
 
 
 def compile_placeholder(node: Placeholder, graph: GraphicalModel):
     """Compile a placeholder by fetching its default value."""
     default = []
     for predecessor in graph.predecessors(node):
-        default.append(predecessor.to_ast())
+        default.append(predecessor.to_cst())
 
-    return node.to_ast(*default)
+    return node.to_cst(*default)

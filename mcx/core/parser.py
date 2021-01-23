@@ -389,7 +389,14 @@ class ModelDefinitionParser(cst.CSTVisitor):
             # This eval is necessary to check whether object sampled
             # from is a model or a distribution. And in the former case
             # to merge to the current graph.
-            fn_call_path = unroll_call_path(expression.func)
+            try:
+                fn_call_path = unroll_call_path(expression.func)
+            except AttributeError as err:
+                raise SyntaxError(
+                    "Expressions on the right-hand-side of <~ must be models or distributions. "
+                    f"Found the node {expression} instead."
+                ) from err
+
             fn_obj = eval(fn_call_path, self.namespace)
             if isinstance(fn_obj, mcx.model):
                 posargs = [
@@ -405,7 +412,7 @@ class ModelDefinitionParser(cst.CSTVisitor):
                 self.graph, sample_op = self.graph.merge(
                     variable_name, posargs, kwargs, fn_obj.graph
                 )
-            elif isinstance(fn_obj, mcx.distributions.Distribution):
+            elif issubclass(fn_obj, mcx.distributions.Distribution):
                 op = self.recursive_visit(comparator.expression)
                 sample_op = SampleOp(variable_name, self.scope, op.to_cst, fn_obj)
                 self.graph = nx.relabel_nodes(self.graph, {op: sample_op})
@@ -480,7 +487,6 @@ class ModelDefinitionParser(cst.CSTVisitor):
 
             op = Op(to_call_cst, self.scope)
             self.graph.add(op, *args, __name__=func)
-
             return op
 
         if isinstance(node, cst.Arg):
@@ -512,8 +518,6 @@ class ModelDefinitionParser(cst.CSTVisitor):
 
             def to_subscript_cst(value, *slice_elements):
                 return cst.Subscript(value, slice_elements)
-
-            print(node)
 
             op = Op(to_subscript_cst, self.scope)
             self.graph.add(op, value, *slice_elements)

@@ -148,10 +148,10 @@ def _logpdf_core(graph: GraphicalModel):
     placeholders = []
     sample = []
 
-    def sample_to_logpdf(to_ast, *args, **kwargs):
+    def sample_to_logpdf(to_cst, *args, **kwargs):
         name = kwargs.pop("var_name")
         return t.call(
-            cst.Attribute(to_ast(*args, **kwargs), cst.Name("logpdf_sum")), name
+            cst.Attribute(to_cst(*args, **kwargs), cst.Name("logpdf_sum")), name
         )
 
     def placeholder_to_param(name: str):
@@ -169,7 +169,7 @@ def _logpdf_core(graph: GraphicalModel):
         placeholders.append(name_node)
 
         # Update the nodes
-        node.to_ast = partial(sample_to_logpdf, node.to_ast)
+        node.to_cst = partial(sample_to_logpdf, node.to_cst)
         node.name = f"logpdf_{node.scope}_{node.name}"
 
         # The random variables now must be placeholder nodes pointing to
@@ -213,7 +213,7 @@ def sample_joint(model):
 
     random_variables = graph.random_variables
 
-    def to_ast(*_):
+    def to_cst(*_):
         scopes = [rv.scope for rv in random_variables]
         names = [rv.name for rv in random_variables]
 
@@ -260,7 +260,7 @@ def sample_joint(model):
         if isinstance(node, Op):
             node.is_returned = False
 
-    tuple_node = Op(to_ast, graph.name, "forward_samples", is_returned=True)
+    tuple_node = Op(to_cst, graph.name, "forward_samples", is_returned=True)
 
     graph = _sampler_core(graph)
     graph.add(tuple_node, *random_variables)
@@ -275,10 +275,10 @@ def _sampler_core(graph: GraphicalModel):
     rng_node = Placeholder("rng_key", lambda: cst.Param(name=cst.Name(value="rng_key")))
 
     # Update the SampleOps to return a sample from the distribution
-    def to_sampler(to_ast, *args, **kwargs):
+    def to_sampler(to_cst, *args, **kwargs):
         rng_key = kwargs.pop("rng_key")
         return cst.Call(
-            func=cst.Attribute(value=to_ast(*args, **kwargs), attr=cst.Name("sample")),
+            func=cst.Attribute(value=to_cst(*args, **kwargs), attr=cst.Name("sample")),
             args=[cst.Arg(value=rng_key)],
         )
 
@@ -286,7 +286,7 @@ def _sampler_core(graph: GraphicalModel):
     for node in reversed(list(graph.nodes())):
         if not isinstance(node, SampleOp):
             continue
-        node.to_ast = partial(to_sampler, node.to_ast)
+        node.to_cst = partial(to_sampler, node.to_cst)
         random_variables.append(node)
 
     # Add the placeholders to the graph
@@ -389,10 +389,10 @@ def sample_posterior_predictive(model, node_names):
     graph = remove_dangling_nodes(graph)
 
     # replace SampleOps by sampling instruction
-    def to_sampler(to_ast, *args, **kwargs):
+    def to_sampler(to_cst, *args, **kwargs):
         rng_key = kwargs.pop("rng_key")
         return cst.Call(
-            func=cst.Attribute(value=to_ast(*args, **kwargs), attr=cst.Name("sample")),
+            func=cst.Attribute(value=to_cst(*args, **kwargs), attr=cst.Name("sample")),
             args=[cst.Arg(value=rng_key)],
         )
 
@@ -400,7 +400,7 @@ def sample_posterior_predictive(model, node_names):
     for node in reversed(list(graph.nodes())):
         if not isinstance(node, SampleOp):
             continue
-        node.to_ast = partial(to_sampler, node.to_ast)
+        node.to_cst = partial(to_sampler, node.to_cst)
         random_variables.append(node)
 
     # Add the placeholders to the graph

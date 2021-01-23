@@ -11,7 +11,7 @@ class Constant(object):
 
     def __init__(self, ast_generator: Callable, name: str = None) -> None:
         self.name = name
-        self.to_ast = ast_generator
+        self.to_cst = ast_generator
 
 
 class Name(object):
@@ -21,7 +21,7 @@ class Name(object):
 
     def __init__(self, name: str, ast_generator: Callable) -> None:
         self.name = name
-        self.to_ast = ast_generator
+        self.to_cst = ast_generator
 
 
 class Placeholder(object):
@@ -34,7 +34,7 @@ class Placeholder(object):
 
     def __init__(self, name: str, ast_generator: Callable, rv=False) -> None:
         self.name = name
-        self.to_ast = ast_generator
+        self.to_cst = ast_generator
         self.rv = rv
 
 
@@ -73,7 +73,7 @@ class Op(object):
     ) -> None:
         self.name = name
         self.scope = scope
-        self.to_ast = ast_generator
+        self.to_cst = ast_generator
         self.do_sample = do_sample
         self.is_returned = is_returned
 
@@ -95,7 +95,7 @@ class SampleOp(Op):
     ) -> None:
         self.name = name
         self.scope = scope
-        self.to_ast = ast_generator
+        self.to_cst = ast_generator
         self.distribution = distribution
         self.is_returned = False
 
@@ -108,7 +108,7 @@ class FunctionOp(object):
     """
 
     def __init__(self, ast_generator, name) -> None:
-        self.to_ast = ast_generator
+        self.to_cst = ast_generator
         self.name = name
 
 
@@ -120,5 +120,5 @@ class ModelOp(object):
     """
 
     def __init__(self, ast_generator, name) -> None:
-        self.to_ast = ast_generator
+        self.to_cst = ast_generator
         self.name = name
