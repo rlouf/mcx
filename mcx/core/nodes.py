@@ -35,7 +35,7 @@ class Placeholder(object):
     def __init__(self, name: str, ast_generator: Callable, rv=False) -> None:
         self.name = name
         self.to_cst = ast_generator
-        self.rv = rv
+        self.is_rv = rv
 
 
 class Op(object):

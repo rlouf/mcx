@@ -8,26 +8,24 @@ from mcx.core.nodes import Constant, Op, Placeholder
 def compile_graph(graph: GraphicalModel, namespace: dict, fn_name):
     """Compile MCX's graph into a python (executable) function."""
 
-    # Model arguments.
-    #
-    # Arguments are passed in the following order:
-    # 1. rng_key (if relevant);
-    # 2. Random variables _in the order in which they appear in the model_
-    # 3. The model's arguments and keyword arguments.
+    # Model arguments are passed in the following order:
+    #  1. (samplers only) rng_key;
+    #  2. (logpdf only) random variables, in the order in which they appear in the model.
+    #  3. (all) the model's arguments and keyword arguments.
     maybe_rng_key = [
         compile_placeholder(node, graph)
-        for node in graph.nodes
-        if isinstance(node, Placeholder) and node.name == "rng_key"
+        for node in graph.placeholders
+        if node.name == "rng_key"
     ]
     maybe_random_variables = [
         compile_placeholder(node, graph)
-        for node in reversed(list(graph.nodes))
-        if isinstance(node, Placeholder) and node.rv
+        for node in reversed(list(graph.placeholders))
+        if node.is_rv
     ]
     model_args = [
         compile_placeholder(node, graph)
-        for node in graph.nodes
-        if isinstance(node, Placeholder) and not node.rv and node.name != "rng_key"
+        for node in graph.placeholders
+        if not node.is_rv and node.name != "rng_key"
     ]
     args = maybe_rng_key + maybe_random_variables + model_args
 
