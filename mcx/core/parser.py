@@ -32,12 +32,13 @@ from mcx.core.nodes import (
     SampleOp,
 )
 
-MODEL_BADLY_FORMED_ERROR = SyntaxError(
+MODEL_BADLY_FORMED_ERROR = (
     "A MCX model should be defined in a single function. This exception is completely unexpected."
     " Please file an issue on https://github.com/rlouf/mcx."
 )
 
-MULTIPLE_RETURNED_VALUES_ERROR = SyntaxError(
+# TODO: Allow random variable assignments from models that return multiple variables
+MULTIPLE_RETURNED_VALUES_ERROR = (
     "Only one variable is allowed on the left-hand-side of a random variable assignment "
     " , several were provided."
 )
@@ -57,14 +58,14 @@ def parse(model_fn: FunctionType) -> Tuple[GraphicalModel, dict]:
 
     """
     source = inspect.getsource(model_fn)
-    source = textwrap.dedent(source)  # not sure we need this now
+    source = textwrap.dedent(source)  # TODO: do we need this with libcst?
     tree = cst.parse_module(source)
 
     namespace = model_fn.__globals__
 
     definition_visitor = ModelDefinitionParser(namespace)
     tree.visit(definition_visitor)
-    graph: GraphicalModel = definition_visitor.graph
+    graph = definition_visitor.graph
 
     return graph, namespace
 
@@ -83,12 +84,12 @@ class ModelDefinitionParser(cst.CSTVisitor):
     instantiated its code source is read and translated into a graph. Every
     subsequent operation is an operation on this graph.
 
-    This class contains all the parsing and graph building logic. The approach
-    is straightforward. Whenever a sample statement is encountered, we perform
-    a recursive visit of the variables used to instantiate the distribution.
-    The recursion stops whenever we encounter a constant or a named variable.
-    We then add node in the reverse order to the graph; nodes contain a function
-    that can reconstruct the corresponding CST node when called with arguments.
+    This class contains all the parsing and graph building logic. Whenever a
+    sample statement is encountered, we perform a recursive visit of the
+    variables used to instantiate the distribution.  The recursion stops
+    whenever we encounter a constant or a named variable.  We then add node in
+    the reverse order to the graph; nodes contain a function that can
+    reconstruct the corresponding CST node when called with arguments.
 
     Say the parser encounters the following line:
 
@@ -96,20 +97,20 @@ class ModelDefinitionParser(cst.CSTVisitor):
 
     where `x` is an argument to the model. The recursion stops immediately
     since both arguments are either a constant or a named node. So we create a
-    new `SampleOp` with name `var` and a to_ast funtion defined as:
+    new `SampleOp` with name `var` and a to_cst funtion defined as:
 
-        >>> def to_ast(*args):
+        >>> def to_cst(*args):
         ...      return cst.Call(
         ...          func='Normal',
         ...          args=args
         ...      )
 
     And we create an edge between the constant `0` and this SampleOp, the
-    placeholder `x` and the SampleOp. Each edge is indexed by the position of
-    the argument. All the compiler has to do at compilation is traverse the
-    graph in topological order, translate `0` and `x` to their equivalent CST
-    nodes, and pass these nodes to var's `to_ast` function when translating it
-    into its AST equivalent.
+    placeholder `x` and this SampleOp. Each edge is indexed by the position of
+    the argument. All the compiler has to do is to traverse the graph in
+    topological order, translate `0` and `x` to their equivalent CST nodes, and
+    pass these nodes to var's `to_cst` function when translating it into its
+    AST equivalent.
 
     When parsing the following:
 
@@ -125,8 +126,8 @@ class ModelDefinitionParser(cst.CSTVisitor):
     model is merged with the current one. Since namespaces can overlap we add a
     scope for variables, named after the model which introduced the variables.
     Furthermore, since the same model can be used several times (this would be
-    common in deep learning), we append the model's occurence number to the
-    scope.
+    common in deep learning), we append the model's current number of occurences
+    to the scope name.
 
     2. As discussed in the docstring of `visit_FunctionDef` below, functions are
     to be treated with care as they can either be standard functions, models
@@ -160,7 +161,10 @@ class ModelDefinitionParser(cst.CSTVisitor):
         self.sample_this_op = True
 
     def visit_FunctionDef(self, node: cst.FunctionDef) -> None:
-        """There's an issue if a model is defined inside the model.
+        """Visit a function definition.
+
+        When we traverse the Concrete Syntax Tree of a MCX model, a function definition
+        can represent several objects.
 
         The main model definition
         ~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -219,12 +223,12 @@ class ModelDefinitionParser(cst.CSTVisitor):
             ...     predictions <~ Normal(np.matmul(x, coefs), scale)
             ...     return predictions
 
+        We can even have nested submodels.
+
         """
 
-        # If we are visiting a function within the model definition
-        # Standard python functions need to be included as is in the
-        # resulting source code.
-        # Models also need to be included in the source code.
+        # Standard python functions defined within a model need to be included
+        # as is in the resulting source code. So do submodels.
         if hasattr(self, "graph"):
             if is_model_definition(node, self.namespace):
                 graph_node = ModelOp(lambda: node, node.name)
@@ -237,31 +241,38 @@ class ModelDefinitionParser(cst.CSTVisitor):
             self.named_variables[node.name] = graph_node
             return False  # don't visit the node's children
 
-        # Each time we enter a model definition we create a new Graphical Model
+        # Each time we enter a model definition we create a new GraphicalModel
         # which is returned after the definition's children have been visited.
-        # The current version does not support nested graph but will.
+        # The current version does not support nested models but will.
         self.graph = GraphicalModel()
         self.graph.namespace = self.namespace
         self.graph.name = node.name.value
         self.scope = node.name.value
 
-        def to_ast(name, default=None):
+        def argument_cst(name, default=None):
             return cst.Param(cst.Name(name), default=default)
 
         function_args = node.params.params
-        for i, argument in enumerate(function_args):
+        for _, argument in enumerate(function_args):
             name = argument.name.value
-            node = Placeholder(name, partial(to_ast, name))
+            node = Placeholder(name, partial(argument_cst, name))
             self.named_variables[name] = node
 
-            try:
+            try:  # parse argument default value is any
                 default = self.recursive_visit(argument.default)
                 self.graph.add(node, default)
             except TypeError:
                 self.graph.add(node)
 
+    # ----------------------------------------------------------------
+    #                        PARSE COMMENTS
+    # ----------------------------------------------------------------
+
     def visit_SimpleStatementLine(self, node: cst.SimpleStatementLine) -> None:
         """Read comments.
+
+        LibCST includes each assignment statement in a statement line, to which
+        comments are attached.
 
         We include an experimental feature which consists in allowing the user
         to ignore some deterministic variables in the trace by adding a
@@ -272,25 +283,27 @@ class ModelDefinitionParser(cst.CSTVisitor):
         if comment is not None and "sample: ignore" in comment.value:
             self.sample_this_op = False
 
-    def leave_SimpleStatementLine(self, node: cst.SimpleStatementLine) -> None:
-        """Re-enable sampling after the line has been parsed."""
+    def leave_SimpleStatementLine(self, _) -> None:
+        """Re-enable the sampling of deterministic variables after parsing the current line."""
         self.sample_this_op = True
 
     # ----------------------------------------------------------------
-    #          PARSE DETERMINISTIC ASSIGNMENTS (Named Ops)
+    #          PARSE DETERMINISTIC ASSIGNMENTS (named Ops)
     # ----------------------------------------------------------------
 
     def visit_Assign(self, node: cst.Assign) -> None:
-        """A new named Op or a Constant.
+        """Visit named Ops and Constants.
 
         This method parses assignment expressions such as:
 
             >>> x = f(a)
 
         We parse the right-hand side recursively to create the Op and its
-        parent constants, placeholders or Ops. For the sake of simplicity we
-        currently explicitly disallow expressions that return a tuple. It should
-        be possible to define multioutput ops to handle this situation.
+        parent which can be Constants, Placeholders or Ops.
+
+        TODO: For the sake of simplicity we currently explicitly disallow
+        expressions that return a tuple. It should be possible to define
+        multioutput ops to handle this situation.
 
         There are three broad situations to take into consideration. First,
         numerical constants:
@@ -324,7 +337,7 @@ class ModelDefinitionParser(cst.CSTVisitor):
 
         # Restict ourselves to single-output ops
         if len(node.targets) > 1:
-            raise MULTIPLE_RETURNED_VALUES_ERROR
+            raise SyntaxError(MULTIPLE_RETURNED_VALUES_ERROR)
 
         op.name = node.targets[0].target.value
         self.named_variables[op.name] = op
@@ -342,7 +355,7 @@ class ModelDefinitionParser(cst.CSTVisitor):
         `SampleOp` in MCX's graph.
 
         The parser can encounter two situations. First, the object on the
-        right-hand side of the 'sample' operator is a mcx model:
+        right-hand side of the 'sample' operator is a MCX model:
 
             >>> coef <~ Horseshoe(1.)
 
@@ -367,7 +380,7 @@ class ModelDefinitionParser(cst.CSTVisitor):
             comparator, cst.UnaryOperation
         ):
             if isinstance(node.left, cst.Tuple):
-                raise MULTIPLE_RETURNED_VALUES_ERROR
+                raise SyntaxError(MULTIPLE_RETURNED_VALUES_ERROR)
 
             variable_name = node.left.value
             expression = comparator.expression
@@ -392,21 +405,26 @@ class ModelDefinitionParser(cst.CSTVisitor):
                 self.graph, sample_op = self.graph.merge(
                     variable_name, posargs, kwargs, fn_obj.graph
                 )
-            else:
+            elif isinstance(fn_obj, mcx.distributions.Distribution):
                 op = self.recursive_visit(comparator.expression)
-                sample_op = SampleOp(variable_name, self.scope, op.to_ast, fn_obj)
+                sample_op = SampleOp(variable_name, self.scope, op.to_cst, fn_obj)
                 self.graph = nx.relabel_nodes(self.graph, {op: sample_op})
+            else:
+                raise SyntaxError(
+                    "Expressions on the right-hand-side of <~ must be models or distributions. "
+                    f"Found {fn_call_path} instead."
+                )
 
             self.named_variables[variable_name] = sample_op
 
-    # ---------------------------------------------------------------
-    #          RECURSIVELY PARSE THE RHS OF STATEMENTS
-    # ---------------------------------------------------------------
+    # ----------------------------------------------------------------
+    #            RECURSIVELY PARSE THE RHS OF STATEMENTS
+    # ----------------------------------------------------------------
 
     def recursive_visit(self, node) -> Union[Constant, Op]:
-        """Recursively visit the node and populate the graph with the corresponding nodes.
+        """Recursively visit the node and populate the graph with the traversed nodes.
 
-        Each recursion ends when the CST node being visited is a `Name` or a
+        The recursion ends when the CST node being visited is a `Name` or a
         `BaseNumber` node.  While we follow strictly libcst's CST
         decomposition, it may be desirable to simplify the graph for our
         purposes. For instance:
@@ -416,6 +434,10 @@ class ModelDefinitionParser(cst.CSTVisitor):
           or a function of other variables.
         - Functions like `np.dot`. `np` and `dot` are currently store in different Ops. We should
           merge these.
+
+        TODO: Implement a function that takes a GraphicalModel and applies
+        these simplifications. This will be necessary when sampling
+        deterministic functions.
 
         Note
         ----
@@ -447,11 +469,16 @@ class ModelDefinitionParser(cst.CSTVisitor):
             func = self.recursive_visit(node.func)
             args = [self.recursive_visit(arg) for arg in node.args]
 
-            def to_call_ast(*args, **kwargs):
+            def to_call_cst(*args, **kwargs):
+                # I don't exactly remember why we pass the `func` as a keyword
+                # argument, but I think it has something to do with the fact
+                # that at compilation the arguments are passed in the order they
+                # were introduced in the graph, and nodes are deleted/re-inserted
+                # when transforming to get logpdf and samplers.
                 func = kwargs["__name__"]
                 return cst.Call(func, args)
 
-            op = Op(to_call_ast, self.scope)
+            op = Op(to_call_cst, self.scope)
             self.graph.add(op, *args, __name__=func)
 
             return op
@@ -459,10 +486,10 @@ class ModelDefinitionParser(cst.CSTVisitor):
         if isinstance(node, cst.Arg):
             value = self.recursive_visit(node.value)
 
-            def to_arg_ast(value):
+            def to_arg_cst(value):
                 return cst.Arg(value, node.keyword)
 
-            op = Op(to_arg_ast, self.scope)
+            op = Op(to_arg_cst, self.scope)
             self.graph.add(op, value)
             return op
 
@@ -470,10 +497,10 @@ class ModelDefinitionParser(cst.CSTVisitor):
             value = self.recursive_visit(node.value)
             attr = self.recursive_visit(node.attr)
 
-            def to_attribute_ast(value, attr):
+            def to_attribute_cst(value, attr):
                 return cst.Attribute(value, attr)
 
-            op = Op(to_attribute_ast, self.scope)
+            op = Op(to_attribute_cst, self.scope)
             self.graph.add(op, value, attr)
             return op
 
@@ -483,10 +510,12 @@ class ModelDefinitionParser(cst.CSTVisitor):
             value = self.recursive_visit(node.value)
             slice_elements = [self.recursive_visit(s) for s in node.slice]
 
-            def to_subscript_ast(value, *slice_elements):
+            def to_subscript_cst(value, *slice_elements):
                 return cst.Subscript(value, slice_elements)
 
-            op = Op(to_subscript_ast, self.scope)
+            print(node)
+
+            op = Op(to_subscript_cst, self.scope)
             self.graph.add(op, value, *slice_elements)
 
             return op
@@ -494,10 +523,10 @@ class ModelDefinitionParser(cst.CSTVisitor):
         if isinstance(node, cst.SubscriptElement):
             sl = self.recursive_visit(node.slice)
 
-            def to_subscript_element_ast(slice):
-                return cst.SubscriptElement(slice)
+            def to_subscript_element_cst(sl):
+                return cst.SubscriptElement(sl)
 
-            op = Op(to_subscript_element_ast, self.scope)
+            op = Op(to_subscript_element_cst, self.scope)
             self.graph.add(op, sl)
 
             return op
@@ -505,10 +534,10 @@ class ModelDefinitionParser(cst.CSTVisitor):
         if isinstance(node, cst.Index):
             value = self.recursive_visit(node.value)
 
-            def to_index_ast(value):
+            def to_index_cst(value):
                 return cst.Index(value)
 
-            op = Op(to_index_ast, self.scope)
+            op = Op(to_index_cst, self.scope)
             self.graph.add(op, value)
 
             return op
@@ -519,21 +548,23 @@ class ModelDefinitionParser(cst.CSTVisitor):
             left = self.recursive_visit(node.left)
             right = self.recursive_visit(node.right)
 
-            def to_binary_operation_ast(left, right):
+            def to_binary_operation_cst(left, right):
                 return cst.BinaryOperation(left, node.operator, right=right)
 
-            op = Op(to_binary_operation_ast, self.scope)
+            op = Op(to_binary_operation_cst, self.scope)
             self.graph.add(op, left, right)
+
             return op
 
         if isinstance(node, cst.UnaryOperation):
             expression = self.recursive_visit(node.expression)
 
-            def to_unary_operation_ast(expression):
+            def to_unary_operation_cst(expression):
                 return cst.UnaryOperation(node.operator, expression)
 
-            op = Op(to_unary_operation_ast, self.scope)
+            op = Op(to_unary_operation_cst, self.scope)
             self.graph.add(op, expression)
+
             return op
 
         # In case we missed an important statement or expression leave a friendly error
@@ -548,17 +579,21 @@ class ModelDefinitionParser(cst.CSTVisitor):
     # ----------------------------------------------------------------
 
     def visit_Return(self, node: cst.Return) -> None:
-        """We currently return all the leaves of the (directed) graph when
-        calling the function, in the order in which they appear. The return
-        statement has thus no effect on how the graph is processed.
+        """Visit the return statement.
+
+        We mark the referenced named Op as returned.
         """
         value = node.value
         if not isinstance(value, cst.Name):
-            raise MULTIPLE_RETURNED_VALUES_ERROR
+            raise SyntaxError(MULTIPLE_RETURNED_VALUES_ERROR)
 
         returned_name = node.value.value
-        returned_node = self.named_variables[returned_name]
-        returned_node.is_returned = True
+
+        try:
+            returned_node = self.named_variables[returned_name]
+            returned_node.is_returned = True
+        except KeyError:
+            raise NameError(f"name '{returned_name}' is not defined")
 
     # ----------------------------------------------------------------
     #           EXPLICITLY EXCLUDE CONTROL FLOW (for now)
@@ -570,13 +605,13 @@ class ModelDefinitionParser(cst.CSTVisitor):
     # translation.
     # ----------------------------------------------------------------
 
-    def visit_If(self, node: cst.If):
+    def visit_If(self, _):
         raise SyntaxError(
             "Probabilistic programs with stochastic support cannot be defined "
             "using python's control flow yet. Please use jax.lax.cond or jax.lax.switch instead. "
         )
 
-    def visit_For(self, node: cst.For):
+    def visit_For(self, _):
         raise SyntaxError(
             "Probabilistic programs cannot use python's control flow constructs yet "
             "Please use jax.lax.scan (preferably), jax.lax.fori_loop or jax.lax.while instead. "
@@ -587,8 +622,8 @@ def is_model_definition(node: cst.FunctionDef, namespace: Dict) -> bool:
     """Determines whether a function is a model definition.
 
     A function is a model definition if it is decorated by the mcx.model class.
-    This is not completely straightforward as the class can be called in many
-    different ways, per python's import rules:
+    This is not completely straightforward to determine as the class can be
+    called in many different ways, per python's import rules:
 
         >>> import mcx
         ... @mcx.model
@@ -602,7 +637,7 @@ def is_model_definition(node: cst.FunctionDef, namespace: Dict) -> bool:
         >>> import mcx.model as turing_machine
         ... @turing_machine
 
-    we handle all these situations using python's introspection capabilities and
+    We handle all these situations using python's introspection capabilities and
     the namespace we captured when the model was called.
 
     """
@@ -624,12 +659,18 @@ def is_model_definition(node: cst.FunctionDef, namespace: Dict) -> bool:
 def unroll_call_path(
     node: Union[cst.Attribute, cst.Call], name: Optional[List[str]] = None
 ) -> str:
-    """Unroll function's call path.
+    """Unroll a function's call path.
 
     When we call a function using a path from the module in which it is defined
     the resulting CST is a succession of nested `Attribute` statement. This
     function unrolls these statement to get the full call path. For instance
     `np.dot`, `mcx.distribution.Normal`.
+
+    Example
+    -------
+        >>> expr = cst.Call(cst.Attribute("mcx", cst.Attribute("distribution", "Normal")), None)
+        >>> unroll_call_path(expr)
+        "mcx.distribution.Normal"
 
     """
     if not name:

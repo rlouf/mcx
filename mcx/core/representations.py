@@ -158,7 +158,7 @@ def _logpdf_core(graph: GraphicalModel):
         return t.param(name)
 
     for node in reversed(list(graph.nodes())):
-        if isinstance(node, SampleOp):
+        if not isinstance(node, SampleOp):
             continue
 
         # Create a new placeholder node with the random variable's name

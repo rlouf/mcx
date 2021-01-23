@@ -63,9 +63,6 @@ def compile_graph(graph: GraphicalModel, namespace: dict, fn_name):
             )
             stmts.append(stmt)
 
-            # We return nodes that do not have a successor in the graph. The
-            # following only works if 'successors' does not return 'None' (which it
-            # shouldn't).
             if node.is_returned:
                 returns.append(
                     cst.SimpleStatementLine(

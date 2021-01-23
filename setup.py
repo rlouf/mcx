@@ -16,7 +16,7 @@ setuptools.setup(
     install_requires=[
         "arviz==0.10.0",
         "jax==0.1.77",
-        "jaxlib",
+        "jaxlib==0.1.57",
         "libcst==0.3.13",
         "networkx",
         "numpy",
