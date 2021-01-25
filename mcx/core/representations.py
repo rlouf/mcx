@@ -10,7 +10,6 @@ from functools import partial
 
 import libcst as cst
 
-import mcx.core.translation as t
 from mcx.core.compiler import compile_graph
 from mcx.core.graph import GraphicalModel
 from mcx.core.nodes import Op, Placeholder, SampleOp
@@ -45,7 +44,7 @@ def logpdf(model):
             return cst.BinaryOperation(left, cst.Add(), right)
 
         if len(args) == 1:
-            return t.name(args[0].value)
+            return cst.Name(args[0].value)
         elif len(args) == 2:
             left = cst.Name(args[0].value)
             right = cst.Name(args[1].value)
@@ -55,7 +54,7 @@ def logpdf(model):
         right = args.pop()
         left = args.pop()
         expr = add(left, right)
-        for arg in args:
+        for _ in args:
             right = args.pop()
             expr = add(expr, right)
 
@@ -109,25 +108,33 @@ def logpdf_contributions(model):
         # if there is only one scope (99% of models) we return a flat dictionary
         if len(set(scopes)) == 1:
             scope = scopes[0]
-            return t.dict(
-                {
-                    cst.SimpleString(f"'{var_name}'"): cst.Name(contrib_name)
+            return cst.Dict(
+                [
+                    cst.DictElement(
+                        cst.SimpleString(f"'{var_name}'"), cst.Name(contrib_name)
+                    )
                     for var_name, contrib_name in scoped[scope].items()
-                }
+                ]
             )
 
         # Otherwise we return a nested dictionary where the first level is
         # the scope, and then the variables.
-        return t.dict(
-            {
-                cst.SimpleString(f"'{scope}'"): t.dict(
-                    {
-                        cst.SimpleString(f"'{var_name}'"): cst.Name(contrib_name)
-                        for var_name, contrib_name in scoped[scope].items()
-                    }
+        return cst.Dict(
+            [
+                cst.DictElement(
+                    cst.SimpleString(f"'{scope}'"),
+                    cst.Dict(
+                        [
+                            cst.DictElement(
+                                cst.SimpleString(f"'{var_name}'"),
+                                cst.Name(contrib_name),
+                            )
+                            for var_name, contrib_name in scoped[scope].items()
+                        ]
+                    ),
                 )
                 for scope in scoped.keys()
-            }
+            ]
         )
 
     tuple_node = Op(
@@ -150,12 +157,12 @@ def _logpdf_core(graph: GraphicalModel):
 
     def sample_to_logpdf(to_cst, *args, **kwargs):
         name = kwargs.pop("var_name")
-        return t.call(
-            cst.Attribute(to_cst(*args, **kwargs), cst.Name("logpdf_sum")), name
+        return cst.Call(
+            cst.Attribute(to_cst(*args, **kwargs), cst.Name("logpdf_sum")), [cst.Arg(name)]
         )
 
     def placeholder_to_param(name: str):
-        return t.param(name)
+        return cst.Param(cst.Name(name))
 
     for node in reversed(list(graph.nodes())):
         if not isinstance(node, SampleOp):
@@ -272,7 +279,7 @@ def _sampler_core(graph: GraphicalModel):
     with the variables' values.
     """
 
-    rng_node = Placeholder("rng_key", lambda: cst.Param(name=cst.Name(value="rng_key")))
+    rng_node = Placeholder("rng_key", lambda: cst.Param(cst.Name(value="rng_key")))
 
     # Update the SampleOps to return a sample from the distribution
     def to_sampler(to_cst, *args, **kwargs):
@@ -332,7 +339,7 @@ def sample_posterior_predictive(model, node_names):
         graph.remove_edge(*edge)
 
     # Add a rng placeholder
-    rng_node = Placeholder("rng_key", lambda: cst.Param(name=cst.Name(value="rng_key")))
+    rng_node = Placeholder("rng_key", lambda: cst.Param(cst.Name(value="rng_key")))
     graph.add_node(rng_node)
 
     # Choose a sample id at random
@@ -363,7 +370,7 @@ def sample_posterior_predictive(model, node_names):
 
         # Add the placeholder
         placeholder = Placeholder(
-            rv_name, partial(lambda name: t.param(name), rv_name), rv=True
+            rv_name, partial(lambda name: cst.Param(cst.Name(name)), rv_name), rv=True
         )
         graph.add_node(placeholder)
 
