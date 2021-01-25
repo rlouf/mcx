@@ -1,41 +1,38 @@
+from dataclasses import dataclass
 from typing import Callable, Optional
+
+
+@dataclass(frozen=True)
+class Name:
+    """Name of an attribute or a function."""
+    cst_generator: Callable
+    name: str
+
+
+@dataclass(frozen=True)
+class Placeholder:
+    """Placeholder node.
+
+    A Placeholder is a named node whose shape and value is not known until
+    execution. Placeholders are collected at compilation time to be used as
+    argument to the function being compiled.
+    """
+    cst_generator: Callable
+    name: str
+    is_random_variable: bool = False
+    has_default: bool = False
 
 
 class Constant(object):
     """Constant node.
 
-    Constant nodes hold a value that is not modified during the program's
-    execution. Will eventually hold expressions such as `np.ones(10)` that
-    do not contain any name.
+    Constant nodes hold a value that is no modified during the
+    program's execution, whether when computing the log-probability
+    or sampling from prior & posterior distributions.
     """
-
-    def __init__(self, ast_generator: Callable, name: str = None) -> None:
+    def __init__(self, cst_generator: Callable, name: Optional[str] = None):
+        self.cst_generator = cst_generator
         self.name = name
-        self.to_cst = ast_generator
-
-
-class Name(object):
-    """This is temporarily here to handle the attributes. Will disappear
-    eventually.
-    """
-
-    def __init__(self, name: str, ast_generator: Callable) -> None:
-        self.name = name
-        self.to_cst = ast_generator
-
-
-class Placeholder(object):
-    """Placeholder node.
-
-    A Placeholder node is a named node whose shape and value is unknown util
-    execution. Placeholders are collected during compilation to be added as
-    arguments to the function.
-    """
-
-    def __init__(self, name: str, ast_generator: Callable, rv=False) -> None:
-        self.name = name
-        self.to_cst = ast_generator
-        self.is_rv = rv
 
 
 class Op(object):
@@ -65,15 +62,15 @@ class Op(object):
 
     def __init__(
         self,
-        ast_generator,
+        cst_generator,
         scope: Optional[str],
         name: Optional[str] = None,
-        do_sample: bool = False,
         is_returned=False,
+        do_sample: bool = False,
     ) -> None:
         self.name = name
         self.scope = scope
-        self.to_cst = ast_generator
+        self.cst_generator = cst_generator
         self.do_sample = do_sample
         self.is_returned = is_returned
 
@@ -87,38 +84,57 @@ class SampleOp(Op):
 
     def __init__(
         self,
-        name: str,
+        cst_generator: Callable,
         scope: str,
-        ast_generator: Callable,
+        name: str,
         distribution,
         is_returned=False,
     ) -> None:
         self.name = name
         self.scope = scope
-        self.to_cst = ast_generator
+        self.cst_generator = cst_generator
         self.distribution = distribution
-        self.is_returned = False
+        self.is_returned = is_returned
 
 
-class FunctionOp(object):
-    """Function node.
+class SampleModelOp(SampleOp):
+    """A SampleModelOp node.
 
-    Standard python functions are stored in nodes.
-
+    SampleOps represent random variables that are defined by a MCX model.
     """
 
-    def __init__(self, ast_generator, name) -> None:
-        self.to_cst = ast_generator
+    def __init__(
+        self,
+        cst_generator: Callable,
+        scope: str,
+        name: str,
+        model_name: str,
+        graph: "GraphicalModel",
+        is_returned=False,
+    ) -> None:
+        self.cst_generator = cst_generator
+        self.scope = scope
         self.name = name
+        self.model_name = model_name
+        self.graph = graph
+        self.is_returned = is_returned
 
 
+@dataclass(frozen=True)
+class FunctionOp:
+    """Function node.
+
+    Stores a standard python function as is.
+    """
+    cst_generator: Callable
+    name: str
+
+
+@dataclass(frozen=True)
 class ModelOp(object):
     """Model node.
 
-    Standard python functions are stored in nodes.
-
+    Stores a MCX model (a function decorated with @mcx.model) as is.
     """
-
-    def __init__(self, ast_generator, name) -> None:
-        self.to_cst = ast_generator
-        self.name = name
+    cst_generator: Callable
+    name: str

@@ -8,7 +8,6 @@ from mcx.sample import validate_model_args
 
 __all__ = ["predict"]
 
-
 def predict(
     rng_key: jax.random.PRNGKey,
     model: mcx.model,

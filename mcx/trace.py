@@ -209,8 +209,8 @@ class Trace(InferenceData):
     def __getitem__(self, key):
         return self.raw.samples[key]
 
-    def values(self):
-        return [self.raw.samples[key][0] for key in self.keys()]
+    def values(self, chain_id=0):
+        return [self.raw.samples[key][chain_id] for key in self.keys()]
 
     # The following methods are used to concatenate two traces or add new samples
     # to a trace.

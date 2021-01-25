@@ -33,7 +33,6 @@ class GraphicalModel(nx.DiGraph):
             return
 
         self.add_node(node)
-
         if isinstance(node, Placeholder):
             for i, arg in enumerate(args):
                 self.add(arg)
@@ -150,6 +149,11 @@ class GraphicalModel(nx.DiGraph):
     def kwargs(self):
         is_kwarg = lambda node: next(self.predecessors(node), None) is not None
         return tuple([node for node in self.placeholders if is_kwarg(node)])
+
+    @property
+    def returned_variables(self):
+        is_returned = lambda node: isinstance(node, Op) and node.is_returned
+        return tuple([node for node in self.nodes() if is_returned(node)])
 
     @property
     def random_variables(self):

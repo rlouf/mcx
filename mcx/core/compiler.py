@@ -20,14 +20,19 @@ def compile_graph(graph: GraphicalModel, namespace: dict, fn_name):
     maybe_random_variables = [
         compile_placeholder(node, graph)
         for node in reversed(list(graph.placeholders))
-        if node.is_rv
+        if node.is_random_variable
     ]
     model_args = [
         compile_placeholder(node, graph)
         for node in graph.placeholders
-        if not node.is_rv and node.name != "rng_key"
+        if not node.is_random_variable and node.name != "rng_key" and not node.has_default
     ]
-    args = maybe_rng_key + maybe_random_variables + model_args
+    model_kwargs = [
+        compile_placeholder(node, graph)
+        for node in graph.placeholders
+        if not node.is_random_variable and node.name != "rng_key" and node.has_default
+    ]
+    args = maybe_rng_key + model_args + maybe_random_variables + model_kwargs
 
     # Every statement in the function corresponds to either a constant definition or
     # a variable assignment. We use a topological sort to respect the
@@ -44,7 +49,7 @@ def compile_graph(graph: GraphicalModel, namespace: dict, fn_name):
                 body=[
                     cst.Assign(
                         targets=[cst.AssignTarget(target=cst.Name(value=node.name))],
-                        value=node.to_cst(),
+                        value=node.cst_generator(),
                     )
                 ]
             )
@@ -123,13 +128,13 @@ def compile_op(node: Op, graph: GraphicalModel):
             for key in graph[predecessor][node]["key"]:
                 op_kwargs[key] = pred_ast
 
-    return node.to_cst(*op_args, **op_kwargs)
+    return node.cst_generator(*op_args, **op_kwargs)
 
 
 def compile_placeholder(node: Placeholder, graph: GraphicalModel):
     """Compile a placeholder by fetching its default value."""
     default = []
     for predecessor in graph.predecessors(node):
-        default.append(predecessor.to_cst())
+        default.append(predecessor.cst_generator())
 
-    return node.to_cst(*default)
+    return node.cst_generator(*default)

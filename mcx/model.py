@@ -202,7 +202,7 @@ def seed(model: "model", rng_key: jax.random.PRNGKey):
 
 
 class generative_function(object):
-    def __init__(self, model_fn: FunctionType, trace: Trace) -> None:
+    def __init__(self, model_fn: FunctionType, trace: Trace, chain_id=0) -> None:
         """Create a generative function.
 
         We create a generative function, or stochastic program, by conditioning
@@ -219,10 +219,11 @@ class generative_function(object):
             self, trace.keys()
         )
         self.trace = trace
+        self.chain_id = chain_id
 
     def __call__(self, rng_key, *args, **kwargs) -> jnp.DeviceArray:
         """Call the model as a generative function."""
-        return self.call_fn(rng_key, *self.trace.values(), *args, **kwargs)
+        return self.call_fn(rng_key, *self.trace.values(self.chain_id), *args, **kwargs)
 
     @property
     def args(self) -> Tuple[str]:

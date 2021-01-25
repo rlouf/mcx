@@ -1,5 +1,5 @@
 from .parser import parse
-from .representations import (
+from .target_functions import (
     logpdf,
     logpdf_contributions,
     sample,

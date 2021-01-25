@@ -1,6 +1,7 @@
 """JAX-related utilities."""
 from collections import namedtuple
 
+import jax
 import jax.lax as lax
 import jax.numpy as jnp
 from jax import jit
@@ -8,8 +9,11 @@ from jax.dtypes import canonicalize_dtype
 from jax.experimental import host_callback
 from jax.tree_util import tree_flatten, tree_leaves, tree_map, tree_unflatten
 
-__all__ = ["ravel_pytree", "wait_until_computed"]
+__all__ = ["choice", "ravel_pytree", "wait_until_computed"]
 
+
+# needed for posterior predictive sampling
+choice = jax.random.choice
 
 pytree_metadata = namedtuple("pytree_metadata", ["flat", "shape", "size", "dtype"])
 

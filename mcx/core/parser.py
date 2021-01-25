@@ -30,17 +30,31 @@ from mcx.core.nodes import (
     Op,
     Placeholder,
     SampleOp,
+    SampleModelOp,
 )
 
 MODEL_BADLY_FORMED_ERROR = (
-    "A MCX model should be defined in a single function. This exception is completely unexpected."
-    " Please file an issue on https://github.com/rlouf/mcx."
+    "a MCX model should be defined in a single function. This exception is completely unexpected."
+    " Please file an issue on https://github.com/rlouf/mcx"
 )
 
 # TODO: Allow random variable assignments from models that return multiple variables
 MULTIPLE_RETURNED_VALUES_ERROR = (
-    "Only one variable is allowed on the left-hand-side of a random variable assignment "
-    " , several were provided."
+    "only one variable is allowed on the left-hand-side of a random variable assignment "
+    " , several were provided"
+)
+
+TRANSFORMED_RETURNED_VALUE_ERROR = (
+    "only random variables can be returned from the model, found a transformed variable instead. "
+    "If you are interested in the posterior value of such a transformed variable, first sample "
+    " from the posterior distribution of random variables and apply the transformation to the variables "
+    " in the trace.\n"
+    "If you are looking to condition on a transformed variable, however, this is not yet possible. Please "
+    "open an issue on https://github.com/rlouf/mcx to signal your interest in having this feature"
+)
+
+DUPLICATE_VARIABLE_NAME_ERROR = (
+    "you cannot reuse the name of random variables."
 )
 
 
@@ -97,9 +111,9 @@ class ModelDefinitionParser(cst.CSTVisitor):
 
     where `x` is an argument to the model. The recursion stops immediately
     since both arguments are either a constant or a named node. So we create a
-    new `SampleOp` with name `var` and a to_cst funtion defined as:
+    new `SampleOp` with name `var` and a cst_generator funtion defined as:
 
-        >>> def to_cst(*args):
+        >>> def cst_generator(*args):
         ...      return cst.Call(
         ...          func='Normal',
         ...          args=args
@@ -109,7 +123,7 @@ class ModelDefinitionParser(cst.CSTVisitor):
     placeholder `x` and this SampleOp. Each edge is indexed by the position of
     the argument. All the compiler has to do is to traverse the graph in
     topological order, translate `0` and `x` to their equivalent CST nodes, and
-    pass these nodes to var's `to_cst` function when translating it into its
+    pass these nodes to var's `cst_generator` function when translating it into its
     AST equivalent.
 
     When parsing the following:
@@ -255,14 +269,16 @@ class ModelDefinitionParser(cst.CSTVisitor):
         function_args = node.params.params
         for _, argument in enumerate(function_args):
             name = argument.name.value
-            node = Placeholder(name, partial(argument_cst, name))
-            self.named_variables[name] = node
 
             try:  # parse argument default value is any
                 default = self.recursive_visit(argument.default)
+                node = Placeholder(partial(argument_cst, name), name, False, True)
                 self.graph.add(node, default)
             except TypeError:
+                node = Placeholder(partial(argument_cst, name), name)
                 self.graph.add(node)
+
+            self.named_variables[name] = node
 
     # ----------------------------------------------------------------
     #                        PARSE COMMENTS
@@ -335,7 +351,7 @@ class ModelDefinitionParser(cst.CSTVisitor):
         """
         op = self.recursive_visit(node.value)
 
-        # Restict ourselves to single-output ops
+        # We restrict ourselves to single-output ops
         if len(node.targets) > 1:
             raise SyntaxError(MULTIPLE_RETURNED_VALUES_ERROR)
 
@@ -385,6 +401,9 @@ class ModelDefinitionParser(cst.CSTVisitor):
             variable_name = node.left.value
             expression = comparator.expression
 
+            if variable_name in self.named_variables:
+                raise SyntaxError(DUPLICATE_VARIABLE_NAME_ERROR)
+
             # Eval the object on the righ-hand side of the <~ operator
             # This eval is necessary to check whether object sampled
             # from is a model or a distribution. And in the former case
@@ -399,22 +418,12 @@ class ModelDefinitionParser(cst.CSTVisitor):
 
             fn_obj = eval(fn_call_path, self.namespace)
             if isinstance(fn_obj, mcx.model):
-                posargs = [
-                    self.recursive_visit(arg)
-                    for arg in expression.args
-                    if not arg.keyword
-                ]
-                kwargs = {
-                    arg.keyword: self.recursive_visit(arg)
-                    for arg in expression.args
-                    if arg.keyword
-                }
-                self.graph, sample_op = self.graph.merge(
-                    variable_name, posargs, kwargs, fn_obj.graph
-                )
+                op = self.recursive_visit(comparator.expression)
+                sample_op = SampleModelOp(op.cst_generator, self.scope, variable_name, fn_call_path, fn_obj.graph)
+                self.graph = nx.relabel_nodes(self.graph, {op: sample_op})
             elif issubclass(fn_obj, mcx.distributions.Distribution):
                 op = self.recursive_visit(comparator.expression)
-                sample_op = SampleOp(variable_name, self.scope, op.to_cst, fn_obj)
+                sample_op = SampleOp(op.cst_generator, self.scope, variable_name, fn_obj)
                 self.graph = nx.relabel_nodes(self.graph, {op: sample_op})
             else:
                 raise SyntaxError(
@@ -463,7 +472,7 @@ class ModelDefinitionParser(cst.CSTVisitor):
             try:
                 name = self.named_variables[node.value]
             except KeyError:
-                name = Name(node.value, lambda: node)
+                name = Name(lambda: node, node.value)
             return name
 
         if isinstance(node, cst.BaseNumber):
@@ -595,9 +604,14 @@ class ModelDefinitionParser(cst.CSTVisitor):
 
         try:
             returned_node = self.named_variables[returned_name]
+            if not isinstance(returned_node, SampleOp):
+                raise SyntaxError(TRANSFORMED_RETURNED_VALUE_ERROR)
+
             returned_node.is_returned = True
         except KeyError:
             raise NameError(f"name '{returned_name}' is not defined")
+        except SyntaxError:
+            raise
 
     # ----------------------------------------------------------------
     #           EXPLICITLY EXCLUDE CONTROL FLOW (for now)
@@ -672,6 +686,7 @@ def unroll_call_path(
 
     Example
     -------
+
         >>> expr = cst.Call(cst.Attribute("mcx", cst.Attribute("distribution", "Normal")), None)
         >>> unroll_call_path(expr)
         "mcx.distribution.Normal"
