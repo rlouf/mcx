@@ -633,6 +633,11 @@ def build_loglikelihoods(model, args, observations):
 
 
 def get_initial_position(rng_key, model, model_args, observations, num_chains):
+    """Get an initial position for the chain.
+
+    While there surely are smarter way to initialize the chain we sample the
+    first position from the prior joint distribution of the variables.
+    """
 
     initial_positions = mcx.sample_joint(
         rng_key, model, model_args, num_samples=num_chains
@@ -645,42 +650,22 @@ def get_initial_position(rng_key, model, model_args, observations, num_chains):
     # positions *for each chain separately*. However, if we naively use JAX's
     # `ravel_pytree` function on the dictionary with prior samples we will obtain
     # a single array with all positions for all chains.
-    #
-    # A naive way to go about flattening the positions is to transform the
-    # dictionary of arrays that contain the parameter value to a list of
-    # dictionaries, one per position and then unravel the dictionaries.
-    # However, this approach takes more time than getting the samples in the
-    # first place.
-    #
-    # Luckily, JAX first sorts dictionaries by keys
-    # (https://github.com/google/jax/blob/master/jaxlib/pytree.cc) when
-    # raveling pytrees. We can thus ravel and stack parameter values in an
-    # array, sorting by key; this gives our flattened positions. We then build
-    # a single dictionary that contains the parameters value and use it to get
-    # the unraveling function using `unravel_pytree`.
-    print(initial_positions)
-    positions_1 = jnp.stack(
-        [np.ravel(leaf) for leaf in jax.tree_util.tree_leaves(initial_positions)],
-        axis=1,
+    initial_positions = jax.tree_util.tree_map(
+        lambda x: x.reshape(num_chains, -1), initial_positions
     )
-    print(positions_1)
+    flattened_positions = jnp.concatenate(
+        jax.tree_util.tree_leaves(initial_positions), axis=1
+    )
 
-    # positions = jnp.stack(
-        # [np.ravel(initial_positions[s]) for s in sorted(initial_positions.keys())],
-        # axis=1,
-    # )
-
-
-    # jnp.atleast_1d is necessary to handle single chains
-    # sample_position_dict = {
-        # parameter: jnp.atleast_1d(values)[0]
-        # for parameter, values in initial_positions.items()
-    # }
-    sample_position_dict = jax.tree_util.tree_map(lambda x: jnp.atleast_1d(x)[0], initial_positions)
-    print(sample_position_dict)
+    # We will use jax.vmap to map the computation over the different chains. The unravelling
+    # function thus needs to unravel a single chain. `jnp.atleast_1d` is necessary to handle
+    # the case where we sample a single chains.
+    sample_position_dict = jax.tree_util.tree_map(
+        lambda x: jnp.atleast_1d(x)[0], initial_positions
+    )
     _, unravel_fn = jax_ravel_pytree(sample_position_dict)
 
-    return positions_1, unravel_fn
+    return flattened_positions, unravel_fn
 
 
 def flatten_loglikelihood(logpdf, unravel_fn):
