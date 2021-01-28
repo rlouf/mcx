@@ -40,6 +40,7 @@ __all__ = [
     "real",
     "simplex",
     "strictly_positive",
+    "real_vector",
 ]
 
 
@@ -175,6 +176,44 @@ class _Simplex(Constraint):
         return np.all(x > 0, axis=-1) & (x_sum <= 1) & (x_sum > 1 - 1e-6)
 
 
+class _IndependentConstraint(Constraint):
+    def __str__(self):
+        return "an event is valid only if all its independent entries are valid."
+
+    def __init__(self, base_constraint, ndims):
+        assert isinstance(base_constraint, Constraint)
+        assert isinstance(ndims, int)
+        assert ndims >= 0
+
+        self.base_constraint = base_constraint
+        self.ndims = ndims
+        super().__init__()
+
+    def __call__(self, value):
+        result = self.base_constraint(value)
+        if self.ndims == 0:
+            return result
+        elif np.ndim(result) < self.ndims:
+            raise ValueError(
+                (f"Expected value.dim() >= {self.ndims}" " but got {np.ndims{result}}")
+            )
+        result = result.all(-1)
+        return result
+
+
+class _PositiveDefinite(Constraint):
+    event_dim = 2
+
+    def __str__(self):
+        return "a positive definite matrix."
+
+    def __call__(self, x):
+        symmetric = np.all(np.all(x == np.swapaxes(x, -2, -1), axis=-1), axis=-1)
+        # check for the smallest eigenvalue is positive
+        positive = np.linalg.eigh(x)[0][..., 0] > 0
+        return symmetric & positive
+
+
 boolean = _Boolean()
 closed_interval = _ClosedInterval
 integer = _Integer()
@@ -182,7 +221,9 @@ integer_interval = _IntegerInterval
 interval = _Interval
 positive_integer = _IntegerGreaterThan(0)
 positive = _GreaterThan(0.0)
+positive_definite = _PositiveDefinite()
 probability = _Interval(0.0, 1.0)
 real = _Real()
+real_vector = _IndependentConstraint(real, 1)
 simplex = _Simplex()
 strictly_positive = _StrictlyGreaterThan(0.0)
