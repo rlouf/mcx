@@ -3,8 +3,10 @@ from collections import namedtuple
 
 import jax.lax as lax
 import jax.numpy as np
+from jax import jit
 from jax.dtypes import canonicalize_dtype
 from jax.tree_util import tree_flatten, tree_leaves, tree_map, tree_unflatten
+from jax.experimental import host_callback
 
 __all__ = ["ravel_pytree", "wait_until_computed"]
 
@@ -71,3 +73,45 @@ def _ravel_list(*leaves):
     )
 
     return flat, unravel_list
+
+
+def _print_consumer(arg, transform):
+    "Consumer for _progress_bar"
+    iter_num, n_iter = arg
+    print(f"Iteration {iter_num}/{n_iter}")
+
+
+@jit
+def _progress_bar(arg, result):
+    """Print progress of a scan/loop only if the iteration number is a multiple of the print_rate
+    Usage: carry = progress_bar((iter_num, n_iter, print_rate), carry)
+    """
+    iter_num, n_iter, print_rate = arg
+    result = lax.cond(
+        iter_num % print_rate == 0,
+        lambda _: host_callback.id_tap(
+            _print_consumer, (iter_num, n_iter), result=result
+        ),
+        lambda _: result,
+        operand=None,
+    )
+    return result
+
+
+def progress_bar_scan(num_samples):
+    """Decorator that adds a progress bar to `body_fun` used in `lax.scan`.
+    Note that `body_fun` must be looping over a tuple who's first element is `np.arange(num_samples)`.
+    This means that `iter_num` is the current iteration number
+    """
+
+    def pbar_factory(func):
+        print_rate = int(num_samples / 10)
+
+        def wrapper_progress_bar(carry, x):
+            iter_num = x[0]
+            iter_num = _progress_bar((iter_num, num_samples, print_rate), iter_num)
+            return func(carry, x)
+
+        return wrapper_progress_bar
+
+    return pbar_factory

@@ -10,6 +10,7 @@ import mcx
 from mcx import sample_forward
 from mcx.compiler import compile_to_loglikelihoods, compile_to_logpdf
 from mcx.jax import ravel_pytree as mcx_ravel_pytree
+from mcx.jax import progress_bar_scan
 from mcx.trace import Trace
 
 __all__ = ["sampler"]
@@ -389,13 +390,17 @@ def sample_scan(
     start = datetime.now()
 
     @jax.jit
-    def update_scan(carry, key):
+    @progress_bar_scan(rng_keys.shape[0])
+    def update_scan(carry, x):
+        key = x[1]
         state, parameters = carry
         keys = jax.random.split(key, num_chains)
         state, info = jax.vmap(kernel, in_axes=(0, 0, 0))(keys, parameters, state)
         return (state, parameters), (state, info)
 
-    last_state, chain = jax.lax.scan(update_scan, (init_state, parameters), rng_keys)
+    last_state, chain = jax.lax.scan(
+        update_scan, (init_state, parameters), (np.arange(rng_keys.shape[0]), rng_keys)
+    )
     last_chain_state = last_state[0]
 
     mcx.jax.wait_until_computed(chain)
