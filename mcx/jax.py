@@ -109,7 +109,7 @@ def progress_bar_scan(num_samples):
 
         def wrapper_progress_bar(carry, x):
             iter_num = x[0]
-            iter_num = _progress_bar((iter_num, num_samples, print_rate), iter_num)
+            iter_num = _progress_bar((iter_num+1, num_samples, print_rate), iter_num)
             return func(carry, x)
 
         return wrapper_progress_bar
