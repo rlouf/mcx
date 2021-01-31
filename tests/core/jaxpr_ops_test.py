@@ -94,10 +94,21 @@ def test__jaxpr_find_denormalize_mapping__non_linear_fn__empty_mapping(case):
 
 
 denormalize_test_cases = [
-    {"fn": lambda x: x + 1.0, "exp_denorm_fn": lambda x: x},
+    {"fn": lambda x: x + 1.0, "denorm_fn": lambda x: x, "inval": 2.0},
     {
         "fn": lambda x: 2.0 - np.sin(x + 1.0),
-        "exp_denorm_fn": lambda x: -np.sin(x + 1.0),
+        "denorm_fn": lambda x: -np.sin(x + 1.0),
+        "inval": 2.0,
+    },
+    {
+        "fn": lambda x: 2.0 - np.sin(x + 1.0),
+        "denorm_fn": lambda x: -np.sin(x + 1.0),
+        "inval": 2.0,
+    },
+    {
+        "fn": lambda x: np.sum(x + 2.0),
+        "denorm_fn": lambda x: np.sum(x),
+        "inval": np.ones((10,)),
     },
 ]
 
@@ -105,7 +116,6 @@ denormalize_test_cases = [
 @pytest.mark.parametrize("case", denormalize_test_cases)
 def test__denormalize__proper_simplication(case):
     denorm_fn = denormalize(case["fn"])
-    exp_denorm_fn = case["exp_denorm_fn"]
-
-    inval = 1.0
-    assert np.allclose(denorm_fn(inval), exp_denorm_fn(inval))
+    expected_denorm_fn = case["denorm_fn"]
+    inval = case["inval"]
+    assert np.allclose(denorm_fn(inval), expected_denorm_fn(inval))

@@ -69,6 +69,7 @@ def jaxpr_find_denormalize_mapping(
         jax.lax.neg_p,
         jax.lax.reshape_p,
         jax.lax.squeeze_p,
+        jax.lax.reduce_sum_p,
     ]
     # Collection of variables linear with respect to the Jaxpr final outputs.
     linear_vars = set(jaxpr.outvars)
