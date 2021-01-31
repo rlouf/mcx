@@ -5,8 +5,8 @@ import jax.lax as lax
 import jax.numpy as np
 from jax import jit
 from jax.dtypes import canonicalize_dtype
-from jax.tree_util import tree_flatten, tree_leaves, tree_map, tree_unflatten
 from jax.experimental import host_callback
+from jax.tree_util import tree_flatten, tree_leaves, tree_map, tree_unflatten
 
 __all__ = ["ravel_pytree", "wait_until_computed"]
 
