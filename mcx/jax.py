@@ -78,7 +78,7 @@ def _ravel_list(*leaves):
 def _print_consumer(arg, transform):
     "Consumer for _progress_bar"
     iter_num, n_iter = arg
-    print(f"Iteration {iter_num}/{n_iter}")
+    print(f"Iteration {iter_num:,} / {n_iter:,}")
 
 
 @jit
