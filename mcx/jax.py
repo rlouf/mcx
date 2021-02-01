@@ -76,17 +76,24 @@ def _ravel_list(*leaves):
     return flat, unravel_list
 
 
-def define_tqdm():
+def define_tqdm(num_samples):
     global tqdm_pbar
-    tqdm_pbar = tqdm(range(10))
+    tqdm_pbar = tqdm(range(num_samples))
 
 
 def close_tqdm():
     tqdm_pbar.close()
 
 
+def set_description_tqdm(message):
+    tqdm_pbar.set_description(
+        message,
+        refresh=False,
+    )
+
+
 def _update_tqdm(arg, transform):
-    tqdm_pbar.update()
+    tqdm_pbar.update(arg[0])
 
 
 @jit
@@ -95,9 +102,10 @@ def _progress_bar(arg, result):
     Usage: carry = progress_bar((iter_num, print_rate), carry)
     """
     iter_num, print_rate = arg
+
     result = lax.cond(
         iter_num % print_rate == 0,
-        lambda _: host_callback.id_tap(_update_tqdm, (None, None), result=result),
+        lambda _: host_callback.id_tap(_update_tqdm, (print_rate, None), result=result),
         lambda _: result,
         operand=None,
     )
