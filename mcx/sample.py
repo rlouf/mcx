@@ -9,7 +9,7 @@ from tqdm import tqdm
 import mcx
 from mcx import sample_forward
 from mcx.compiler import compile_to_loglikelihoods, compile_to_logpdf
-from mcx.jax import progress_bar_scan
+from mcx.jax import close_tqdm, define_tqdm, progress_bar_scan
 from mcx.jax import ravel_pytree as mcx_ravel_pytree
 from mcx.trace import Trace
 
@@ -398,6 +398,7 @@ def sample_scan(
         state, info = jax.vmap(kernel, in_axes=(0, 0, 0))(keys, parameters, state)
         return (state, parameters), (state, info)
 
+    define_tqdm()
     last_state, chain = jax.lax.scan(
         update_scan, (init_state, parameters), (np.arange(rng_keys.shape[0]), rng_keys)
     )
@@ -405,6 +406,7 @@ def sample_scan(
 
     mcx.jax.wait_until_computed(chain)
     mcx.jax.wait_until_computed(last_state)
+    close_tqdm()
     print(f"Done in {(datetime.now()-start).total_seconds():.1f} s.")
 
     return last_chain_state, chain

@@ -7,6 +7,7 @@ from jax import jit
 from jax.dtypes import canonicalize_dtype
 from jax.experimental import host_callback
 from jax.tree_util import tree_flatten, tree_leaves, tree_map, tree_unflatten
+from tqdm import tqdm
 
 __all__ = ["ravel_pytree", "wait_until_computed"]
 
@@ -75,23 +76,28 @@ def _ravel_list(*leaves):
     return flat, unravel_list
 
 
-def _print_consumer(arg, transform):
-    "Consumer for _progress_bar"
-    iter_num, n_iter = arg
-    print(f"Iteration {iter_num:,} / {n_iter:,}")
+def define_tqdm():
+    global tqdm_pbar
+    tqdm_pbar = tqdm(range(10))
+
+
+def close_tqdm():
+    tqdm_pbar.close()
+
+
+def _update_tqdm(arg, transform):
+    tqdm_pbar.update()
 
 
 @jit
 def _progress_bar(arg, result):
-    """Print progress of a scan/loop only if the iteration number is a multiple of the print_rate
-    Usage: carry = progress_bar((iter_num, n_iter, print_rate), carry)
+    """Updates tqdm progress bar of a scan/loop only if the iteration number is a multiple of the print_rate
+    Usage: carry = progress_bar((iter_num, print_rate), carry)
     """
-    iter_num, n_iter, print_rate = arg
+    iter_num, print_rate = arg
     result = lax.cond(
         iter_num % print_rate == 0,
-        lambda _: host_callback.id_tap(
-            _print_consumer, (iter_num, n_iter), result=result
-        ),
+        lambda _: host_callback.id_tap(_update_tqdm, (None, None), result=result),
         lambda _: result,
         operand=None,
     )
@@ -109,7 +115,7 @@ def progress_bar_scan(num_samples):
 
         def wrapper_progress_bar(carry, x):
             iter_num = x[0]
-            iter_num = _progress_bar((iter_num + 1, num_samples, print_rate), iter_num)
+            iter_num = _progress_bar((iter_num, print_rate), iter_num)
             return func(carry, x)
 
         return wrapper_progress_bar
