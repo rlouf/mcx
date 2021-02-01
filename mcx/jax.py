@@ -76,49 +76,45 @@ def _ravel_list(*leaves):
     return flat, unravel_list
 
 
-def define_tqdm(num_samples):
-    global tqdm_pbar
+def progress_bar_factory(num_samples):
+    """Factory that builds a progress bar decorator along
+    with the `set_tqdm_description` and `close_tqdm` functions
+    """
+
     tqdm_pbar = tqdm(range(num_samples))
 
+    def set_tqdm_description(message):
+        tqdm_pbar.set_description(
+            message,
+            refresh=False,
+        )
 
-def close_tqdm():
-    tqdm_pbar.close()
+    def close_tqdm():
+        tqdm_pbar.close()
 
+    def _update_tqdm(arg, transform):
+        tqdm_pbar.update(arg)
 
-def set_description_tqdm(message):
-    tqdm_pbar.set_description(
-        message,
-        refresh=False,
-    )
+    @jit
+    def _progress_bar(arg, result):
+        """Updates tqdm progress bar of a scan/loop only if the iteration number is a multiple of the print_rate
+        Usage: carry = progress_bar((iter_num, print_rate), carry)
+        """
+        iter_num, print_rate = arg
 
+        result = lax.cond(
+            iter_num % print_rate == 0,
+            lambda _: host_callback.id_tap(_update_tqdm, print_rate, result=result),
+            lambda _: result,
+            operand=None,
+        )
+        return result
 
-def _update_tqdm(arg, transform):
-    tqdm_pbar.update(arg)
-
-
-@jit
-def _progress_bar(arg, result):
-    """Updates tqdm progress bar of a scan/loop only if the iteration number is a multiple of the print_rate
-    Usage: carry = progress_bar((iter_num, print_rate), carry)
-    """
-    iter_num, print_rate = arg
-
-    result = lax.cond(
-        iter_num % print_rate == 0,
-        lambda _: host_callback.id_tap(_update_tqdm, print_rate, result=result),
-        lambda _: result,
-        operand=None,
-    )
-    return result
-
-
-def progress_bar_scan(num_samples):
-    """Decorator that adds a progress bar to `body_fun` used in `lax.scan`.
-    Note that `body_fun` must be looping over a tuple who's first element is `np.arange(num_samples)`.
-    This means that `iter_num` is the current iteration number
-    """
-
-    def pbar_factory(func):
+    def progress_bar_scan(func):
+        """Decorator that adds a progress bar to `body_fun` used in `lax.scan`.
+        Note that `body_fun` must be looping over a tuple who's first element is `np.arange(num_samples)`.
+        This means that `iter_num` is the current iteration number
+        """
         print_rate = int(num_samples / 10)
 
         def wrapper_progress_bar(carry, x):
@@ -128,4 +124,4 @@ def progress_bar_scan(num_samples):
 
         return wrapper_progress_bar
 
-    return pbar_factory
+    return progress_bar_scan, set_tqdm_description, close_tqdm

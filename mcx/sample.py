@@ -8,9 +8,8 @@ from tqdm import tqdm
 import mcx
 from mcx import sample_forward
 from mcx.compiler import compile_to_loglikelihoods, compile_to_logpdf
-from mcx.jax import close_tqdm, define_tqdm, progress_bar_scan
+from mcx.jax import progress_bar_factory
 from mcx.jax import ravel_pytree as mcx_ravel_pytree
-from mcx.jax import set_description_tqdm
 from mcx.trace import Trace
 
 __all__ = ["sampler"]
@@ -386,8 +385,12 @@ def sample_scan(
     """
     num_samples = rng_keys.shape[0]
 
+    progress_bar_scan, set_tqdm_description, close_tqdm = progress_bar_factory(
+        num_samples
+    )
+
     @jax.jit
-    @progress_bar_scan(rng_keys.shape[0])
+    @progress_bar_scan
     def update_scan(carry, x):
         key = x[1]
         state, parameters = carry
@@ -395,12 +398,11 @@ def sample_scan(
         state, info = jax.vmap(kernel, in_axes=(0, 0, 0))(keys, parameters, state)
         return (state, parameters), (state, info)
 
-    define_tqdm(num_samples)
-    set_description_tqdm(
+    set_tqdm_description(
         f"Collecting {num_samples:,} samples across {num_chains:,} chains"
     )
     last_state, chain = jax.lax.scan(
-        update_scan, (init_state, parameters), (np.arange(rng_keys.shape[0]), rng_keys)
+        update_scan, (init_state, parameters), (np.arange(num_samples), rng_keys)
     )
     last_chain_state = last_state[0]
 
