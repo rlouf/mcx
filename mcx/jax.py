@@ -93,7 +93,7 @@ def set_description_tqdm(message):
 
 
 def _update_tqdm(arg, transform):
-    tqdm_pbar.update(arg[0])
+    tqdm_pbar.update(arg)
 
 
 @jit
@@ -105,7 +105,7 @@ def _progress_bar(arg, result):
 
     result = lax.cond(
         iter_num % print_rate == 0,
-        lambda _: host_callback.id_tap(_update_tqdm, (print_rate, None), result=result),
+        lambda _: host_callback.id_tap(_update_tqdm, print_rate, result=result),
         lambda _: result,
         operand=None,
     )
