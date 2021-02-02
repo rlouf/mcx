@@ -235,7 +235,9 @@ def find_reasonable_step_size(
         kernel = kernel_generator(step_size, inverse_mass_matrix)
         _, hmc_info = kernel(rng_key, reference_hmc_state)
 
-        new_direction = jnp.where(target_accept < hmc_info.acceptance_probability, 1, -1)
+        new_direction = jnp.where(
+            target_accept < hmc_info.acceptance_probability, 1, -1
+        )
         return ReasonableStepSizeState(rng_key, new_direction, direction, step_size)
 
     @jax.jit

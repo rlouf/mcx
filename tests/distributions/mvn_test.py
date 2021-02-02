@@ -70,9 +70,9 @@ def test_sample_shape_2darray_argumentse(rng_key, case):
     """Test the correctness of broadcasting when dimension of the MVN is
     two. This is the simplest case of a 2d MVN"""
 
-    samples = MvNormal(jnp.array([1.0, 2.0]), jnp.array([[1.0, 0.2], [0.2, 1.0]])).sample(
-        rng_key, case["sample_shape"]
-    )
+    samples = MvNormal(
+        jnp.array([1.0, 2.0]), jnp.array([[1.0, 0.2], [0.2, 1.0]])
+    ).sample(rng_key, case["sample_shape"])
     assert samples.shape == case["expected_shape"]
 
 
