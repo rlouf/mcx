@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Callable, Iterator, Tuple
 
 import jax
-import jax.numpy as np
+import jax.numpy as jnp
 from jax.flatten_util import ravel_pytree as jax_ravel_pytree
 from tqdm import tqdm
 
@@ -275,7 +275,7 @@ class sampler(object):
         num_warmup_steps: int = 1000,
         compile: bool = False,
         **warmup_kwargs,
-    ) -> np.DeviceArray:
+    ) -> jnp.DeviceArray:
         """Run the posterior inference.
 
         For convenience we automatically run the warmup if it hasn't been run
@@ -351,9 +351,9 @@ class sampler(object):
 
 def sample_scan(
     kernel: Callable,
-    init_state: np.DeviceArray,
-    parameters: np.DeviceArray,
-    rng_keys: np.DeviceArray,
+    init_state: jnp.DeviceArray,
+    parameters: jnp.DeviceArray,
+    rng_keys: jnp.DeviceArray,
     num_chains: int,
 ) -> Tuple:
     """Sample using JAX's scan.
@@ -407,9 +407,9 @@ def sample_scan(
 
 def sample_loop(
     kernel: Callable,
-    init_state: np.DeviceArray,
-    parameters: np.DeviceArray,
-    rng_keys: np.DeviceArray,
+    init_state: jnp.DeviceArray,
+    parameters: jnp.DeviceArray,
+    rng_keys: jnp.DeviceArray,
     num_chains: int,
 ) -> Tuple:
     """Sample using a Python loop.
@@ -427,7 +427,7 @@ def sample_loop(
     is slightly more complicated that we originally thought.
 
     While we can copy the implementation of `jax.lax.scan` (non-jitted version) to get
-    the same output `jax.tree_util.tree_multimap(np.stack, chain)`, this is slow for large
+    the same output `jax.tree_util.tree_multimap(jnp.stack, chain)`, this is slow for large
     numbers of samples. Since the work happens outside of the progress bar this can be
     very confusing for the user.
 
@@ -487,7 +487,7 @@ def sample_loop(
             state, _, ravelled_state = update_loop(state, key)
             chain.append(ravelled_state)
 
-    chain = np.stack(chain)
+    chain = jnp.stack(chain)
     chain = jax.vmap(unravel_fn)(chain)
     last_state = state
 
@@ -566,13 +566,13 @@ def get_initial_position(rng_key, model, num_chains, **kwargs):
     # array, sorting by key; this gives our flattened positions. We then build
     # a single dictionary that contains the parameters value and use it to get
     # the unraveling function using `unravel_pytree`.
-    positions = np.stack(
-        [np.ravel(samples[s]) for s in sorted(initial_positions.keys())], axis=1
+    positions = jnp.stack(
+        [jnp.ravel(samples[s]) for s in sorted(initial_positions.keys())], axis=1
     )
 
-    # np.atleast_1d is necessary to handle single chains
+    # jnp.atleast_1d is necessary to handle single chains
     sample_position_dict = {
-        parameter: np.atleast_1d(values)[0]
+        parameter: jnp.atleast_1d(values)[0]
         for parameter, values in initial_positions.items()
     }
     _, unravel_fn = jax_ravel_pytree(sample_position_dict)

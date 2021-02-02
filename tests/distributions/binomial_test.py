@@ -1,5 +1,5 @@
 import pytest
-from jax import numpy as np
+from jax import numpy as jnp
 from jax import random
 from scipy.stats import binom as scipy_binom
 
@@ -34,7 +34,7 @@ sample_means = [
 @pytest.mark.parametrize("case", sample_means)
 def test_sample_mean(rng_key, case):
     samples = Binomial(case["p"], case["n"]).sample(rng_key, (1_000_000,))
-    avg = np.mean(samples, axis=0).item()
+    avg = jnp.mean(samples, axis=0).item()
     assert avg == pytest.approx(case["expected"], abs=1e-2)
 
 
@@ -49,7 +49,7 @@ sample_variances = [
 @pytest.mark.parametrize("case", sample_variances)
 def test_sample_variance(rng_key, case):
     samples = Binomial(case["p"], case["n"]).sample(rng_key, (1_000_000,))
-    var = np.var(samples, axis=0).item()
+    var = jnp.var(samples, axis=0).item()
     assert var == pytest.approx(case["expected"], abs=1e-2)
 
 
@@ -58,9 +58,9 @@ def test_sample_variance(rng_key, case):
 #
 
 out_of_support_cases = [
-    {"p": 0.5, "n": 10, "x": 11, "expected": -np.inf},  # > 0
-    {"p": 0.5, "n": 10, "x": -1, "expected": -np.inf},  # < 0
-    {"p": 0.5, "n": 10, "x": 1.1, "expected": -np.inf},  # is integer
+    {"p": 0.5, "n": 10, "x": 11, "expected": -jnp.inf},  # > 0
+    {"p": 0.5, "n": 10, "x": -1, "expected": -jnp.inf},  # < 0
+    {"p": 0.5, "n": 10, "x": 1.1, "expected": -jnp.inf},  # is integer
 ]
 
 
@@ -71,9 +71,9 @@ def test_logpdf_out_of_support(case):
 
 
 edge_cases = [
-    {"p": 0, "n": 10, "x": 1, "expected": -np.inf},
-    {"p": 1, "n": 10, "x": 1, "expected": -np.inf},
-    {"p": 1, "n": 10, "x": 0, "expected": -np.inf},
+    {"p": 0, "n": 10, "x": 1, "expected": -jnp.inf},
+    {"p": 1, "n": 10, "x": 1, "expected": -jnp.inf},
+    {"p": 1, "n": 10, "x": 0, "expected": -jnp.inf},
     {"p": 1.0, "n": 10, "x": 10, "expected": 0.0},
     {"p": 0.0, "n": 10, "x": 0, "expected": 0.0},
 ]
@@ -115,7 +115,7 @@ def test_logpdf_compare_scipy(case):
 
 expected_logpdf_shapes = [
     {"x": 2, "p": 0.5, "n": 10, "expected_shape": ()},
-    {"x": 2, "p": np.array([0.1, 0.2]), "n": 10, "expected_shape": (2,)},
+    {"x": 2, "p": jnp.array([0.1, 0.2]), "n": 10, "expected_shape": (2,)},
 ]
 
 
@@ -152,25 +152,25 @@ def test_sample_shape_scalar_arguments(rng_key, case):
 array_argument_expected_shapes = [
     {
         "p": 0.5,
-        "n": np.array([1, 2, 3, 4]),
+        "n": jnp.array([1, 2, 3, 4]),
         "sample_shape": (),
         "expected_shape": (4,),
     },
     {
-        "p": np.array([0.1, 0.2, 0.3]),
+        "p": jnp.array([0.1, 0.2, 0.3]),
         "n": 5,
         "sample_shape": (),
         "expected_shape": (3,),
     },
     {
         "p": 0.5,
-        "n": np.array([[1, 2], [3, 4]]),
+        "n": jnp.array([[1, 2], [3, 4]]),
         "sample_shape": (),
         "expected_shape": (2, 2),
     },
     {
-        "p": np.array([0.1, 0.2]),
-        "n": np.array([[1, 2], [3, 4]]),
+        "p": jnp.array([0.1, 0.2]),
+        "n": jnp.array([[1, 2], [3, 4]]),
         "sample_shape": (),
         "expected_shape": (2, 2),
     },
@@ -187,25 +187,25 @@ def test_sample_shape_array_arguments_no_sample_shape(rng_key, case):
 array_argument_expected_shapes_one_dim = [
     {
         "p": 0.1,
-        "n": np.array([1, 2, 3]),
+        "n": jnp.array([1, 2, 3]),
         "sample_shape": (100,),
         "expected_shape": (100, 3),
     },
     {
-        "p": np.array([0.1, 0.2, 0.3]),
+        "p": jnp.array([0.1, 0.2, 0.3]),
         "n": 1,
         "sample_shape": (100,),
         "expected_shape": (100, 3),
     },
     {
         "p": 0.1,
-        "n": np.array([[1, 2], [3, 4]]),
+        "n": jnp.array([[1, 2], [3, 4]]),
         "sample_shape": (100,),
         "expected_shape": (100, 2, 2),
     },
     {
-        "p": np.array([0.1, 0.2]),
-        "n": np.array([[1, 2], [3, 4]]),
+        "p": jnp.array([0.1, 0.2]),
+        "n": jnp.array([[1, 2], [3, 4]]),
         "sample_shape": (100,),
         "expected_shape": (100, 2, 2),
     },
@@ -221,25 +221,25 @@ def test_sample_shape_array_arguments_1d_sample_shape(rng_key, case):
 array_argument_expected_shapes_two_dims = [
     {
         "p": 0.1,
-        "n": np.array([1, 2, 3]),
+        "n": jnp.array([1, 2, 3]),
         "sample_shape": (100, 2),
         "expected_shape": (100, 2, 3),
     },
     {
-        "p": np.array([0.1, 0.2, 0.3]),
+        "p": jnp.array([0.1, 0.2, 0.3]),
         "n": 1,
         "sample_shape": (100, 3),
         "expected_shape": (100, 3, 3),
     },
     {
         "p": 0.1,
-        "n": np.array([[1, 2], [3, 4]]),
+        "n": jnp.array([[1, 2], [3, 4]]),
         "sample_shape": (100, 2),
         "expected_shape": (100, 2, 2, 2),
     },
     {
-        "p": np.array([0.1, 0.2]),
-        "n": np.array([[1, 2], [3, 4]]),
+        "p": jnp.array([0.1, 0.2]),
+        "n": jnp.array([[1, 2], [3, 4]]),
         "sample_shape": (100, 2),
         "expected_shape": (100, 2, 2, 2),
     },

@@ -10,7 +10,7 @@ parameters used in Hamiltonian Monte Carlo.
 from typing import Callable, NamedTuple, Tuple
 
 import jax
-import jax.numpy as np
+import jax.numpy as jnp
 
 __all__ = ["mass_matrix_adaptation", "welford_algorithm"]
 
@@ -42,7 +42,7 @@ class MassMatrixAdaptationState(NamedTuple):
         The current state of the Welford Algorithm.
     """
 
-    inverse_mass_matrix: np.DeviceArray
+    inverse_mass_matrix: jnp.DeviceArray
     wc_state: WelfordAlgorithmState
 
 
@@ -80,9 +80,9 @@ def mass_matrix_adaptation(
             the number of dimensions of the chain position.
         """
         if is_diagonal_matrix:
-            inverse_mass_matrix = np.ones(n_dims)
+            inverse_mass_matrix = jnp.ones(n_dims)
         else:
-            inverse_mass_matrix = np.identity(n_dims)
+            inverse_mass_matrix = jnp.identity(n_dims)
 
         wc_state = wc_init(n_dims)
 
@@ -90,7 +90,7 @@ def mass_matrix_adaptation(
 
     @jax.jit
     def update(
-        state: MassMatrixAdaptationState, position: np.DeviceArray
+        state: MassMatrixAdaptationState, position: jnp.DeviceArray
     ) -> MassMatrixAdaptationState:
         """Update the algorithm's state.
 
@@ -120,11 +120,11 @@ def mass_matrix_adaptation(
         if is_diagonal_matrix:
             inverse_mass_matrix = scaled_covariance + shrinkage
         else:
-            inverse_mass_matrix = scaled_covariance + shrinkage * np.identity(
+            inverse_mass_matrix = scaled_covariance + shrinkage * jnp.identity(
                 mean.shape[0]
             )
 
-        ndims = np.shape(inverse_mass_matrix)[-1]
+        ndims = jnp.shape(inverse_mass_matrix)[-1]
         new_mm_state = MassMatrixAdaptationState(inverse_mass_matrix, wc_init(ndims))
 
         return new_mm_state
@@ -174,16 +174,16 @@ def welford_algorithm(is_diagonal_matrix: bool) -> Tuple[Callable, Callable, Cal
             of the corresponding square mass matrix.
         """
         sample_size = 0
-        mean = np.zeros(n_dims)
+        mean = jnp.zeros(n_dims)
         if is_diagonal_matrix:
-            m2 = np.zeros(n_dims)
+            m2 = jnp.zeros(n_dims)
         else:
-            m2 = np.zeros((n_dims, n_dims))
+            m2 = jnp.zeros((n_dims, n_dims))
         return WelfordAlgorithmState(mean, m2, sample_size)
 
     @jax.jit
     def update(
-        state: WelfordAlgorithmState, value: np.DeviceArray
+        state: WelfordAlgorithmState, value: jnp.DeviceArray
     ) -> WelfordAlgorithmState:
         """Update the M2 matrix using the new value.
 
@@ -203,13 +203,13 @@ def welford_algorithm(is_diagonal_matrix: bool) -> Tuple[Callable, Callable, Cal
         if is_diagonal_matrix:
             new_m2 = m2 + delta * updated_delta
         else:
-            new_m2 = m2 + np.outer(updated_delta, delta)
+            new_m2 = m2 + jnp.outer(updated_delta, delta)
 
         return WelfordAlgorithmState(mean, new_m2, sample_size)
 
     def covariance(
         state: WelfordAlgorithmState,
-    ) -> Tuple[np.DeviceArray, int, np.DeviceArray]:
+    ) -> Tuple[jnp.DeviceArray, int, jnp.DeviceArray]:
         mean, m2, sample_size = state
         covariance = m2 / (sample_size - 1)
         return covariance, sample_size, mean

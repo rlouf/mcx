@@ -3,18 +3,18 @@
 from typing import Callable, Tuple
 
 import jax
-import jax.numpy as np
+import jax.numpy as jnp
 import jax.scipy as scipy
 
 __all__ = ["gaussian_euclidean_metric"]
 
 
-KineticEnergy = Callable[[np.DeviceArray], float]
-MomentumGenerator = Callable[[jax.random.PRNGKey], np.DeviceArray]
+KineticEnergy = Callable[[jnp.DeviceArray], float]
+MomentumGenerator = Callable[[jax.random.PRNGKey], jnp.DeviceArray]
 
 
 def gaussian_euclidean_metric(
-    inverse_mass_matrix: np.DeviceArray,
+    inverse_mass_matrix: jnp.DeviceArray,
 ) -> Tuple[Callable, Callable]:
     """Emulate dynamics on an Euclidean Manifold [1]_ for vanilla Hamiltonian
     Monte Carlo with a standard gaussian as the conditional probability density
@@ -27,23 +27,23 @@ def gaussian_euclidean_metric(
             Information. Springer, Berlin, Heidelberg, 2013.
     """
 
-    ndim = np.ndim(inverse_mass_matrix)
-    shape = np.shape(inverse_mass_matrix)[:1]
+    ndim = jnp.ndim(inverse_mass_matrix)
+    shape = jnp.shape(inverse_mass_matrix)[:1]
 
     if ndim == 1:  # diagonal mass matrix
 
-        mass_matrix_sqrt = np.sqrt(np.reciprocal(inverse_mass_matrix))
+        mass_matrix_sqrt = jnp.sqrt(jnp.reciprocal(inverse_mass_matrix))
 
         @jax.jit
-        def momentum_generator(rng_key: jax.random.PRNGKey) -> np.DeviceArray:
+        def momentum_generator(rng_key: jax.random.PRNGKey) -> jnp.DeviceArray:
             std = jax.random.normal(rng_key, shape)
-            p = np.multiply(std, mass_matrix_sqrt)
+            p = jnp.multiply(std, mass_matrix_sqrt)
             return p
 
         @jax.jit
-        def kinetic_energy(momentum: np.DeviceArray) -> float:
-            velocity = np.multiply(inverse_mass_matrix, momentum)
-            return 0.5 * np.dot(velocity, momentum)
+        def kinetic_energy(momentum: jnp.DeviceArray) -> float:
+            velocity = jnp.multiply(inverse_mass_matrix, momentum)
+            return 0.5 * jnp.dot(velocity, momentum)
 
         return momentum_generator, kinetic_energy
 
@@ -52,22 +52,22 @@ def gaussian_euclidean_metric(
         mass_matrix_sqrt = cholesky_of_inverse(inverse_mass_matrix)
 
         @jax.jit
-        def momentum_generator(rng_key: jax.random.PRNGKey) -> np.DeviceArray:
+        def momentum_generator(rng_key: jax.random.PRNGKey) -> jnp.DeviceArray:
             std = jax.random.normal(rng_key, shape)
-            p = np.dot(std, mass_matrix_sqrt)
+            p = jnp.dot(std, mass_matrix_sqrt)
             return p
 
         @jax.jit
-        def kinetic_energy(momentum: np.DeviceArray) -> float:
-            velocity = np.matmul(inverse_mass_matrix, momentum)
-            return 0.5 * np.dot(velocity, momentum)
+        def kinetic_energy(momentum: jnp.DeviceArray) -> float:
+            velocity = jnp.matmul(inverse_mass_matrix, momentum)
+            return 0.5 * jnp.dot(velocity, momentum)
 
         return momentum_generator, kinetic_energy
 
     else:
         raise ValueError(
             "The mass matrix has the wrong number of dimensions:"
-            f" expected 1 or 2, got {np.dim(inverse_mass_matrix)}."
+            f" expected 1 or 2, got {jnp.dim(inverse_mass_matrix)}."
         )
 
 
@@ -79,8 +79,8 @@ def cholesky_of_inverse(matrix):
     # which is more numerically stable.
     # Refer to:
     # https://nbviewer.jupyter.org/gist/fehiepsi/5ef8e09e61604f10607380467eb82006#Precision-to-scale_tril
-    tril_inv = np.swapaxes(
-        np.linalg.cholesky(matrix[..., ::-1, ::-1])[..., ::-1, ::-1], -2, -1
+    tril_inv = jnp.swapaxes(
+        jnp.linalg.cholesky(matrix[..., ::-1, ::-1])[..., ::-1, ::-1], -2, -1
     )
-    identity = np.broadcast_to(np.identity(matrix.shape[-1]), tril_inv.shape)
+    identity = jnp.broadcast_to(jnp.identity(matrix.shape[-1]), tril_inv.shape)
     return scipy.linalg.solve_triangular(tril_inv, identity, lower=True)

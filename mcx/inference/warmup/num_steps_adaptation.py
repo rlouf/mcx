@@ -15,7 +15,7 @@ from functools import partial
 from typing import Callable, Tuple
 
 import jax
-from jax import numpy as np
+from jax import numpy as jnp
 
 __all__ = ["longest_batch_before_turn"]
 
@@ -37,8 +37,8 @@ def longest_batch_before_turn(integrator_step: Callable) -> Callable:
 
     @partial(jax.jit, static_argnums=(2, 3))
     def run(
-        initial_position: np.DeviceArray,
-        initial_momentum: np.DeviceArray,
+        initial_position: jnp.DeviceArray,
+        initial_momentum: jnp.DeviceArray,
         step_size: float,
         num_integration_steps: int,
     ):
@@ -63,15 +63,15 @@ def longest_batch_before_turn(integrator_step: Callable) -> Callable:
 
 @jax.jit
 def is_u_turn(
-    initial_position: np.DeviceArray,
-    position: np.DeviceArray,
-    inverse_mass_matrix: np.DeviceArray,
-    momentum: np.DeviceArray,
+    initial_position: jnp.DeviceArray,
+    position: jnp.DeviceArray,
+    inverse_mass_matrix: jnp.DeviceArray,
+    momentum: jnp.DeviceArray,
 ) -> bool:
     """Detect when the trajectory starts turning back towards the point
     where it started.
     """
-    v = np.multiply(inverse_mass_matrix, momentum)
+    v = jnp.multiply(inverse_mass_matrix, momentum)
     position_vec = position - initial_position
-    projection = np.multiply(position_vec, v)
-    return np.where(projection < 0, True, False)
+    projection = jnp.multiply(position_vec, v)
+    return jnp.where(projection < 0, True, False)

@@ -29,7 +29,7 @@ def compile_to_logpdf(graph: GraphicalModel, namespace: Dict) -> Artifact:
         ... def linear_regression(x, lmbda=1.):
         ...     scale <~ Exponential(lmbda)
         ...     coeff <~ Normal(0, 1)
-        ...     y = np.dot(x, coeff)
+        ...     y = jnp.dot(x, coeff)
         ...     predictions <~ Normal(y, scale)
         ...     return predictions
 
@@ -41,7 +41,7 @@ def compile_to_logpdf(graph: GraphicalModel, namespace: Dict) -> Artifact:
         ...     logpdf = 0
         ...     logpdf += Exponential(lmbda).logpdf(scale)
         ...     logpdf += Normal(0, 1).logpdf(coeff)
-        ...     y = np.dot(x, coeff)
+        ...     y = jnp.dot(x, coeff)
         ...     logpdf += Normal(y, coeff).logpdf(predictions)
         ...     return logpdf
 
@@ -168,7 +168,7 @@ def compile_to_loglikelihoods(graph: GraphicalModel, namespace: Dict) -> Artifac
         ... def linear_regression(x, lmbda=1.):
         ...     scale <~ Exponential(lmbda)
         ...     coeff <~ Normal(0, 1)
-        ...     y = np.dot(x, coeff)
+        ...     y = jnp.dot(x, coeff)
         ...     predictions <~ Normal(y, scale)
         ...     return predictions
 
@@ -177,9 +177,9 @@ def compile_to_loglikelihoods(graph: GraphicalModel, namespace: Dict) -> Artifac
         >>> def linear_regression_logpdf(x, scale, coeffs, predictions, lmbda=1.):
         ...     logpdf_scale = Exponential(lmbda).logpdf(scale)
         ...     logpdf_coeff = Normal(0, 1).logpdf(coeff)
-        ...     y = np.dot(x, coeff)
+        ...     y = jnp.dot(x, coeff)
         ...     logpdf_predictions = Normal(y, coeff).logpdf(predictions)
-        ...     return np.array([logpdf_scale, logpdf_coeff, logpdf_predictions])
+        ...     return jnp.array([logpdf_scale, logpdf_coeff, logpdf_predictions])
     """
 
     fn_name = graph.name + "_loglikelihoods"
@@ -483,7 +483,7 @@ def compile_to_posterior_sampler(graph, namespace, jit=False) -> Artifact:
         ... def linear_regression(x):
         ...     sigma <~ Exponential(1.)
         ...     weights <~ Normal(0, 1)
-        ...     z = np.dot(X, weights)
+        ...     z = jnp.dot(X, weights)
         ...     y <~ Normal(z, sigma)
         ...     return y
 
@@ -491,7 +491,7 @@ def compile_to_posterior_sampler(graph, namespace, jit=False) -> Artifact:
 
         >>> @mcx.model
         ... def linear_regression(rng_key, x, sigma, weights):
-        ...     z = np.dot(X, weights)
+        ...     z = jnp.dot(X, weights)
         ...     y = Normal(z, sigma).sample(rng_key)
         ...     return y
 

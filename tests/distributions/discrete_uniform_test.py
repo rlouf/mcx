@@ -1,5 +1,5 @@
 import pytest
-from jax import numpy as np
+from jax import numpy as jnp
 
 from mcx.distributions import DiscreteUniform
 
@@ -9,7 +9,7 @@ def discreteuniform_mean(lower, upper):
 
 
 def discreteuniform_variance(lower, upper):
-    return (np.pow((upper - lower + 1.0), 2) - 1.0) / 12.0
+    return (jnp.pow((upper - lower + 1.0), 2) - 1.0) / 12.0
 
 
 #
@@ -22,9 +22,9 @@ def discreteuniform_variance(lower, upper):
 #
 
 out_of_support_cases = [
-    {"lower": 1, "upper": 10, "x": 11, "expected": -np.inf},  # > upper
-    {"lower": 0, "upper": 3, "x": -1, "expected": -np.inf},  # < lower
-    {"lower": 0, "upper": 4, "x": 1.3, "expected": -np.inf},  # float
+    {"lower": 1, "upper": 10, "x": 11, "expected": -jnp.inf},  # > upper
+    {"lower": 0, "upper": 3, "x": -1, "expected": -jnp.inf},  # < lower
+    {"lower": 0, "upper": 4, "x": 1.3, "expected": -jnp.inf},  # float
 ]
 
 
@@ -36,8 +36,8 @@ def test_logpdf_out_of_support(case):
 
 edge_cases = [
     {"lower": 1, "upper": 1, "x": 1, "expected": 0},
-    {"lower": 0, "upper": 3, "x": 0, "expected": -np.log(4)},
-    {"lower": 0, "upper": 3, "x": 3, "expected": -np.log(4)},
+    {"lower": 0, "upper": 3, "x": 0, "expected": -jnp.log(4)},
+    {"lower": 0, "upper": 3, "x": 3, "expected": -jnp.log(4)},
 ]
 
 

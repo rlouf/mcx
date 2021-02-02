@@ -3,7 +3,7 @@ import functools
 from typing import Any, Callable, List, Tuple, Union
 
 import jax
-import jax.numpy as np
+import jax.numpy as jnp
 import numpy
 
 import mcx.compiler as compiler
@@ -42,14 +42,14 @@ class model(Distribution):
     in their generative form, that is a function that transforms some
     (optional) input---data, parameters---and returns the result:
 
-    >>> import jax.numpy as np
+    >>> import jax.numpy as jnp
     >>> import mcx
     >>> import mcx.distributions as dist
     >>>
     >>> def linear_model(X):
     ...     weights <~ dist.Normal(0, 1)
     ...     sigma <~ dist.Exponential(1)
-    ...     z = np.dot(X, weights)
+    ...     z = jnp.dot(X, weights)
     ...     y <~ Normal(z, sigma)
     ...     return y
 
@@ -77,7 +77,7 @@ class model(Distribution):
     ... def linear_model(X):
     ...     weights <~ dist.Normal(0, 1)
     ...     sigma <~ dist.Exponential(1)
-    ...     z = np.dot(X, weights)
+    ...     z = jnp.dot(X, weights)
     ...     y <~ Normal(z, sigma)
     ...     return y
 
@@ -98,7 +98,7 @@ class model(Distribution):
 
     This also works for an array input; standard broadcasting rules apply:
 
-    >>> mcx.sample_forward(linear_model, x=np.array([1, 2, 3]), num_samples=1000)
+    >>> mcx.sample_forward(linear_model, x=jnp.array([1, 2, 3]), num_samples=1000)
 
     Unlike calling the model directly, this function JIT-compiles the forward
     sampler; if your machine has a GPU, it will automatically run on it. This
@@ -188,7 +188,7 @@ class model(Distribution):
         arguments: Tuple[Any, ...] = ()
         for arg in args:
             try:
-                arguments += (np.atleast_1d(arg),)
+                arguments += (jnp.atleast_1d(arg),)
             except Exception:
                 arguments += (arg,)
 

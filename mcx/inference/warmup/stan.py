@@ -2,7 +2,7 @@
 from typing import Callable, List, NamedTuple, Tuple
 
 import jax
-import jax.numpy as np
+import jax.numpy as jnp
 
 from mcx.inference.kernels import HMCInfo, HMCState
 from mcx.inference.warmup.mass_matrix_adaptation import (
@@ -142,7 +142,7 @@ def stan_hmc_warmup(
         The updated states of the chain and the warmup.
 
         """
-        step_size = np.exp(warmup_state.da_state.log_step_size)
+        step_size = jnp.exp(warmup_state.da_state.log_step_size)
         inverse_mass_matrix = warmup_state.mm_state.inverse_mass_matrix
         kernel = kernel_factory(step_size, inverse_mass_matrix)
 
@@ -163,9 +163,9 @@ def stan_hmc_warmup(
 
         return chain_state, warmup_state, chain_info
 
-    def final(warmup_state: StanWarmupState) -> Tuple[float, np.DeviceArray]:
+    def final(warmup_state: StanWarmupState) -> Tuple[float, jnp.DeviceArray]:
         """Return the step size and mass matrix."""
-        step_size = np.exp(warmup_state.da_state.log_step_size_avg)
+        step_size = jnp.exp(warmup_state.da_state.log_step_size_avg)
         inverse_mass_matrix = warmup_state.mm_state.inverse_mass_matrix
         return step_size, inverse_mass_matrix
 
@@ -238,7 +238,7 @@ def stan_second_stage(
 
     def init(chain_state: HMCState) -> MassMatrixAdaptationState:
         """Initialize the mass matrix adaptation algorithm."""
-        n_dims = np.shape(chain_state.position)[-1]
+        n_dims = jnp.shape(chain_state.position)[-1]
         mm_state = mm_init(n_dims)
         return mm_state
 
@@ -272,7 +272,7 @@ def stan_second_stage(
 
         """
         new_mm_state = mm_final(warmup_state.mm_state)
-        new_da_state = da_init(np.exp(warmup_state.da_state.log_step_size_avg))
+        new_da_state = da_init(jnp.exp(warmup_state.da_state.log_step_size_avg))
         new_warmup_state = StanWarmupState(new_da_state, new_mm_state)
 
         return new_warmup_state

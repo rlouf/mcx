@@ -2,7 +2,7 @@ from dataclasses import asdict, dataclass, replace
 from typing import Callable, Dict, List, Optional, Tuple
 
 import jax
-import jax.numpy as np
+import jax.numpy as jnp
 from arviz import InferenceData
 from arviz.data.base import dict_to_dataset
 
@@ -226,7 +226,7 @@ class Trace(InferenceData):
             The trace we need to concatenate to the current one.
 
         """
-        concatenate = lambda cur, new: np.concatenate((cur, new), axis=1)
+        concatenate = lambda cur, new: jnp.concatenate((cur, new), axis=1)
 
         for field, new_value in asdict(trace.raw).items():
             current_value = getattr(self.raw, field)
@@ -265,7 +265,7 @@ class Trace(InferenceData):
         trace and the trace passed as argument.
 
         """
-        concatenate = lambda cur, new: np.concatenate((cur, new), axis=1)
+        concatenate = lambda cur, new: jnp.concatenate((cur, new), axis=1)
 
         raw_trace_dict = {}
         for field, new_value in asdict(trace.raw).items():
@@ -301,8 +301,8 @@ class Trace(InferenceData):
             A tuple that contains the chain state and the corresponding sampling info.
         """
         sample, sample_info = state
-        concatenate = lambda cur, new: np.concatenate((cur, new), axis=1)
-        concatenate_1d = lambda cur, new: np.column_stack((cur, new))
+        concatenate = lambda cur, new: jnp.concatenate((cur, new), axis=1)
+        concatenate_1d = lambda cur, new: jnp.column_stack((cur, new))
 
         if self.raw.samples is None:
             stacked_chain = sample

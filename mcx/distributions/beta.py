@@ -1,4 +1,4 @@
-from jax import numpy as np
+from jax import numpy as jnp
 from jax import random
 from jax.scipy import stats
 
@@ -16,7 +16,7 @@ class Beta(Distribution):
 
     def __init__(self, a, b):
         self.event_shape = ()
-        self.batch_shape = broadcast_batch_shape(np.shape(a), np.shape(b))
+        self.batch_shape = broadcast_batch_shape(jnp.shape(a), jnp.shape(b))
         self.a = a
         self.b = b
 
