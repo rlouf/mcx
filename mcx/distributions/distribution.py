@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from typing import Dict, Tuple, Union
 
 import jax
-from jax import numpy as np
+from jax import numpy as jnp
 
 from .constraints import Constraint
 
@@ -114,7 +114,7 @@ class Distribution(ABC):
 
     def logpdf_sum(self, data):
         """Return the logpdf of the distribution over the observations."""
-        return np.sum(self.logpdf(data))
+        return jnp.sum(self.logpdf(data))
 
     def __str__(self):
         """User-friendly representation of the probability distribution."""

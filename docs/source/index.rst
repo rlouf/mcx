@@ -23,7 +23,7 @@ MCX by example
 .. code-block:: python
 
   import jax
-  from jax import numpy as np
+  from jax import numpy as jnp
   import mcx
   import mcx.distributions as dist
 
@@ -34,8 +34,8 @@ MCX by example
   @mcx.model
   def linear_regression(x, lmbda=1.):
       scale <~ dist.Exponential(lmbda)
-      coefs <~ dist.Normal(np.zeros(np.shape(x)[-1]))
-      y = np.dot(x, coefs)
+      coefs <~ dist.Normal(jnp.zeros(jnp.shape(x)[-1]))
+      y = jnp.dot(x, coefs)
       predictions <~ dist.Normal(y, scale)
       return predictions
 

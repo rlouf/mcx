@@ -1,5 +1,5 @@
 import jax
-from jax import numpy as np
+from jax import numpy as jnp
 
 from mcx.inference.integrators import velocity_verlet
 from mcx.inference.kernels import HMCState, hmc_kernel
@@ -10,13 +10,13 @@ from mcx.inference.warmup.step_size_adaptation import find_reasonable_step_size
 
 def test_find_reasonable_step_size():
     def potential_fn(x):
-        return np.sum(0.5 * np.square(x))
+        return jnp.sum(0.5 * jnp.square(x))
 
     rng_key = jax.random.PRNGKey(0)
 
-    inv_mass_matrix = np.array([1.0])
+    inv_mass_matrix = jnp.array([1.0])
 
-    init_position = np.array([3.0])
+    init_position = jnp.array([3.0])
 
     potential_energy, potential_energy_grad = jax.value_and_grad(potential_fn)(
         init_position

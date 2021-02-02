@@ -137,7 +137,7 @@ class ModelParser(ast.NodeVisitor):
         - Transformation of existing variables.
 
         Since constants can also be the result of a call of the form
-        `np.array([0, 1])`, we need to walk down the assignments' values. If
+        `jnp.array([0, 1])`, we need to walk down the assignments' values. If
         any `ast.Name` node is find, the assignment is a transformation
         otherwise it is a constant.
 

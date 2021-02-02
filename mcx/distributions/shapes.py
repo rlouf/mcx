@@ -11,7 +11,7 @@ def broadcast_batch_shape(*shapes):
     To see why we need to do that, consider the following model:
 
         >>> def toy_model():
-        ...     sigma = np.array([1, 2, 3])
+        ...     sigma = jnp.array([1, 2, 3])
         ...     x <~ Normal(0, sigma) # shape (n_samples, 3)
         ...     q <~ Normal(1, 1) # shape (n_samples,)
         ...     y <~ Normal(x, q)

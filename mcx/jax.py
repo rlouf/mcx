@@ -2,7 +2,7 @@
 from collections import namedtuple
 
 import jax.lax as lax
-import jax.numpy as np
+import jax.numpy as jnp
 from jax.dtypes import canonicalize_dtype
 from jax.tree_util import tree_flatten, tree_leaves, tree_map, tree_unflatten
 
@@ -50,24 +50,24 @@ def ravel_pytree(pytree):
 def _ravel_list(*leaves):
     leaves_metadata = tree_map(
         lambda l: pytree_metadata(
-            np.ravel(l), np.shape(l), np.size(l), canonicalize_dtype(lax.dtype(l))
+            jnp.ravel(l), jnp.shape(l), jnp.size(l), canonicalize_dtype(lax.dtype(l))
         ),
         leaves,
     )
-    leaves_idx = np.cumsum(np.array((0,) + tuple(d.size for d in leaves_metadata)))
+    leaves_idx = jnp.cumsum(jnp.array((0,) + tuple(d.size for d in leaves_metadata)))
 
     def unravel_list(arr):
         return [
-            np.reshape(
+            jnp.reshape(
                 lax.dynamic_slice_in_dim(arr, leaves_idx[i], m.size), m.shape
             ).astype(m.dtype)
             for i, m in enumerate(leaves_metadata)
         ]
 
     flat = (
-        np.concatenate([m.flat for m in leaves_metadata])
+        jnp.concatenate([m.flat for m in leaves_metadata])
         if leaves_metadata
-        else np.array([])
+        else jnp.array([])
     )
 
     return flat, unravel_list

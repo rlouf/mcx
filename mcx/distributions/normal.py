@@ -1,4 +1,4 @@
-from jax import numpy as np
+from jax import numpy as jnp
 from jax import random, scipy
 
 from mcx.distributions import constraints
@@ -15,7 +15,7 @@ class Normal(Distribution):
 
     def __init__(self, mu, sigma):
         self.event_shape = ()
-        self.batch_shape = broadcast_batch_shape(np.shape(mu), np.shape(sigma))
+        self.batch_shape = broadcast_batch_shape(jnp.shape(mu), jnp.shape(sigma))
         self.mu = mu
         self.sigma = sigma
         super(Normal, self).__init__()

@@ -1,4 +1,4 @@
-from jax import numpy as np
+from jax import numpy as jnp
 from jax import random, scipy
 
 from mcx.distributions import constraints
@@ -15,7 +15,7 @@ class Cauchy(Distribution):
 
     def __init__(self, loc, scale):
         self.event_shape = ()
-        self.batch_shape = broadcast_batch_shape(np.shape(loc), np.shape(scale))
+        self.batch_shape = broadcast_batch_shape(jnp.shape(loc), jnp.shape(scale))
         self.loc = loc
         self.scale = scale
 

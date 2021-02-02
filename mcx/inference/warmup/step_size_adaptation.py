@@ -10,7 +10,7 @@ from functools import partial
 from typing import Callable, NamedTuple, Tuple
 
 import jax
-import jax.numpy as np
+import jax.numpy as jnp
 
 from mcx.inference.kernels import HMCState
 
@@ -116,10 +116,10 @@ def dual_averaging(
         The parameter :math:`\\mu` is set to :math:`\\log(10 \\epsilon_1)`
         where :math:`\\epsilon_1` is the initial value of the step size.
         """
-        mu: float = np.log(10 * inital_step_size)
+        mu: float = jnp.log(10 * inital_step_size)
         step = 1
         avg_error: float = 0.0
-        log_step_size: float = np.log(inital_step_size)
+        log_step_size: float = jnp.log(inital_step_size)
         log_step_size_avg: float = 0.0
         return DualAveragingState(log_step_size, log_step_size_avg, step, avg_error, mu)
 
@@ -142,7 +142,7 @@ def dual_averaging(
         reg_step = step + t0
         eta_t = step ** (-kappa)
         avg_error = (1 - (1 / (reg_step))) * avg_error + (target - p_accept) / reg_step
-        log_step_size = mu - (np.sqrt(step) / gamma) * avg_error
+        log_step_size = mu - (jnp.sqrt(step) / gamma) * avg_error
         log_step_size_avg = eta_t * log_step + (1 - eta_t) * avg_log_step
         return DualAveragingState(
             log_step_size, log_step_size_avg, step + 1, avg_error, mu
@@ -180,9 +180,9 @@ class ReasonableStepSizeState(NamedTuple):
 @partial(jax.jit, static_argnums=(1,))
 def find_reasonable_step_size(
     rng_key: jax.random.PRNGKey,
-    kernel_generator: Callable[[float, np.DeviceArray], Callable],
+    kernel_generator: Callable[[float, jnp.DeviceArray], Callable],
     reference_hmc_state: HMCState,
-    inverse_mass_matrix: np.DeviceArray,
+    inverse_mass_matrix: jnp.DeviceArray,
     initial_step_size: float = 1.0,
     target_accept: float = 0.65,
 ) -> float:
@@ -223,7 +223,7 @@ def find_reasonable_step_size(
             adaptively setting path lengths in Hamiltonian Monte Carlo." Journal
             of Machine Learning Research 15.1 (2014): 1593-1623.
     """
-    fp_limit = np.finfo(jax.lax.dtype(initial_step_size))
+    fp_limit = jnp.finfo(jax.lax.dtype(initial_step_size))
 
     @jax.jit
     def _update(search_state: ReasonableStepSizeState) -> ReasonableStepSizeState:
@@ -235,7 +235,7 @@ def find_reasonable_step_size(
         kernel = kernel_generator(step_size, inverse_mass_matrix)
         _, hmc_info = kernel(rng_key, reference_hmc_state)
 
-        new_direction = np.where(target_accept < hmc_info.acceptance_probability, 1, -1)
+        new_direction = jnp.where(target_accept < hmc_info.acceptance_probability, 1, -1)
         return ReasonableStepSizeState(rng_key, new_direction, direction, step_size)
 
     @jax.jit

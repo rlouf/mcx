@@ -2,7 +2,7 @@
 from typing import Callable, NamedTuple
 
 import jax
-import jax.numpy as np
+import jax.numpy as jnp
 
 __all__ = [
     "four_stages_integrator",
@@ -13,8 +13,8 @@ __all__ = [
 
 
 class IntegratorState(NamedTuple):
-    position: np.DeviceArray
-    momentum: np.DeviceArray
+    position: jnp.DeviceArray
+    momentum: jnp.DeviceArray
     log_prob_grad: float
 
 

@@ -1,4 +1,4 @@
-from jax import numpy as np
+from jax import numpy as jnp
 from jax import random
 
 from mcx.distributions import constraints
@@ -13,7 +13,7 @@ class Uniform(Distribution):
         self.support = constraints.closed_interval(lower, upper)
 
         self.event_shape = ()
-        self.batch_shape = broadcast_batch_shape(np.shape(lower), np.shape(upper))
+        self.batch_shape = broadcast_batch_shape(jnp.shape(lower), jnp.shape(upper))
         self.lower = lower
         self.upper = upper
 
@@ -24,4 +24,4 @@ class Uniform(Distribution):
 
     @constraints.limit_to_support
     def logpdf(self, x):
-        return np.log(1.0 / (self.upper - self.lower))
+        return jnp.log(1.0 / (self.upper - self.lower))

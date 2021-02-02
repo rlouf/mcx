@@ -2,7 +2,7 @@
 """
 from typing import NamedTuple
 
-import jax.numpy as np
+import jax.numpy as jnp
 
 from mcx.inference.warmup.mass_matrix_adaptation import (
     WelfordAlgorithmState,
@@ -31,10 +31,10 @@ def online_gelman_rubin():
         within_state = w_update(within_state, positions)
 
         covariance, step, mean = w_covariance(rhat_state)
-        within_var = np.mean(covariance)
-        between_var = np.var(mean, ddof=1)
+        within_var = jnp.mean(covariance)
+        between_var = jnp.var(mean, ddof=1)
         estimator = ((step - 1) / step) * within_var + between_var
-        rhat = np.sqrt(estimator / within_var)
+        rhat = jnp.sqrt(estimator / within_var)
 
         return GelmanRubinState(within_state, rhat)
 
