@@ -100,7 +100,7 @@ following functions are invalid MCX code:</p>
     <span class="sd">&quot;&quot;&quot;You cannot use deterministic expressions as an argument.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">a</span> <span class="o">&lt;~</span> <span class="n">Normal</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
-    <span class="n">b</span> <span class="o">&lt;~</span> <span class="n">Gamma</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="n">a</span><span class="p">))</span>
+    <span class="n">b</span> <span class="o">&lt;~</span> <span class="n">Gamma</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">jnp</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="n">a</span><span class="p">))</span>
     <span class="k">return</span> <span class="n">b</span>
 </pre></div>
 </div>
@@ -162,7 +162,7 @@ scipy’s methods).</p>
 <span class="nd">@mcx</span><span class="o">.</span><span class="n">model</span>
 <span class="k">def</span> <span class="nf">one_dimensional_linear_regression</span><span class="p">(</span><span class="n">X</span><span class="p">):</span>
       <span class="n">sigma</span> <span class="o">&lt;~</span> <span class="n">Exponential</span><span class="p">(</span><span class="o">.</span><span class="mi">3</span><span class="p">)</span>
-      <span class="n">mu</span> <span class="o">&lt;~</span> <span class="n">Normal</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">zeros_like</span><span class="p">(</span><span class="n">X</span><span class="p">))</span>
+      <span class="n">mu</span> <span class="o">&lt;~</span> <span class="n">Normal</span><span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">zeros_like</span><span class="p">(</span><span class="n">X</span><span class="p">))</span>
       <span class="n">y</span> <span class="o">=</span> <span class="n">multiply</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">mu</span><span class="p">)</span>
       <span class="k">return</span> <span class="n">Normal</span><span class="p">(</span><span class="n">y</span><span class="p">,</span> <span class="n">sigma</span><span class="p">)</span>
 </pre></div>
@@ -172,14 +172,14 @@ scipy’s methods).</p>
 <h2>Models are (multivariate) distributions<a class="headerlink" href="#models-are-multivariate-distributions" title="Permalink to this headline">¶</a></h2>
 <p>Most distributions can be seen as the result of a generative process. For
 instance you can re-implement the exponential distribution in MCX as</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">jax.numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">jax.numpy</span> <span class="k">as</span> <span class="nn">jnp</span>
 <span class="kn">import</span> <span class="nn">mcx</span>
 <span class="kn">from</span> <span class="nn">mcx.distributions</span> <span class="kn">import</span> <span class="n">Exponential</span>
 
 <span class="nd">@mcx</span><span class="o">.</span><span class="n">model</span>
 <span class="k">def</span> <span class="nf">Exponential</span><span class="p">(</span><span class="n">lmbda</span><span class="p">):</span>
     <span class="n">U</span> <span class="o">&lt;~</span> <span class="n">Uniform</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
-    <span class="n">t</span> <span class="o">=</span> <span class="o">-</span> <span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">U</span><span class="p">)</span> <span class="o">/</span> <span class="n">lmbda</span>
+    <span class="n">t</span> <span class="o">=</span> <span class="o">-</span> <span class="n">jnp</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">U</span><span class="p">)</span> <span class="o">/</span> <span class="n">lmbda</span>
     <span class="k">return</span> <span class="n">t</span>
 </pre></div>
 </div>
@@ -201,7 +201,7 @@ possible to compose MCX models as follows</p>
 <span class="nd">@mcx</span><span class="o">.</span><span class="n">model</span>
 <span class="k">def</span> <span class="nf">one_dimensional_linear_regression</span><span class="p">(</span><span class="n">X</span><span class="p">):</span>
     <span class="n">sigma</span> <span class="o">&lt;~</span> <span class="n">Exponential</span><span class="p">(</span><span class="o">.</span><span class="mi">3</span><span class="p">)</span>
-    <span class="n">mu</span> <span class="o">&lt;~</span> <span class="n">HorseShoe</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">zeros_like</span><span class="p">(</span><span class="n">X</span><span class="p">),</span> <span class="mf">1.</span><span class="p">,</span> <span class="mf">1.</span><span class="p">)</span>
+    <span class="n">mu</span> <span class="o">&lt;~</span> <span class="n">HorseShoe</span><span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">zeros_like</span><span class="p">(</span><span class="n">X</span><span class="p">),</span> <span class="mf">1.</span><span class="p">,</span> <span class="mf">1.</span><span class="p">)</span>
     <span class="n">z</span> <span class="o">=</span> <span class="n">X</span> <span class="o">*</span> <span class="n">mu</span>
     <span class="n">y</span> <span class="o">&lt;~</span> <span class="n">Normal</span><span class="p">(</span><span class="n">mu</span><span class="p">,</span> <span class="n">sigma</span><span class="p">)</span>
     <span class="k">return</span> <span class="n">y</span>
