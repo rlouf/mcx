@@ -2,7 +2,7 @@ from typing import Any, Dict, Tuple, Union
 
 import jax
 import numpy
-from jax import numpy as np
+from jax import numpy as jnp
 
 import mcx.compiler as compiler
 from mcx.trace import Trace
@@ -101,7 +101,7 @@ class posterior_predictive:
             try:
                 value = observations[arg]
                 try:
-                    sampler_args += (np.atleast_1d(value),)
+                    sampler_args += (jnp.atleast_1d(value),)
                 except RuntimeError:
                     sampler_args += (value,)
                 in_axes_single_chain += (None,)
@@ -118,10 +118,10 @@ class posterior_predictive:
         for arg in model_randvars:
             try:
                 value = posterior_samples[arg]  # type: ignore
-                num_samples = np.shape(value)[-1]
-                num_chains = np.shape(value)[0]
+                num_samples = jnp.shape(value)[-1]
+                num_chains = jnp.shape(value)[0]
                 try:
-                    sampler_args += (np.atleast_1d(value),)
+                    sampler_args += (jnp.atleast_1d(value),)
                     in_axes_single_chain += (-1,)  # mapping over samples
                     in_axes += (0,)  # mapping over chains
                 except RuntimeError:
@@ -141,7 +141,7 @@ class posterior_predictive:
                 value = observations[kwarg]
             else:
                 value = self.model.nodes[kwarg]["content"].default_value.n
-            sampler_args += (np.atleast_1d(value),)
+            sampler_args += (jnp.atleast_1d(value),)
             in_axes_single_chain += (None,)
             in_axes += (None,)
 
@@ -232,7 +232,7 @@ class prior_predictive:
             try:
                 value = observations[arg]
                 try:
-                    sampler_args += (np.atleast_1d(value),)
+                    sampler_args += (jnp.atleast_1d(value),)
                 except RuntimeError:
                     sampler_args += (value,)
                 in_axes += (None,)
@@ -248,7 +248,7 @@ class prior_predictive:
             else:
                 # if the kwargs' values are not specified we retrieve them from the graph.
                 value = self.model.nodes[kwarg]["content"].default_value.n
-            sampler_args += (np.atleast_1d(value),)
+            sampler_args += (jnp.atleast_1d(value),)
             in_axes += (None,)
 
         print(f"Generating {num_samples:,} samples from the prior distribution.")
@@ -300,7 +300,7 @@ def sample_forward(
         try:
             value = observations[arg]
             try:
-                sampler_args += (np.atleast_1d(value),)
+                sampler_args += (jnp.atleast_1d(value),)
             except RuntimeError:
                 sampler_args += (value,)
             in_axes += (None,)

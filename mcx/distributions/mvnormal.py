@@ -1,4 +1,4 @@
-from jax import numpy as np
+from jax import numpy as jnp
 from jax import random, scipy
 
 from mcx.distributions import constraints
@@ -15,8 +15,8 @@ class MvNormal(Distribution):
 
     def __init__(self, mu, covariance_matrix):
 
-        (mu_event_shape,) = np.shape(mu)[-1:]
-        covariance_event_shape = np.shape(covariance_matrix)[-2:]
+        (mu_event_shape,) = jnp.shape(mu)[-1:]
+        covariance_event_shape = jnp.shape(covariance_matrix)[-2:]
         if (mu_event_shape, mu_event_shape) != covariance_event_shape:
             raise ValueError(
                 (
@@ -27,10 +27,10 @@ class MvNormal(Distribution):
             )
 
         self.batch_shape = broadcast_batch_shape(
-            np.shape(mu)[:-1], np.shape(covariance_matrix)[:-2]
+            jnp.shape(mu)[:-1], jnp.shape(covariance_matrix)[:-2]
         )
         self.event_shape = broadcast_batch_shape(
-            np.shape(mu)[-1:], np.shape(covariance_matrix)[-2:]
+            jnp.shape(mu)[-1:], jnp.shape(covariance_matrix)[-2:]
         )
         self.mu = mu
         self.covariance_matrix = covariance_matrix

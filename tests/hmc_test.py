@@ -2,8 +2,8 @@
 correctly.
 """
 import jax
-import jax.numpy as np
-import numpy as onp
+import jax.numpy as jnp
+import numpy as np
 import pytest
 
 import mcx
@@ -16,9 +16,9 @@ from mcx import HMC
 @mcx.model
 def linear_regression(x, lmbda=1.0):
     sigma <~ dist.Exponential(lmbda)
-    coeffs_init = np.ones(x.shape[-1])
+    coeffs_init = jnp.ones(x.shape[-1])
     coeffs <~ dist.Normal(coeffs_init, sigma)
-    y = np.dot(x, coeffs)
+    y = jnp.dot(x, coeffs)
     predictions <~ dist.Normal(y, sigma)
     return predictions
 # fmt: on
@@ -27,13 +27,13 @@ def linear_regression(x, lmbda=1.0):
 @pytest.mark.sampling
 @pytest.mark.slow
 def test_linear_regression():
-    x_data = onp.random.normal(0, 5, size=1000).reshape(-1, 1)
-    y_data = 3 * x_data + onp.random.normal(size=x_data.shape)
+    x_data = np.random.normal(0, 5, size=1000).reshape(-1, 1)
+    y_data = 3 * x_data + np.random.normal(size=x_data.shape)
 
     kernel = HMC(
         step_size=0.001,
         num_integration_steps=90,
-        inverse_mass_matrix=np.array([1.0, 1.0]),
+        inverse_mass_matrix=jnp.array([1.0, 1.0]),
     )
 
     observations = {"x": x_data, "predictions": y_data}
@@ -49,7 +49,7 @@ def test_linear_regression():
     )
     trace = sampler.run(num_samples=3000)
 
-    mean_coeffs = onp.asarray(np.mean(trace.raw.samples["coeffs"][:, 1000:], axis=1))
-    mean_scale = onp.asarray(np.mean(trace.raw.samples["sigma"][:, 1000:], axis=1))
+    mean_coeffs = np.asarray(jnp.mean(trace.raw.samples["coeffs"][:, 1000:], axis=1))
+    mean_scale = np.asarray(jnp.mean(trace.raw.samples["sigma"][:, 1000:], axis=1))
     assert mean_coeffs == pytest.approx(3, 1e-1)
     assert mean_scale == pytest.approx(1, 1e-1)

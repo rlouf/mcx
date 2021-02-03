@@ -77,7 +77,7 @@ following functions are invalid MCX code:
         """You cannot use deterministic expressions as an argument.
         """
         a <~ Normal(0, 1)
-        b <~ Gamma(1, np.exp(a))
+        b <~ Gamma(1, jnp.exp(a))
         return b
 
 Control flow is also not supported for the moment. MCX will not compile
@@ -145,7 +145,7 @@ scipy's methods).
   @mcx.model
   def one_dimensional_linear_regression(X):
         sigma <~ Exponential(.3)
-        mu <~ Normal(np.zeros_like(X))
+        mu <~ Normal(jnp.zeros_like(X))
         y = multiply(X, mu)
         return Normal(y, sigma)
 
@@ -158,14 +158,14 @@ instance you can re-implement the exponential distribution in MCX as
 
 .. code-block:: python
   
-  import jax.numpy as np
+  import jax.numpy as jnp
   import mcx
   from mcx.distributions import Exponential
         
   @mcx.model
   def Exponential(lmbda):
       U <~ Uniform(0, 1)
-      t = - np.log(U) / lmbda
+      t = - jnp.log(U) / lmbda
       return t
 
 When we say that we "sample" from the exponential distribution, we are actually
@@ -190,7 +190,7 @@ possible to compose MCX models as follows
   @mcx.model
   def one_dimensional_linear_regression(X):
       sigma <~ Exponential(.3)
-      mu <~ HorseShoe(np.zeros_like(X), 1., 1.)
+      mu <~ HorseShoe(jnp.zeros_like(X), 1., 1.)
       z = X * mu
       y <~ Normal(mu, sigma)
       return y
