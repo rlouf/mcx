@@ -385,9 +385,13 @@ def sample_scan(
     """
     num_samples = rng_keys.shape[0]
 
-    progress_bar_scan, set_tqdm_description, close_tqdm = progress_bar_factory(
-        num_samples
+    progress_bar = tqdm(range(num_samples))
+    progress_bar.set_description(
+        f"Collecting {num_samples:,} samples across {num_chains:,} chains",
+        refresh=False,
     )
+    print_rate = int(num_samples / 10)
+    progress_bar_scan = progress_bar_factory(progress_bar, print_rate)
 
     @jax.jit
     @progress_bar_scan
@@ -398,9 +402,6 @@ def sample_scan(
         state, info = jax.vmap(kernel, in_axes=(0, 0, 0))(keys, parameters, state)
         return (state, parameters), (state, info)
 
-    set_tqdm_description(
-        f"Collecting {num_samples:,} samples across {num_chains:,} chains"
-    )
     last_state, chain = jax.lax.scan(
         update_scan, (init_state, parameters), (np.arange(num_samples), rng_keys)
     )
@@ -408,7 +409,7 @@ def sample_scan(
 
     mcx.jax.wait_until_computed(chain)
     mcx.jax.wait_until_computed(last_state)
-    close_tqdm()
+    progress_bar.close()
 
     return last_chain_state, chain
 

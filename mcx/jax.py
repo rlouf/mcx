@@ -7,7 +7,6 @@ from jax import jit
 from jax.dtypes import canonicalize_dtype
 from jax.experimental import host_callback
 from jax.tree_util import tree_flatten, tree_leaves, tree_map, tree_unflatten
-from tqdm import tqdm
 
 __all__ = ["ravel_pytree", "wait_until_computed"]
 
@@ -76,31 +75,18 @@ def _ravel_list(*leaves):
     return flat, unravel_list
 
 
-def progress_bar_factory(num_samples):
-    """Factory that builds a progress bar decorator along
-    with the `set_tqdm_description` and `close_tqdm` functions
-    """
+def progress_bar_factory(tqdm_pbar, print_rate):
+    """Factory that builds a progress bar decorator"""
 
-    tqdm_pbar = tqdm(range(num_samples))
-
-    def set_tqdm_description(message):
-        tqdm_pbar.set_description(
-            message,
-            refresh=False,
-        )
-
-    def close_tqdm():
-        tqdm_pbar.close()
-
-    def _update_tqdm(arg, transform):
+    def _update_tqdm(arg, _):
         tqdm_pbar.update(arg)
 
     @jit
-    def _progress_bar(arg, result):
-        """Updates tqdm progress bar of a scan/loop only if the iteration number is a multiple of the print_rate
-        Usage: carry = progress_bar((iter_num, print_rate), carry)
+    def _update_progress_bar(arg, result):
+        """Updates tqdm progress bar of a scan/loop only if the iteration
+        number is a multiple of the print_rate
         """
-        iter_num, print_rate = arg
+        iter_num = arg
 
         result = lax.cond(
             iter_num % print_rate == 0,
@@ -115,13 +101,13 @@ def progress_bar_factory(num_samples):
         Note that `body_fun` must be looping over a tuple who's first element is `np.arange(num_samples)`.
         This means that `iter_num` is the current iteration number
         """
-        print_rate = int(num_samples / 10)
 
         def wrapper_progress_bar(carry, x):
+            "x is a tuple: (iteration_number, key)"
             iter_num = x[0]
-            iter_num = _progress_bar((iter_num, print_rate), iter_num)
+            _ = _update_progress_bar(iter_num, iter_num)
             return func(carry, x)
 
         return wrapper_progress_bar
 
-    return progress_bar_scan, set_tqdm_description, close_tqdm
+    return progress_bar_scan
