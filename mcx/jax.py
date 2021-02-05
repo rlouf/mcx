@@ -82,19 +82,16 @@ def progress_bar_factory(tqdm_pbar, print_rate):
         tqdm_pbar.update(arg)
 
     @jit
-    def _update_progress_bar(arg, result):
+    def _update_progress_bar(iter_num):
         """Updates tqdm progress bar of a scan/loop only if the iteration
         number is a multiple of the print_rate
         """
-        iter_num = arg
-
-        result = lax.cond(
+        _ = lax.cond(
             iter_num % print_rate == 0,
-            lambda _: host_callback.id_tap(_update_tqdm, print_rate, result=result),
-            lambda _: result,
+            lambda _: host_callback.id_tap(_update_tqdm, print_rate, result=iter_num),
+            lambda _: iter_num,
             operand=None,
         )
-        return result
 
     def progress_bar_scan(func):
         """Decorator that adds a progress bar to `body_fun` used in `lax.scan`.
@@ -105,7 +102,7 @@ def progress_bar_factory(tqdm_pbar, print_rate):
         def wrapper_progress_bar(carry, x):
             "x is a tuple: (iteration_number, key)"
             iter_num = x[0]
-            _ = _update_progress_bar(iter_num, iter_num)
+            _update_progress_bar(iter_num)
             return func(carry, x)
 
         return wrapper_progress_bar
