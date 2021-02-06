@@ -10,6 +10,8 @@ from typing import List, Dict, Tuple, Any, Type, TypeVar, Callable
 Array = Any
 TState = TypeVar("TState")
 
+ConstVarState = Dict[jax.core.Var, bool]
+
 jaxpr_high_order_primitives_to_subjaxprs = {
     jax.lax.cond_p: lambda jxpr: jxpr.params["branches"],
     jax.lax.while_p: lambda jxpr: (
@@ -38,8 +40,9 @@ def jax_lax_identity(x: Array) -> Array:
 def jaxpr_visitor(
     jaxpr: jax.core.Jaxpr,
     initial_state: TState,
-    visitor_fn: Callable[[jax.core.JaxprEqn, TState, Any], TState],
-    init_sub_states_fn: Callable[[jax.core.JaxprEqn, TState], List[TState]],
+    visitor_fn: Callable[[jax.core.JaxprEqn, TState], TState],
+    map_sub_states_fn: Callable[[jax.core.JaxprEqn, TState], List[TState]],
+    reduce_sub_states_fn: Callable[[jax.core.JaxprEqn, TState, List[TState]], TState],
     reverse: bool = False,
 ) -> Tuple[TState, List[Any]]:
     """Visitor pattern on a Jaxpr, traversing equations and supporting higher-order primitives
@@ -62,51 +65,36 @@ def jaxpr_visitor(
     equations = jaxpr.eqns if not reverse else jaxpr.eqns[::-1]
     for eqn in equations:
         if eqn.primitive in jaxpr_high_order_primitives_to_subjaxprs:
+            init_sub_states = map_sub_states_fn(eqn, state)
             sub_jaxprs = jaxpr_high_order_primitives_to_subjaxprs[eqn.primitive]
-            sub_states = init_sub_states_fn(eqn, state)
             # Map visitor method to each sub-jaxpr.
             res_sub_states = [
                 jaxpr_visitor(
-                    sub_jaxpr, sub_state, visitor_fn, init_sub_states_fn, reverse
+                    sub_jaxpr,
+                    sub_state,
+                    visitor_fn,
+                    map_sub_states_fn,
+                    reduce_sub_states_fn,
+                    reverse,
                 )
-                for sub_jaxpr, sub_state in zip(sub_jaxprs, sub_states)
+                for sub_jaxpr, sub_state in zip(sub_jaxprs, init_sub_states)
             ]
             # Reduce to update the current state.
-            state = visitor_fn(eqn, state, res_sub_states)
+            state = reduce_sub_states_fn(eqn, state, [v[0] for v in res_sub_states])
             subjaxprs_visit.append(res_sub_states)
         else:
             # Common Jaxpr equation: apply the visitor and update state.
-            state = visitor_fn(eqn, state, None)
+            state = visitor_fn(eqn, state)
             subjaxprs_visit.append(None)
     return state, subjaxprs_visit
 
 
 def jaxpr_find_constvars_visitor_fn(
     eqn: jax.core.JaxprEqn,
-    state: Dict[Any, bool],
-    sub_states: List[Tuple[Dict, Any]] = None,
-) -> Dict[Any, bool]:
+    state: ConstVarState,
+    sub_states: List[Tuple[ConstVarState, Any]] = None,
+) -> ConstVarState:
     """fdsafads"""
-    primitive_type = type(eqn.primitive)
-
-    # Reduce logic of high level primitives: combine the results to update the state.
-    if (
-        eqn.primitive in jaxpr_high_order_primitives_to_subjaxprs
-        or primitive_type in jaxpr_high_order_primitives_to_subjaxprs
-    ):
-        if primitive_type == jax.core.CallPrimitive:
-            # Jit compiled sub-jaxpr.
-            sub_jaxpr = eqn.params["call_jaxpr"]
-            sub_state = sub_states[0][0]
-            for eqn_outvar, sub_outvar in zip(eqn.outvars, sub_jaxpr.outvars):
-                # Add a constant variables if marked constant in the sub-jaxpr.
-                if sub_outvar in sub_state:
-                    state[eqn_outvar] = sub_state[sub_outvar]
-        else:
-            # TODO: support other high primitive. No constants marked at the moment.
-            pass
-        return state
-
     # Common ops logic: are inputs literal or const variables?
     is_const_invars = [
         str(v) in state or type(v) is jax.core.Literal for v in eqn.invars
@@ -116,9 +104,9 @@ def jaxpr_find_constvars_visitor_fn(
     return state
 
 
-def jaxpr_find_constvars_init_sub_states_fn(
-    eqn: jax.core.JaxprEqn, state: Dict[Any, bool]
-) -> List[Dict[Any, bool]]:
+def jaxpr_find_constvars_map_sub_states_fn(
+    eqn: jax.core.JaxprEqn, state: ConstVarState
+) -> List[ConstVarState]:
     """fdsafads"""
     # Mapping the current state to the sub-jaxprs.
     primitive_type = type(eqn.primitive)
@@ -136,6 +124,25 @@ def jaxpr_find_constvars_init_sub_states_fn(
         # TODO: support other high primitives.
         sub_init_states = [{} for _ in range(len(sub_jaxprs))]
     return sub_init_states
+
+
+def jaxpr_find_constvars_reduce_sub_states_fn(
+    eqn: jax.core.JaxprEqn, state: ConstVarState, sub_states: List[ConstVarState]
+) -> ConstVarState:
+    """fdsafads"""
+    primitive_type = type(eqn.primitive)
+    if primitive_type == jax.core.CallPrimitive:
+        # Jit compiled sub-jaxpr.
+        sub_jaxpr = eqn.params["call_jaxpr"]
+        sub_state = sub_states[0][0]
+        for eqn_outvar, sub_outvar in zip(eqn.outvars, sub_jaxpr.outvars):
+            # Add a constant variables if marked constant in the sub-jaxpr.
+            if sub_outvar in sub_state:
+                state[eqn_outvar] = sub_state[sub_outvar]
+    else:
+        # TODO: support other high primitive. No constants marked at the moment.
+        pass
+    return state
 
 
 def jaxpr_find_constvars(
