@@ -27,11 +27,19 @@ jaxpr_high_order_primitives_to_subjaxprs = {
 jaxpr_high_order_primitives = set(jaxpr_high_order_primitives_to_subjaxprs.keys())
 
 
+def jax_lax_identity(x: Array) -> Array:
+    """Identity operator.
+
+    Intrinsingly, it seems jax.lax does not have a public identity operation?
+    """
+    return x
+
+
 def jaxpr_visitor(
     jaxpr: jax.core.Jaxpr,
     initial_state: TState,
     visitor_fn: Callable[[jax.core.JaxprEqn, TState, Any], TState],
-    init_sub_state_fn: Callable[[jax.core.JaxprEqn, TState], List[TState]],
+    init_sub_states_fn: Callable[[jax.core.JaxprEqn, TState], List[TState]],
     reverse: bool = False,
 ) -> Tuple[TState, List[Any]]:
     """Visitor pattern on a Jaxpr, traversing equations and supporting higher-order primitives
@@ -41,7 +49,7 @@ def jaxpr_visitor(
     ----------
     initial_state: Initial state to feed to the visitor method.
     visitor_fn: Visitor function, taking an input state and Jaxpr, outputting an updated state.
-    init_sub_state_fn: Initializing method for higher-order primitives sub-Jaxprs. Taking as input
+    init_sub_states_fn: Initializing method for higher-order primitives sub-Jaxprs. Taking as input
         the existing state, and outputting input states to respective sub-Jaxprs.
     reverse: Traverse the Jaxpr equations in reverse order.
     Returns
@@ -51,15 +59,15 @@ def jaxpr_visitor(
     state = initial_state
     subjaxprs_visit = []
 
-    equations = jax.eqns if not reverse else jax.eqns[::-1]
+    equations = jaxpr.eqns if not reverse else jaxpr.eqns[::-1]
     for eqn in equations:
         if eqn.primitive in jaxpr_high_order_primitives_to_subjaxprs:
             sub_jaxprs = jaxpr_high_order_primitives_to_subjaxprs[eqn.primitive]
-            sub_states = init_sub_state_fn(eqn, state)
+            sub_states = init_sub_states_fn(eqn, state)
             # Map visitor method to each sub-jaxpr.
             res_sub_states = [
                 jaxpr_visitor(
-                    sub_jaxpr, sub_state, visitor_fn, init_sub_state_fn, reverse
+                    sub_jaxpr, sub_state, visitor_fn, init_sub_states_fn, reverse
                 )
                 for sub_jaxpr, sub_state in zip(sub_jaxprs, sub_states)
             ]
@@ -73,15 +81,66 @@ def jaxpr_visitor(
     return state, subjaxprs_visit
 
 
-def jax_lax_identity(x: Array) -> Array:
-    """Identity operator.
+def jaxpr_find_constvars_visitor_fn(
+    eqn: jax.core.JaxprEqn,
+    state: Dict[Any, bool],
+    sub_states: List[Tuple[Dict, Any]] = None,
+) -> Dict[Any, bool]:
+    """fdsafads"""
+    primitive_type = type(eqn.primitive)
 
-    Intrinsingly, it seems jax.lax does not have a public identity operation?
-    """
-    return x
+    # Reduce logic of high level primitives: combine the results to update the state.
+    if (
+        eqn.primitive in jaxpr_high_order_primitives_to_subjaxprs
+        or primitive_type in jaxpr_high_order_primitives_to_subjaxprs
+    ):
+        if primitive_type == jax.core.CallPrimitive:
+            # Jit compiled sub-jaxpr.
+            sub_jaxpr = eqn.params["call_jaxpr"]
+            sub_state = sub_states[0][0]
+            for eqn_outvar, sub_outvar in zip(eqn.outvars, sub_jaxpr.outvars):
+                # Add a constant variables if marked constant in the sub-jaxpr.
+                if sub_outvar in sub_state:
+                    state[eqn_outvar] = sub_state[sub_outvar]
+        else:
+            # TODO: support other primitive. No constants marked at the moment.
+            pass
+        return state
+
+    # Common ops logic: are inputs literal or const variables?
+    is_const_invars = [
+        str(v) in state or type(v) is jax.core.Literal for v in eqn.invars
+    ]
+    if all(is_const_invars):
+        state.update({v: False for v in eqn.outvars})
+    return state
+
+
+def jaxpr_find_constvars_init_sub_states_fn(
+    eqn: jax.core.JaxprEqn, state: Dict[Any, bool]
+) -> List[Dict[Any, bool]]:
+    """fdsafads"""
+    pass
 
 
 def jaxpr_find_constvars(
+    jaxpr: jax.core.Jaxpr, consts: List[jax.core.Var]
+) -> List[jax.core.Var]:
+    """Find all intermediates variables in a JAX expression which are expected to be constants.
+
+    Parameters
+    ----------
+    jaxpr: JAX expression.
+    consts: List of known constant variables in the JAX expression.
+
+    Returns
+    -------
+    List of all intermediate constant variables.
+    """
+    pass
+
+
+def jaxpr_find_constvars_old(
     jaxpr: jax.core.Jaxpr, consts: List[jax.core.Var]
 ) -> List[jax.core.Var]:
     """Find all intermediates variables in a JAX expression which are expected to be constants.
