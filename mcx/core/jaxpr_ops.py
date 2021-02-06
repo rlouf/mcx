@@ -103,7 +103,7 @@ def jaxpr_find_constvars_visitor_fn(
                 if sub_outvar in sub_state:
                     state[eqn_outvar] = sub_state[sub_outvar]
         else:
-            # TODO: support other primitive. No constants marked at the moment.
+            # TODO: support other high primitive. No constants marked at the moment.
             pass
         return state
 
@@ -120,7 +120,22 @@ def jaxpr_find_constvars_init_sub_states_fn(
     eqn: jax.core.JaxprEqn, state: Dict[Any, bool]
 ) -> List[Dict[Any, bool]]:
     """fdsafads"""
-    pass
+    # Mapping the current state to the sub-jaxprs.
+    primitive_type = type(eqn.primitive)
+    sub_jaxprs = jaxpr_high_order_primitives_to_subjaxprs[eqn.primitive]
+    sub_init_states = None
+
+    if primitive_type == jax.core.CallPrimitive:
+        # Jit compiled sub-jaxpr: map eqn inputs to sub-jaxpr inputs.
+        sub_init_state = {}
+        for eqn_invar, sub_invar in zip(eqn.invars, sub_jaxprs[0].invars):
+            # Add a constant variables if marked constant in the sub-jaxpr.
+            if eqn_invar in state or type(sub_invar) is jax.core.Literal:
+                sub_init_state[sub_invar] = False
+    else:
+        # TODO: support other high primitives.
+        sub_init_states = [{} for _ in range(len(sub_jaxprs))]
+    return sub_init_states
 
 
 def jaxpr_find_constvars(
