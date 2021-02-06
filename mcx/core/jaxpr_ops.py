@@ -64,7 +64,7 @@ def jaxpr_visitor(
                 for sub_jaxpr, sub_state in zip(sub_jaxprs, sub_states)
             ]
             # Reduce to update the current state.
-            sate = visitor_fn(eqn, state, res_sub_states)
+            state = visitor_fn(eqn, state, res_sub_states)
             subjaxprs_visit.append(res_sub_states)
         else:
             # Common Jaxpr equation: apply the visitor and update state.
