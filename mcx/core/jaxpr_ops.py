@@ -11,14 +11,20 @@ Array = Any
 TState = TypeVar("TState")
 
 jaxpr_high_order_primitives_to_subjaxprs = {
-    jax.lax.cond_p: lambda jxpr: (None,),
-    jax.lax.while_p: None,
-    jax.lax.scan_p: None,
-    jax.core.CallPrimitive: None,  # xla_call, from jax.jit
-    jax.core.MapPrimitive: None,
+    jax.lax.cond_p: lambda jxpr: jxpr.params["branches"],
+    jax.lax.while_p: lambda jxpr: (
+        jxpr.params["cond_jaxpr"],
+        jxpr.params["body_jaxpr"],
+    ),
+    jax.lax.scan_p: lambda jxpr: (jxpr.params["jaxpr"],),
+    jax.core.CallPrimitive: lambda jxpr: (
+        jxpr.params["call_jaxpr"],
+    ),  # xla_call, from jax.jit
+    jax.core.MapPrimitive: lambda jxpr: (jxpr.params["call_jaxpr"],),
 }
 """Collection of high-order Jax primitives, with sub-Jaxprs.
 """
+jaxpr_high_order_primitives = set(jaxpr_high_order_primitives_to_subjaxprs.keys())
 
 
 def jaxpr_visitor(
@@ -57,7 +63,7 @@ def jaxpr_visitor(
                 )
                 for sub_jaxpr, sub_state in zip(sub_jaxprs, sub_states)
             ]
-            # Reduce, to update the current state.
+            # Reduce to update the current state.
             sate = visitor_fn(eqn, state, res_sub_states)
             subjaxprs_visit.append(res_sub_states)
         else:
