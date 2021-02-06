@@ -5,9 +5,66 @@ import jax.lax
 from jax.util import safe_map
 
 from functools import wraps
-from typing import List, Dict, Tuple, Any
+from typing import List, Dict, Tuple, Any, Type, TypeVar, Callable
 
 Array = Any
+TState = TypeVar("TState")
+
+jaxpr_high_order_primitives_to_subjaxprs = {
+    jax.lax.cond_p: lambda jxpr: (None,),
+    jax.lax.while_p: None,
+    jax.lax.scan_p: None,
+    jax.core.CallPrimitive: None,  # xla_call, from jax.jit
+    jax.core.MapPrimitive: None,
+}
+"""Collection of high-order Jax primitives, with sub-Jaxprs.
+"""
+
+
+def jaxpr_visitor(
+    jaxpr: jax.core.Jaxpr,
+    initial_state: TState,
+    visitor_fn: Callable[[jax.core.JaxprEqn, TState, Any], TState],
+    init_sub_state_fn: Callable[[jax.core.JaxprEqn, TState], List[TState]],
+    reverse: bool = False,
+) -> Tuple[TState, List[Any]]:
+    """Visitor pattern on a Jaxpr, traversing equations and supporting higher-order primitives
+    with sub-Jaxprs.
+
+    Parameters
+    ----------
+    initial_state: Initial state to feed to the visitor method.
+    visitor_fn: Visitor function, taking an input state and Jaxpr, outputting an updated state.
+    init_sub_state_fn: Initializing method for higher-order primitives sub-Jaxprs. Taking as input
+        the existing state, and outputting input states to respective sub-Jaxprs.
+    reverse: Traverse the Jaxpr equations in reverse order.
+    Returns
+    -------
+    Output state of the last iteration.
+    """
+    state = initial_state
+    subjaxprs_visit = []
+
+    equations = jax.eqns if not reverse else jax.eqns[::-1]
+    for eqn in equations:
+        if eqn.primitive in jaxpr_high_order_primitives_to_subjaxprs:
+            sub_jaxprs = jaxpr_high_order_primitives_to_subjaxprs[eqn.primitive]
+            sub_states = init_sub_state_fn(eqn, state)
+            # Map visitor method to each sub-jaxpr.
+            res_sub_states = [
+                jaxpr_visitor(
+                    sub_jaxpr, sub_state, visitor_fn, init_sub_state_fn, reverse
+                )
+                for sub_jaxpr, sub_state in zip(sub_jaxprs, sub_states)
+            ]
+            # Reduce, to update the current state.
+            sate = visitor_fn(eqn, state, res_sub_states)
+            subjaxprs_visit.append(res_sub_states)
+        else:
+            # Common Jaxpr equation: apply the visitor and update state.
+            state = visitor_fn(eqn, state, None)
+            subjaxprs_visit.append(None)
+    return state, subjaxprs_visit
 
 
 def jax_lax_identity(x: Array) -> Array:
