@@ -121,7 +121,7 @@ def jaxpr_find_constvars_map_sub_states_fn(
             if eqn_invar in state or type(sub_invar) is jax.core.Literal:
                 sub_init_state[sub_invar] = False
     else:
-        # TODO: support other high primitives.
+        # TODO: support other high primitives. No constants passed at the moment.
         sub_init_states = [{} for _ in range(len(sub_jaxprs))]
     return sub_init_states
 
@@ -140,7 +140,7 @@ def jaxpr_find_constvars_reduce_sub_states_fn(
             if sub_outvar in sub_state:
                 state[eqn_outvar] = sub_state[sub_outvar]
     else:
-        # TODO: support other high primitive. No constants marked at the moment.
+        # TODO: support other high primitives. No constants passed at the moment.
         pass
     return state
 
