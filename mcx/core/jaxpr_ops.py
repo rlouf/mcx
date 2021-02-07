@@ -126,13 +126,11 @@ def jaxpr_visitor(
 def jaxpr_find_constvars_visitor_fn(
     eqn: jax.core.JaxprEqn,
     state: ConstVarState,
-    sub_states: List[Tuple[ConstVarState, Any]] = None,
 ) -> ConstVarState:
     """fdsafads"""
     # Common ops logic: are inputs literal or const variables?
-    is_const_invars = [
-        str(v) in state or type(v) is jax.core.Literal for v in eqn.invars
-    ]
+    # NOTE: Jax literal are not hashable!
+    is_const_invars = [type(v) is jax.core.Literal or v in state for v in eqn.invars]
     if all(is_const_invars):
         state.update({v: False for v in eqn.outvars})
     return state
@@ -193,7 +191,8 @@ def jaxpr_find_constvars(
     -------
     List of all intermediate constant variables.
     """
-    const_state = {}
+    # Start with the list of input constants.
+    const_state = {c: False for c in consts}
     const_state, _ = jaxpr_visitor(
         jaxpr,
         const_state,
