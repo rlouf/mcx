@@ -65,9 +65,9 @@ def jaxpr_find_sub_jaxprs(
     """
     primitive_type = type(eqn.primitive)
     if eqn.primitive in jaxpr_high_order_primitives_to_subjaxprs:
-        return jaxpr_high_order_primitives_to_subjaxprs[eqn.primitive]
+        return jaxpr_high_order_primitives_to_subjaxprs[eqn.primitive](eqn)
     elif primitive_type in jaxpr_high_order_primitives_to_subjaxprs:
-        return jaxpr_high_order_primitives_to_subjaxprs[primitive_type]
+        return jaxpr_high_order_primitives_to_subjaxprs[primitive_type](eqn)
     return []
 
 
@@ -100,7 +100,7 @@ def jaxpr_visitor(
     for eqn in equations:
         if jax_is_high_order_primitive(eqn):
             init_sub_states = map_sub_states_fn(eqn, state)
-            sub_jaxprs = jaxpr_find_sub_jaxprs[eqn]
+            sub_jaxprs = jaxpr_find_sub_jaxprs(eqn)
             # Map visitor method to each sub-jaxpr.
             res_sub_states = [
                 jaxpr_visitor(
@@ -148,6 +148,7 @@ def jaxpr_find_constvars_map_sub_states_fn(
     if primitive_type == jax.core.CallPrimitive:
         # Jit compiled sub-jaxpr: map eqn inputs to sub-jaxpr inputs.
         sub_init_state = {}
+        print(sub_jaxprs)
         for eqn_invar, sub_invar in zip(eqn.invars, sub_jaxprs[0].invars):
             # Add a constant variables if marked constant in the sub-jaxpr.
             if eqn_invar in state or type(sub_invar) is jax.core.Literal:

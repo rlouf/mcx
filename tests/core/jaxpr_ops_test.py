@@ -14,6 +14,12 @@ from mcx.core.jaxpr_ops import (
 
 def test__jaxpr_find_constvars__propagate_constants():
     def foo(x):
+        @jax.jit
+        def g(y):
+            return y + np.ones((2,))
+
+        return g(x) + np.exp(2.0)
+
         return x + np.ones((2,)) + np.exp(2.0)
 
     typed_jaxpr = jax.make_jaxpr(foo)(1.0)
