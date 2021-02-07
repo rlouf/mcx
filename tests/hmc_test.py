@@ -24,8 +24,8 @@ def linear_regression(x, lmbda=1.0):
 def linear_regression_mvn(x, lmbda=1.):
     sigma <~ dist.Exponential(lmbda)
     sigma2 <~ dist.Exponential(lmbda)
-    rho <~ dist.Uniform(0, 1)
-    cov = jnp.array([[sigma, rho*sigma*sigma2],[rho*sigma*sigma2, sigma2]])
+    rho <~ dist.Uniform(-1, 1)
+    cov = jnp.array([[sigma**2, rho*sigma*sigma2],[rho*sigma*sigma2, sigma2**2]])
     coeffs <~ dist.MvNormal(jnp.ones(x.shape[-1]), cov)
     y = jnp.dot(x, coeffs)
     predictions <~ dist.Normal(y, sigma)
@@ -70,7 +70,7 @@ def test_linear_regression_mvn():
     y_data = x_data @ np.array([3, 1]) + np.random.normal(size=x_data.shape[0])
 
     kernel = HMC(
-        num_integration_steps=90,
+        num_integration_steps=10,
     )
 
     rng_key = jax.random.PRNGKey(2)
