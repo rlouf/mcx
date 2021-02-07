@@ -143,20 +143,19 @@ def jaxpr_find_constvars_map_sub_states_fn(
     # Mapping the current state to the sub-jaxprs.
     primitive_type = type(eqn.primitive)
     sub_jaxprs = jaxpr_find_sub_jaxprs(eqn)
-    sub_init_states = None
 
     if primitive_type == jax.core.CallPrimitive:
         # Jit compiled sub-jaxpr: map eqn inputs to sub-jaxpr inputs.
         sub_init_state = {}
-        print(sub_jaxprs)
         for eqn_invar, sub_invar in zip(eqn.invars, sub_jaxprs[0].invars):
             # Add a constant variables if marked constant in the sub-jaxpr.
             if eqn_invar in state or type(sub_invar) is jax.core.Literal:
                 sub_init_state[sub_invar] = False
+        return [sub_init_state]
     else:
         # TODO: support other high primitives. No constants passed at the moment.
         sub_init_states = [{} for _ in range(len(sub_jaxprs))]
-    return sub_init_states
+        return sub_init_states
 
 
 def jaxpr_find_constvars_reduce_sub_states_fn(
@@ -167,7 +166,7 @@ def jaxpr_find_constvars_reduce_sub_states_fn(
     if primitive_type == jax.core.CallPrimitive:
         # Jit compiled sub-jaxpr.
         sub_jaxpr = eqn.params["call_jaxpr"]
-        sub_state = sub_states[0][0]
+        sub_state = sub_states[0]
         for eqn_outvar, sub_outvar in zip(eqn.outvars, sub_jaxpr.outvars):
             # Add a constant variables if marked constant in the sub-jaxpr.
             if sub_outvar in sub_state:
