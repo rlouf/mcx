@@ -39,9 +39,9 @@ class MvNormal(Distribution):
         if (mu_event_shape, mu_event_shape) != covariance_event_shape:
             raise ValueError(
                 (
-                    f"The number of dimensions implied by `mu` ({mu_event_shape}),"
-                    "does not match the dimensions implied by `covariance_matrix` "
-                    f"({covariance_event_shape})"
+                    f"The number of dimensions implied by `mu`(dims = {mu_event_shape})"
+                    ", does not match the dimensions implied by `covariance_matrix`"
+                    f"(dims = {covariance_event_shape})"
                 )
             )
 

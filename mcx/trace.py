@@ -85,7 +85,7 @@ class Trace(InferenceData):
     The integration with ArviZ is seemless: MCX traces can be passed to ArviZ's
     diagnostics, statistics and plotting functions.
 
-        >>> import arvix as az
+        >>> import arviz as az
         >>> az.plot_trace(trace)
 
 
