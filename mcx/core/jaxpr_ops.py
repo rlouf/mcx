@@ -37,6 +37,40 @@ def jax_lax_identity(x: Array) -> Array:
     return x
 
 
+def jax_is_high_order_primitive(
+    eqn: jax.core.JaxprEqn,
+) -> bool:
+    """Is the input Jaxpr equation corresponding to a high-order Jax primitive?
+
+    Parameters
+    ----------
+    Returns
+    -------
+    """
+    is_high_order = (eqn.primitive in jaxpr_high_order_primitives_to_subjaxprs) or (
+        type(eqn.primitive) in jaxpr_high_order_primitives_to_subjaxprs
+    )
+    return is_high_order
+
+
+def jaxpr_find_sub_jaxprs(
+    eqn: jax.core.JaxprEqn,
+) -> List[jax.core.Jaxpr]:
+    """Is the input Jaxpr equation corresponding to a high-order Jax primitive?
+
+    Parameters
+    ----------
+    Returns
+    -------
+    """
+    primitive_type = type(eqn.primitive)
+    if eqn.primitive in jaxpr_high_order_primitives_to_subjaxprs:
+        return jaxpr_high_order_primitives_to_subjaxprs[eqn.primitive]
+    elif primitive_type in jaxpr_high_order_primitives_to_subjaxprs:
+        return jaxpr_high_order_primitives_to_subjaxprs[primitive_type]
+    return []
+
+
 def jaxpr_visitor(
     jaxpr: jax.core.Jaxpr,
     initial_state: TState,
@@ -64,9 +98,9 @@ def jaxpr_visitor(
 
     equations = jaxpr.eqns if not reverse else jaxpr.eqns[::-1]
     for eqn in equations:
-        if eqn.primitive in jaxpr_high_order_primitives_to_subjaxprs:
+        if jax_is_high_order_primitive(eqn):
             init_sub_states = map_sub_states_fn(eqn, state)
-            sub_jaxprs = jaxpr_high_order_primitives_to_subjaxprs[eqn.primitive]
+            sub_jaxprs = jaxpr_find_sub_jaxprs[eqn]
             # Map visitor method to each sub-jaxpr.
             res_sub_states = [
                 jaxpr_visitor(
@@ -110,7 +144,7 @@ def jaxpr_find_constvars_map_sub_states_fn(
     """fdsafads"""
     # Mapping the current state to the sub-jaxprs.
     primitive_type = type(eqn.primitive)
-    sub_jaxprs = jaxpr_high_order_primitives_to_subjaxprs[eqn.primitive]
+    sub_jaxprs = jaxpr_find_sub_jaxprs(eqn)
     sub_init_states = None
 
     if primitive_type == jax.core.CallPrimitive:
@@ -159,7 +193,16 @@ def jaxpr_find_constvars(
     -------
     List of all intermediate constant variables.
     """
-    pass
+    const_state = {}
+    const_state, _ = jaxpr_visitor(
+        jaxpr,
+        const_state,
+        jaxpr_find_constvars_visitor_fn,
+        jaxpr_find_constvars_map_sub_states_fn,
+        jaxpr_find_constvars_reduce_sub_states_fn,
+        reverse=False,
+    )
+    return list(const_state)
 
 
 def jaxpr_find_constvars_old(
