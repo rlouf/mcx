@@ -12,24 +12,24 @@ from mcx.core.jaxpr_ops import (
 )
 
 
-def test__jaxpr_find_constvars__propagate_constants():
-    def foo(x):
-        @jax.jit
-        def g(y):
-            return y + np.ones((2,))
+find_constvars_test_functions = [
+    # Simple constant propagation.
+    {"fn": lambda x: x + np.ones((2,)) + np.exp(2.0)},
+    # Handle properly jax.jit sub-jaxpr.
+    {"fn": lambda x: jax.jit(lambda y: y + np.ones((2,)))(x) + np.exp(2.0)},
+    # TODO: test pmap, while, scan, cond.
+]
 
-        return g(x) + np.exp(2.0)
 
-        return x + np.ones((2,)) + np.exp(2.0)
-
-    typed_jaxpr = jax.make_jaxpr(foo)(1.0)
+@pytest.mark.parametrize("case", find_constvars_test_functions)
+def test__jaxpr_find_constvars__propagate_constants(case):
+    test_fn = case["fn"]
+    typed_jaxpr = jax.make_jaxpr(test_fn)(1.0)
 
     # All inputs consts, outputs should be consts!
     constvars = jaxpr_find_constvars(
         typed_jaxpr.jaxpr, typed_jaxpr.jaxpr.invars + typed_jaxpr.jaxpr.constvars
     )
-    print(typed_jaxpr)
-    print(constvars, typed_jaxpr.jaxpr.invars, typed_jaxpr.jaxpr.outvars)
     for outvar in typed_jaxpr.jaxpr.outvars:
         assert outvar in constvars
 
