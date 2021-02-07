@@ -8,9 +8,12 @@ from functools import wraps
 from typing import List, Dict, Tuple, Any, Type, TypeVar, Callable
 
 Array = Any
+"""Generic Array type.
+"""
 TState = TypeVar("TState")
+"""Generic Jaxpr visitor state.
+"""
 
-ConstVarState = Dict[jax.core.Var, bool]
 
 jaxpr_high_order_primitives_to_subjaxprs = {
     jax.lax.cond_p: lambda jxpr: jxpr.params["branches"],
@@ -89,6 +92,7 @@ def jaxpr_visitor(
     init_sub_states_fn: Initializing method for higher-order primitives sub-Jaxprs. Taking as input
         the existing state, and outputting input states to respective sub-Jaxprs.
     reverse: Traverse the Jaxpr equations in reverse order.
+
     Returns
     -------
     Output state of the last iteration.
@@ -123,11 +127,29 @@ def jaxpr_visitor(
     return state, subjaxprs_visit
 
 
+ConstVarState = Dict[jax.core.Var, bool]
+"""Const variables visitor state: dictionary associating const variables with their status.
+"""
+
+
 def jaxpr_find_constvars_visitor_fn(
     eqn: jax.core.JaxprEqn,
     state: ConstVarState,
 ) -> ConstVarState:
-    """fdsafads"""
+    """Jaxpr find const variables visitor method: propagating constant through ops.
+
+    This method is implementing a very simple logic, assuming that as method in Jax should be pure
+    functions, any output of a function with constant inputs is constant.
+
+    Parameters
+    ----------
+    eqn: Jaxpr equation.
+    state: Current collection of constant variables.
+
+    Returns
+    -------
+    Updated constant variables collection with outputs of the Jaxpr equation.
+    """
     # Common ops logic: are inputs literal or const variables?
     # NOTE: Jax literal are not hashable!
     is_const_invars = [type(v) is jax.core.Literal or v in state for v in eqn.invars]
@@ -139,7 +161,20 @@ def jaxpr_find_constvars_visitor_fn(
 def jaxpr_find_constvars_map_sub_states_fn(
     eqn: jax.core.JaxprEqn, state: ConstVarState
 ) -> List[ConstVarState]:
-    """fdsafads"""
+    """Map the constant variables collection to sub-jaxprs initial constant collections.
+
+    The method is performing a simple mapping of constant variables of the main jaxpr to the inputs
+    of the sub-jaxprs.
+
+    Parameters
+    ----------
+    eqn: Jaxpr equation with high order primitive (xla_call, ...).
+    state: Constant variables collection.
+
+    Returns
+    -------
+    List of initial const variable states corresponding to each sub-jaxpr.
+    """
     # Mapping the current state to the sub-jaxprs.
     primitive_type = type(eqn.primitive)
     sub_jaxprs = jaxpr_find_sub_jaxprs(eqn)
@@ -161,7 +196,21 @@ def jaxpr_find_constvars_map_sub_states_fn(
 def jaxpr_find_constvars_reduce_sub_states_fn(
     eqn: jax.core.JaxprEqn, state: ConstVarState, sub_states: List[ConstVarState]
 ) -> ConstVarState:
-    """fdsafads"""
+    """Reduce the collection of sub-jaxpr const variables states to update to main jaxpr state.
+
+    The method is performing a simple update of the main jaxpr state using the result of the
+    sub-jaxprs (i.e. whether the latter are constants).
+
+    Parameters
+    ----------
+    eqn: Main jaxpr equation.
+    state: Main jaxpr current const variables state.
+    sub_states: Sub-jaxprs final const variables states.
+
+    Returns
+    -------
+    Updated main Jaxpr constant variables state.
+    """
     primitive_type = type(eqn.primitive)
     if primitive_type == jax.core.CallPrimitive:
         # Jit compiled sub-jaxpr.
