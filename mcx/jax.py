@@ -75,8 +75,15 @@ def _ravel_list(*leaves):
     return flat, unravel_list
 
 
-def progress_bar_factory(tqdm_pbar, print_rate):
+def progress_bar_factory(tqdm_pbar, num_samples):
     """Factory that builds a progress bar decorator"""
+
+    if num_samples > 20:
+        print_rate = int(num_samples / 20)
+    else:
+        print_rate = 1
+
+    remainder = num_samples % print_rate
 
     def _update_tqdm(arg, _):
         tqdm_pbar.update(arg)
@@ -87,8 +94,15 @@ def progress_bar_factory(tqdm_pbar, print_rate):
         number is a multiple of the print_rate
         """
         _ = lax.cond(
-            iter_num % print_rate == 0,
+            (iter_num % print_rate == 0) & (iter_num != num_samples - remainder),
             lambda _: host_callback.id_tap(_update_tqdm, print_rate, result=iter_num),
+            lambda _: iter_num,
+            operand=None,
+        )
+
+        _ = lax.cond(
+            iter_num == num_samples - remainder,
+            lambda _: host_callback.id_tap(_update_tqdm, remainder, result=iter_num),
             lambda _: iter_num,
             operand=None,
         )

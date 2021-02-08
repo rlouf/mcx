@@ -390,8 +390,7 @@ def sample_scan(
         f"Collecting {num_samples:,} samples across {num_chains:,} chains",
         refresh=False,
     )
-    print_rate = int(num_samples / 20)
-    progress_bar_scan = progress_bar_factory(progress_bar, print_rate)
+    progress_bar_scan = progress_bar_factory(progress_bar, num_samples)
 
     @jax.jit
     @progress_bar_scan
