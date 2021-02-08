@@ -9,14 +9,20 @@ from mcx.core.jaxpr_ops import (
     jaxpr_find_constvars,
     jaxpr_find_denormalize_mapping,
     denormalize,
+    ConstVarStatus,
 )
 
 
 find_constvars_test_functions = [
     # Simple constant propagation.
-    {"fn": lambda x: x + np.ones((2,)) + np.exp(2.0)},
+    {"fn": lambda x: x + np.ones((2,)) + np.exp(2.0), "status": ConstVarStatus.Unknown},
     # Handle properly jax.jit sub-jaxpr.
-    {"fn": lambda x: jax.jit(lambda y: y + np.ones((2,)))(x) + np.exp(2.0)},
+    {
+        "fn": lambda x: jax.jit(lambda y: y + np.ones((2,)))(x) + np.exp(2.0),
+        "status": ConstVarStatus.Unknown,
+    },
+    # Simple inf constant propagation.
+    {"fn": lambda x: x + np.ones((2,)) + np.inf, "status": ConstVarStatus.NonFinite},
     # TODO: test pmap, while, scan, cond.
 ]
 
@@ -24,6 +30,7 @@ find_constvars_test_functions = [
 @pytest.mark.parametrize("case", find_constvars_test_functions)
 def test__jaxpr_find_constvars__propagate_constants(case):
     test_fn = case["fn"]
+    expected_status = case["status"]
     typed_jaxpr = jax.make_jaxpr(test_fn)(1.0)
 
     # All inputs consts, outputs should be consts!
@@ -32,6 +39,7 @@ def test__jaxpr_find_constvars__propagate_constants(case):
     )
     for outvar in typed_jaxpr.jaxpr.outvars:
         assert outvar in constvars
+        assert constvars[outvar] == expected_status
 
 
 # denorm_expected_add_mapping_op = [

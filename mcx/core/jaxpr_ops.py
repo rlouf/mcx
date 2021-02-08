@@ -4,6 +4,7 @@ import jax.core
 import jax.lax
 from jax.util import safe_map
 
+import enum
 from functools import wraps
 from typing import List, Dict, Tuple, Any, Type, TypeVar, Callable
 
@@ -127,7 +128,19 @@ def jaxpr_visitor(
     return state, subjaxprs_visit
 
 
-ConstVarState = Dict[jax.core.Var, bool]
+class ConstVarStatus(enum.Enum):
+    """Const variable status.
+
+    For the application to constant simplification in logpdfs, we do not need a full constant
+    folding in the graph of operations (which can be quite expensive, in computation and memory), but
+    just to keep track of constant variables and whether these are non-finite or not.
+    """
+
+    Unknown = 0
+    NonFinite = 1
+
+
+ConstVarState = Dict[jax.core.Var, ConstVarStatus]
 """Const variables visitor state: dictionary associating const variables with their status.
 """
 
@@ -154,7 +167,7 @@ def jaxpr_find_constvars_visitor_fn(
     # NOTE: Jax literal are not hashable!
     is_const_invars = [type(v) is jax.core.Literal or v in state for v in eqn.invars]
     if all(is_const_invars):
-        state.update({v: False for v in eqn.outvars})
+        state.update({v: ConstVarStatus.Unknown for v in eqn.outvars})
     return state
 
 
@@ -228,7 +241,7 @@ def jaxpr_find_constvars_reduce_sub_states_fn(
 
 def jaxpr_find_constvars(
     jaxpr: jax.core.Jaxpr, consts: List[jax.core.Var]
-) -> List[jax.core.Var]:
+) -> Dict[jax.core.Var, ConstVarStatus]:
     """Find all intermediates variables in a JAX expression which are expected to be constants.
 
     Parameters
@@ -250,7 +263,7 @@ def jaxpr_find_constvars(
         jaxpr_find_constvars_reduce_sub_states_fn,
         reverse=False,
     )
-    return list(const_state)
+    return const_state
 
 
 def jaxpr_find_constvars_old(
