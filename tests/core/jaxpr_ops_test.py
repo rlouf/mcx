@@ -23,6 +23,11 @@ find_constvars_test_functions = [
     },
     # Simple inf constant propagation.
     {"fn": lambda x: x + np.ones((2,)) + np.inf, "status": ConstVarStatus.NonFinite},
+    # Handle properly jax.jit sub-jaxpr.
+    {
+        "fn": lambda x: jax.jit(lambda y: y + np.full((2,), np.inf))(x) + np.exp(2.0),
+        "status": ConstVarStatus.NonFinite,
+    },
     # TODO: test pmap, while, scan, cond.
 ]
 
