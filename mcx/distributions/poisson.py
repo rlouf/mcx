@@ -1,4 +1,4 @@
-from jax import numpy as np
+from jax import numpy as jnp
 from jax import random, scipy
 
 from mcx.distributions import constraints
@@ -12,7 +12,7 @@ class Poisson(Distribution):
 
     def __init__(self, lmbda):
         self.event_shape = ()
-        self.batch_shape = broadcast_batch_shape(np.shape(lmbda))
+        self.batch_shape = broadcast_batch_shape(jnp.shape(lmbda))
         self.lmbda = lmbda
 
     def sample(self, rng_key, sample_shape):

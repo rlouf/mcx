@@ -25,7 +25,7 @@
 # POSSIBILITY OF SUCH DAMAGE.
 from abc import ABC, abstractmethod
 
-from jax import numpy as np
+from jax import numpy as jnp
 
 __all__ = [
     "limit_to_support",
@@ -40,6 +40,7 @@ __all__ = [
     "real",
     "simplex",
     "strictly_positive",
+    "real_vector",
 ]
 
 
@@ -47,7 +48,7 @@ __all__ = [
 # Copyright Contributors to the NumPyro project.
 # SPDX-License-Identifier: Apache-2.0
 def limit_to_support(logpdf):
-    """Decorator that enforces the distrbution's support by returning `-np.inf`
+    """Decorator that enforces the distrbution's support by returning `-jnp.inf`
     if the value passed to the logpdf is out of support.
 
     """
@@ -56,7 +57,7 @@ def limit_to_support(logpdf):
         log_prob = logpdf(self, *args)
         value = args[0]
         mask = self.support(value)
-        log_prob = np.where(mask, log_prob, -np.inf)
+        log_prob = jnp.where(mask, log_prob, -jnp.inf)
         return log_prob
 
     return wrapper
@@ -129,7 +130,7 @@ class _ClosedInterval(Constraint):
 
 class _Integer(Constraint):
     def __call__(self, x):
-        return x == np.floor(x)
+        return x == jnp.floor(x)
 
     def __str__(self):
         return "an integer"
@@ -143,7 +144,7 @@ class _IntegerGreaterThan(Constraint):
         return f"an integer > {self.lower_bound}"
 
     def __call__(self, x):
-        return (x == np.floor(x)) & (x > self.lower_bound)
+        return (x == jnp.floor(x)) & (x > self.lower_bound)
 
 
 class _IntegerInterval(Constraint):
@@ -155,7 +156,7 @@ class _IntegerInterval(Constraint):
         return f"an integer in [{self.lower_bound},{self.upper_bound}]"
 
     def __call__(self, x):
-        return (x == np.floor(x)) & (x >= self.lower_bound) & (x <= self.upper_bound)
+        return (x == jnp.floor(x)) & (x >= self.lower_bound) & (x <= self.upper_bound)
 
 
 class _Real(Constraint):
@@ -163,7 +164,7 @@ class _Real(Constraint):
         return "a real number"
 
     def __call__(self, x):
-        return np.isfinite(x)
+        return jnp.isfinite(x)
 
 
 class _Simplex(Constraint):
@@ -171,8 +172,46 @@ class _Simplex(Constraint):
         return "a vector of numbers that sums to one up to 1e-6 (probability simplex)"
 
     def __call__(self, x):
-        x_sum = np.sum(x, axis=-1)
-        return np.all(x > 0, axis=-1) & (x_sum <= 1) & (x_sum > 1 - 1e-6)
+        x_sum = jnp.sum(x, axis=-1)
+        return jnp.all(x > 0, axis=-1) & (x_sum <= 1) & (x_sum > 1 - 1e-6)
+
+
+class _IndependentConstraint(Constraint):
+    def __str__(self):
+        return "an event is valid only if all its independent entries are valid."
+
+    def __init__(self, base_constraint, ndims):
+        assert isinstance(base_constraint, Constraint)
+        assert isinstance(ndims, int)
+        assert ndims >= 0
+
+        self.base_constraint = base_constraint
+        self.ndims = ndims
+        super().__init__()
+
+    def __call__(self, value):
+        result = self.base_constraint(value)
+        if self.ndims == 0:
+            return result
+        elif jnp.ndim(result) < self.ndims:
+            raise ValueError(
+                (f"Expected value.dim() >= {self.ndims}" " but got {jnp.ndims{result}}")
+            )
+        result = result.all(-1)
+        return result
+
+
+class _PositiveDefinite(Constraint):
+    event_dim = 2
+
+    def __str__(self):
+        return "a positive definite matrix."
+
+    def __call__(self, x):
+        symmetric = jnp.all(jnp.all(x == jnp.swapaxes(x, -2, -1), axis=-1), axis=-1)
+        # check for the smallest eigenvalue is positive
+        positive = jnp.linalg.eigh(x)[0][..., 0] > 0
+        return symmetric & positive
 
 
 boolean = _Boolean()
@@ -182,7 +221,9 @@ integer_interval = _IntegerInterval
 interval = _Interval
 positive_integer = _IntegerGreaterThan(0)
 positive = _GreaterThan(0.0)
+positive_definite = _PositiveDefinite()
 probability = _Interval(0.0, 1.0)
 real = _Real()
+real_vector = _IndependentConstraint(real, 1)
 simplex = _Simplex()
 strictly_positive = _StrictlyGreaterThan(0.0)

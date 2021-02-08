@@ -31,24 +31,24 @@ slightly.
 
 ```python
 import jax
-import jax.numpy as np
-import numpy as onp
+import jax.numpy as jnp
+import numpy as np
 import mcx
 import mcx.distributions as dist
 
 rng_key = jax.random.PRNGKey(0)
 
-x_data = onp.random.normal(0, 5, size=(1000,1))
-y_data = 3 * x_data + onp.random.normal(size=x_data.shape)
+x_data = np.random.normal(0, 5, size=(1000,1))
+y_data = 3 * x_data + np.random.normal(size=x_data.shape)
 observations = {'x': x_data, 'predictions': y_data}
 
 
 @mcx.model
 def linear_regression(x, lmbda=1.):
     sigma <~ dist.Exponential(lmbda)
-    coeffs_init = np.ones(x.shape[-1])
+    coeffs_init = jnp.ones(x.shape[-1])
     coeffs <~ dist.Normal(coeffs_init, sigma)
-    y = np.dot(x, coeffs)
+    y = jnp.dot(x, coeffs)
     predictions <~ dist.Normal(y, sigma)
     return predictions
 

@@ -7,6 +7,7 @@ from .discrete_uniform import DiscreteUniform
 from .distribution import Distribution
 from .exponential import Exponential
 from .lognormal import LogNormal
+from .mvnormal import MvNormal
 from .normal import Normal
 from .poisson import Poisson
 from .uniform import Uniform
@@ -24,4 +25,5 @@ __all__ = [
     "Normal",
     "Poisson",
     "Uniform",
+    "MvNormal",
 ]

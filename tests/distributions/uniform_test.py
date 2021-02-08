@@ -1,5 +1,5 @@
 import pytest
-from jax import numpy as np
+from jax import numpy as jnp
 
 from mcx.distributions import Uniform
 
@@ -15,8 +15,8 @@ from mcx.distributions import Uniform
 out_of_support_cases = [
     {"x": 0, "expected": 0.0},  # boundary belongs to support
     {"x": 1, "expected": 0.0},  # boundary belongs to support
-    {"x": -0.01, "expected": -np.inf},
-    {"x": 1.001, "expected": -np.inf},
+    {"x": -0.01, "expected": -jnp.inf},
+    {"x": 1.001, "expected": -jnp.inf},
 ]
 
 

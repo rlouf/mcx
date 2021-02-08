@@ -1,7 +1,7 @@
 from functools import partial
 
 from jax import jit
-from jax import numpy as np
+from jax import numpy as jnp
 from jax import random
 from jax.scipy.special import gammaln, xlog1py, xlogy
 
@@ -20,18 +20,18 @@ class Binomial(Distribution):
         self.support = constraints.integer_interval(0, n)
 
         self.event_shape = ()
-        self.batch_shape = broadcast_batch_shape(np.shape(p), np.shape(n))
+        self.batch_shape = broadcast_batch_shape(jnp.shape(p), jnp.shape(n))
         self.n = n
         self.p = p
 
     def sample(self, rng_key, sample_shape=()):
         shape = sample_shape + self.batch_shape + self.event_shape
-        n_max = np.max(self.n).item()
+        n_max = jnp.max(self.n).item()
         return _random_binomial(rng_key, self.p, self.n, n_max, shape)
 
     @constraints.limit_to_support
     def logpdf(self, k):
-        k = np.floor(k)
+        k = jnp.floor(k)
         unnormalized = xlogy(k, self.p) + xlog1py(self.n - k, -self.p)
         binomialcoeffln = gammaln(self.n + 1) - (
             gammaln(k + 1) + gammaln(self.n - k + 1)
@@ -55,11 +55,11 @@ def _random_binomial(rng_key, p, n, n_max, shape):
     """
     shape = shape + (n_max,)
 
-    p = np.expand_dims(p, axis=-1)
-    n = np.expand_dims(n, axis=-1)
+    p = jnp.expand_dims(p, axis=-1)
+    n = jnp.expand_dims(n, axis=-1)
 
     samples = random.bernoulli(rng_key, p, shape=shape)
-    mask = (np.arange(n_max) < n).astype(samples.dtype)
-    samples = np.sum(samples * mask, axis=-1)
+    mask = (jnp.arange(n_max) < n).astype(samples.dtype)
+    samples = jnp.sum(samples * mask, axis=-1)
 
     return samples
