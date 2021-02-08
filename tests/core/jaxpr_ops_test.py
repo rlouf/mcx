@@ -34,9 +34,10 @@ def test__jaxpr_find_constvars__propagate_constants(case):
     typed_jaxpr = jax.make_jaxpr(test_fn)(1.0)
 
     # All inputs consts, outputs should be consts!
-    constvars = jaxpr_find_constvars(
-        typed_jaxpr.jaxpr, typed_jaxpr.jaxpr.invars + typed_jaxpr.jaxpr.constvars
-    )
+    constvars = {v: ConstVarStatus.Unknown for v in typed_jaxpr.jaxpr.invars}
+    constvars.update({v: ConstVarStatus.Unknown for v in typed_jaxpr.jaxpr.constvars})
+
+    constvars = jaxpr_find_constvars(typed_jaxpr.jaxpr, constvars)
     for outvar in typed_jaxpr.jaxpr.outvars:
         assert outvar in constvars
         assert constvars[outvar] == expected_status

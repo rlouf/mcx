@@ -3,7 +3,9 @@
 import jax.core
 import jax.lax
 from jax.util import safe_map
+import numpy as np
 
+import copy
 import enum
 from functools import wraps
 from typing import List, Dict, Tuple, Any, Type, TypeVar, Callable
@@ -163,11 +165,30 @@ def jaxpr_find_constvars_visitor_fn(
     -------
     Updated constant variables collection with outputs of the Jaxpr equation.
     """
+
+    def get_var_status(v) -> ConstVarStatus:
+        if type(v) is jax.core.Literal:
+            # Non-finite if all entries are non-finite.
+            return (
+                ConstVarStatus.Unknown
+                if np.any(np.isfinite(v.val))
+                else ConstVarStatus.NonFinite
+            )
+        return state.get(v, ConstVarStatus.Unknown)
+
     # Common ops logic: are inputs literal or const variables?
     # NOTE: Jax literal are not hashable!
     is_const_invars = [type(v) is jax.core.Literal or v in state for v in eqn.invars]
+    status_invars = [get_var_status(v) for v in eqn.invars]
     if all(is_const_invars):
-        state.update({v: ConstVarStatus.Unknown for v in eqn.outvars})
+        # Using a form of heuristic here: outputs are non-finite if one the input is. Should
+        # refine this logic per op.
+        outvar_status = (
+            ConstVarStatus.NonFinite
+            if any([s == ConstVarStatus.NonFinite for s in status_invars])
+            else ConstVarStatus.Unknown
+        )
+        state.update({v: outvar_status for v in eqn.outvars})
     return state
 
 
@@ -196,9 +217,16 @@ def jaxpr_find_constvars_map_sub_states_fn(
         # Jit compiled sub-jaxpr: map eqn inputs to sub-jaxpr inputs.
         sub_init_state = {}
         for eqn_invar, sub_invar in zip(eqn.invars, sub_jaxprs[0].invars):
-            # Add a constant variables if marked constant in the sub-jaxpr.
-            if eqn_invar in state or type(sub_invar) is jax.core.Literal:
-                sub_init_state[sub_invar] = False
+            if eqn_invar in state:
+                # Add a constant variables if marked constant in the sub-jaxpr.
+                sub_init_state[sub_invar] = state[eqn_invar]
+            elif type(sub_invar) is jax.core.Literal:
+                # Literal argument: check the value fo the status.
+                sub_init_state[sub_invar] = (
+                    ConstVarStatus.Unknown
+                    if np.any(np.isfinite(sub_invar.val))
+                    else ConstVarStatus.NonFinite
+                )
         return [sub_init_state]
     else:
         # TODO: support other high primitives. No constants passed at the moment.
@@ -240,21 +268,22 @@ def jaxpr_find_constvars_reduce_sub_states_fn(
 
 
 def jaxpr_find_constvars(
-    jaxpr: jax.core.Jaxpr, consts: List[jax.core.Var]
+    jaxpr: jax.core.Jaxpr, constvars: Dict[jax.core.Var, ConstVarStatus]
 ) -> Dict[jax.core.Var, ConstVarStatus]:
     """Find all intermediates variables in a JAX expression which are expected to be constants.
 
     Parameters
     ----------
     jaxpr: JAX expression.
-    consts: List of known constant variables in the JAX expression.
+    constvars: List of known constant variables in the JAX expression.
 
     Returns
     -------
     List of all intermediate constant variables.
     """
-    # Start with the list of input constants.
-    const_state = {c: False for c in consts}
+    # Start with the collection of input constants.
+    const_state = copy.copy(constvars)
+    print(jaxpr)
     const_state, _ = jaxpr_visitor(
         jaxpr,
         const_state,
