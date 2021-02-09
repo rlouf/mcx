@@ -82,7 +82,7 @@ denorm_linear_op_propagating = [
         "expected_op": jax.lax.neg,
     },
     {"fn": lambda x: jax.jit(lambda y: 1.0 - y)(x), "expected_op": jax.lax.neg},
-    {"fn": lambda x: 2.0 * (1.0 - x), "expected_op": jax.lax.neg},
+    {"fn": lambda x: np.full((2,), 2.0) * (1.0 - x), "expected_op": jax.lax.neg},
     {"fn": lambda x: (1.0 - x) / 2.0, "expected_op": jax.lax.neg},
 ]
 
