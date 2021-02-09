@@ -1,4 +1,3 @@
-from datetime import datetime
 from typing import Callable, Iterator, Tuple
 
 import jax
@@ -9,6 +8,7 @@ from tqdm import tqdm
 import mcx
 from mcx import sample_forward
 from mcx.compiler import compile_to_loglikelihoods, compile_to_logpdf
+from mcx.jax import progress_bar_factory
 from mcx.jax import ravel_pytree as mcx_ravel_pytree
 from mcx.trace import Trace
 
@@ -385,22 +385,30 @@ def sample_scan(
     """
     num_samples = rng_keys.shape[0]
 
-    print(f"Draw {num_samples:,} samples from {num_chains:,} chains.", end=" ")
-    start = datetime.now()
+    progress_bar = tqdm(range(num_samples))
+    progress_bar.set_description(
+        f"Collecting {num_samples:,} samples across {num_chains:,} chains",
+        refresh=False,
+    )
+    progress_bar_scan = progress_bar_factory(progress_bar, num_samples)
 
     @jax.jit
-    def update_scan(carry, key):
+    @progress_bar_scan
+    def update_scan(carry, x):
+        key = x[1]
         state, parameters = carry
         keys = jax.random.split(key, num_chains)
         state, info = jax.vmap(kernel, in_axes=(0, 0, 0))(keys, parameters, state)
         return (state, parameters), (state, info)
 
-    last_state, chain = jax.lax.scan(update_scan, (init_state, parameters), rng_keys)
+    last_state, chain = jax.lax.scan(
+        update_scan, (init_state, parameters), (jnp.arange(num_samples), rng_keys)
+    )
     last_chain_state = last_state[0]
 
     mcx.jax.wait_until_computed(chain)
     mcx.jax.wait_until_computed(last_state)
-    print(f"Done in {(datetime.now()-start).total_seconds():.1f} s.")
+    progress_bar.close()
 
     return last_chain_state, chain
 

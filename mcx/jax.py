@@ -3,7 +3,9 @@ from collections import namedtuple
 
 import jax.lax as lax
 import jax.numpy as jnp
+from jax import jit
 from jax.dtypes import canonicalize_dtype
+from jax.experimental import host_callback
 from jax.tree_util import tree_flatten, tree_leaves, tree_map, tree_unflatten
 
 __all__ = ["ravel_pytree", "wait_until_computed"]
@@ -71,3 +73,52 @@ def _ravel_list(*leaves):
     )
 
     return flat, unravel_list
+
+
+def progress_bar_factory(tqdm_pbar, num_samples):
+    """Factory that builds a progress bar decorator"""
+
+    if num_samples > 20:
+        print_rate = int(num_samples / 20)
+    else:
+        print_rate = 1
+
+    remainder = num_samples % print_rate
+
+    def _update_tqdm(arg, _):
+        tqdm_pbar.update(arg)
+
+    @jit
+    def _update_progress_bar(iter_num):
+        """Updates tqdm progress bar of a scan/loop only if the iteration
+        number is a multiple of the print_rate
+        """
+        _ = lax.cond(
+            (iter_num % print_rate == 0) & (iter_num != num_samples - remainder),
+            lambda _: host_callback.id_tap(_update_tqdm, print_rate, result=iter_num),
+            lambda _: iter_num,
+            operand=None,
+        )
+
+        _ = lax.cond(
+            iter_num == num_samples - remainder,
+            lambda _: host_callback.id_tap(_update_tqdm, remainder, result=iter_num),
+            lambda _: iter_num,
+            operand=None,
+        )
+
+    def progress_bar_scan(func):
+        """Decorator that adds a progress bar to `body_fun` used in `lax.scan`.
+        Note that `body_fun` must be looping over a tuple who's first element is `np.arange(num_samples)`.
+        This means that `iter_num` is the current iteration number
+        """
+
+        def wrapper_progress_bar(carry, x):
+            "x is a tuple: (iteration_number, key)"
+            iter_num = x[0]
+            _update_progress_bar(iter_num)
+            return func(carry, x)
+
+        return wrapper_progress_bar
+
+    return progress_bar_scan
