@@ -147,6 +147,18 @@ ConstVarState = Dict[jax.core.Var, ConstVarStatus]
 """
 
 
+def get_variable_const_status(v: Any, state: ConstVarState) -> ConstVarStatus:
+    """Get the constant status on a variable (or literal)."""
+    if type(v) is jax.core.Literal:
+        # Non-finite if all entries are non-finite.
+        return (
+            ConstVarStatus.Unknown
+            if np.any(np.isfinite(v.val))
+            else ConstVarStatus.NonFinite
+        )
+    return state.get(v, None)
+
+
 def jaxpr_find_constvars_visitor_fn(
     eqn: jax.core.JaxprEqn,
     state: ConstVarState,
@@ -166,27 +178,18 @@ def jaxpr_find_constvars_visitor_fn(
     Updated constant variables collection with outputs of the Jaxpr equation.
     """
 
-    def get_var_status(v) -> ConstVarStatus:
-        if type(v) is jax.core.Literal:
-            # Non-finite if all entries are non-finite.
-            return (
-                ConstVarStatus.Unknown
-                if np.any(np.isfinite(v.val))
-                else ConstVarStatus.NonFinite
-            )
-        return state.get(v, ConstVarStatus.Unknown)
-
     # Common ops logic: are inputs literal or const variables?
     # NOTE: Jax literal are not hashable!
     is_const_invars = [type(v) is jax.core.Literal or v in state for v in eqn.invars]
-    status_invars = [get_var_status(v) for v in eqn.invars]
+    status_invars = [get_variable_const_status(v, state) for v in eqn.invars]
     if all(is_const_invars):
         # Using a form of heuristic here: outputs are non-finite if one the input is. Should
         # refine this logic per op.
+        any_non_finite_invar = any(
+            [s == ConstVarStatus.NonFinite for s in status_invars]
+        )
         outvar_status = (
-            ConstVarStatus.NonFinite
-            if any([s == ConstVarStatus.NonFinite for s in status_invars])
-            else ConstVarStatus.Unknown
+            ConstVarStatus.NonFinite if any_non_finite_invar else ConstVarStatus.Unknown
         )
         state.update({v: outvar_status for v in eqn.outvars})
     return state
@@ -222,11 +225,7 @@ def jaxpr_find_constvars_map_sub_states_fn(
                 sub_init_state[sub_invar] = state[eqn_invar]
             elif type(sub_invar) is jax.core.Literal:
                 # Literal argument: check the value fo the status.
-                sub_init_state[sub_invar] = (
-                    ConstVarStatus.Unknown
-                    if np.any(np.isfinite(sub_invar.val))
-                    else ConstVarStatus.NonFinite
-                )
+                sub_init_state[sub_invar] = get_variable_const_status(sub_invar, None)
         return [sub_init_state]
     else:
         # TODO: support other high primitives. No constants passed at the moment.
@@ -293,31 +292,6 @@ def jaxpr_find_constvars(
         reverse=False,
     )
     return const_state
-
-
-def jaxpr_find_constvars_old(
-    jaxpr: jax.core.Jaxpr, consts: List[jax.core.Var]
-) -> List[jax.core.Var]:
-    """Find all intermediates variables in a JAX expression which are expected to be constants.
-
-    Parameters
-    ----------
-    jaxpr: JAX expression.
-    consts: List of known constant variables in the JAX expression.
-
-    Returns
-    -------
-    List of all intermediate constant variables.
-    """
-    constvars_dict = {str(v): v for v in consts}
-    for eqn in jaxpr.eqns:
-        # Are inputs literal or const variables?
-        is_const_invars = [
-            str(v) in constvars_dict or type(v) is jax.core.Literal for v in eqn.invars
-        ]
-        if all(is_const_invars):
-            constvars_dict.update({str(v): v for v in eqn.outvars})
-    return list(constvars_dict.values())
 
 
 def jaxpr_find_denormalize_mapping(
