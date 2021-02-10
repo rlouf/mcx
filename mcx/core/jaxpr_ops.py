@@ -7,6 +7,8 @@ import numpy as np
 
 import copy
 import enum
+
+from dataclasses import dataclass
 from functools import wraps
 from typing import List, Dict, Tuple, Any, Type, TypeVar, Callable
 
@@ -130,32 +132,43 @@ def jaxpr_visitor(
     return state, subjaxprs_visit
 
 
-class ConstVarStatus(enum.Enum):
-    """Const variable status.
+@dataclass
+class ConstVarInfo:
+    """Const variable additional information.
 
-    For the application to constant simplification in logpdfs, we do not need a full constant
+    For the application of constant simplification in logpdfs, we do not need a full constant
     folding in the graph of operations (which can be quite expensive, in computation and memory), but
-    just to keep track of constant variables and whether these are non-finite or not.
+    just to keep track of constant variables, and some additional information:
+
+    Parameters
+    ----------
+    is_non_finite: whether the constant is non-finite. false by default.
+    is_uniform: whether the constant is a uniform tensor. false by default.
     """
 
-    Unknown = 0
-    NonFinite = 1
+    is_non_finite: bool = False
+    is_uniform: bool = False
 
 
-ConstVarState = Dict[jax.core.Var, ConstVarStatus]
-"""Const variables visitor state: dictionary associating const variables with their status.
+ConstVarState = Dict[jax.core.Var, ConstVarInfo]
+"""Const variables visitor state: dictionary associating const variables with their info.
 """
 
 
-def get_variable_const_status(v: Any, state: ConstVarState) -> ConstVarStatus:
-    """Get the constant status on a variable (or literal)."""
+def get_variable_const_info(v: Any, state: ConstVarState) -> ConstVarInfo:
+    """Get the constant info on a variable (or literal).
+
+    Parameters
+    ----------
+    v: Input variable or literal
+    state: Constant variable state.
+
+    Returns
+    -------
+    Optional const info. None if not a constant variable.
+    """
     if type(v) is jax.core.Literal:
-        # Non-finite if all entries are non-finite.
-        return (
-            ConstVarStatus.Unknown
-            if np.any(np.isfinite(v.val))
-            else ConstVarStatus.NonFinite
-        )
+        return ConstVarInfo(is_non_finite=not bool(np.isfinite(v.val)), is_uniform=True)
     return state.get(v, None)
 
 
@@ -181,17 +194,23 @@ def jaxpr_find_constvars_visitor_fn(
     # Common ops logic: are inputs literal or const variables?
     # NOTE: Jax literal are not hashable!
     is_const_invars = [type(v) is jax.core.Literal or v in state for v in eqn.invars]
-    status_invars = [get_variable_const_status(v, state) for v in eqn.invars]
+    invars_const_info = [get_variable_const_info(v, state) for v in eqn.invars]
     if all(is_const_invars):
-        # Using a form of heuristic here: outputs are non-finite if one the input is. Should
-        # refine this logic per op.
-        any_non_finite_invar = any(
-            [s == ConstVarStatus.NonFinite for s in status_invars]
+        # Using a form of heuristic here: outputs are non-finite if one the input is.
+        # TODO: refine this logic per op.
+        is_non_finite_outvars = any(
+            [s is not None and s.is_non_finite for s in invars_const_info]
         )
-        outvar_status = (
-            ConstVarStatus.NonFinite if any_non_finite_invar else ConstVarStatus.Unknown
+        # Another heuristic to refine! if all inputs are uniform, all outputs are uniform.
+        # TODO: refine the logic per op supported.
+        is_uniform_outvars = all(
+            [s is not None and s.is_uniform for s in invars_const_info]
         )
-        state.update({v: outvar_status for v in eqn.outvars})
+
+        outvar_const_info = ConstVarInfo(
+            is_non_finite=is_non_finite_outvars, is_uniform=is_uniform_outvars
+        )
+        state.update({v: copy.copy(outvar_const_info) for v in eqn.outvars})
     return state
 
 
@@ -225,7 +244,7 @@ def jaxpr_find_constvars_map_sub_states_fn(
                 sub_init_state[sub_invar] = state[eqn_invar]
             elif type(sub_invar) is jax.core.Literal:
                 # Literal argument: check the value fo the status.
-                sub_init_state[sub_invar] = get_variable_const_status(sub_invar, None)
+                sub_init_state[sub_invar] = get_variable_const_info(sub_invar, None)
         return [sub_init_state]
     else:
         # TODO: support other high primitives. No constants passed at the moment.
@@ -267,8 +286,8 @@ def jaxpr_find_constvars_reduce_sub_states_fn(
 
 
 def jaxpr_find_constvars(
-    jaxpr: jax.core.Jaxpr, constvars: Dict[jax.core.Var, ConstVarStatus]
-) -> Dict[jax.core.Var, ConstVarStatus]:
+    jaxpr: jax.core.Jaxpr, constvars: Dict[jax.core.Var, ConstVarInfo]
+) -> Dict[jax.core.Var, ConstVarInfo]:
     """Find all intermediates variables in a JAX expression which are expected to be constants.
 
     Parameters

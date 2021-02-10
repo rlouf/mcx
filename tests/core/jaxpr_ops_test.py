@@ -3,31 +3,40 @@ import jax
 import jax.lax
 import numpy as onp
 import pytest
-from jax import numpy as np
+import jax.numpy as jnp
+import numpy as np
 
 from mcx.core.jaxpr_ops import (
     jax_lax_identity,
     jaxpr_find_constvars,
     jaxpr_find_denormalize_mapping,
     denormalize,
-    ConstVarStatus,
+    ConstVarInfo,
 )
 
 
 find_constvars_test_functions = [
     # Simple constant propagation.
-    {"fn": lambda x: x + np.ones((2,)) + np.exp(2.0), "status": ConstVarStatus.Unknown},
+    {
+        "fn": lambda x: x + np.ones((2,)) + np.exp(2.0),
+        "info": ConstVarInfo(False, True),
+    },
+    # Simple constant propagation, non-uniform.
+    {
+        "fn": lambda x: x + jnp.array([1.0, 2.0]) + np.exp(2.0),
+        "info": ConstVarInfo(False, False),
+    },
     # Handle properly jax.jit sub-jaxpr.
     {
-        "fn": lambda x: jax.jit(lambda y: y + np.ones((2,)))(x) + np.exp(2.0),
-        "status": ConstVarStatus.Unknown,
+        "fn": lambda x: jax.jit(lambda y: y + jnp.ones((2,)))(x) + np.exp(2.0),
+        "info": ConstVarInfo(False, True),
     },
     # Simple inf constant propagation.
-    {"fn": lambda x: x + np.ones((2,)) + np.inf, "status": ConstVarStatus.NonFinite},
+    {"fn": lambda x: x + np.ones((2,)) + np.inf, "info": ConstVarInfo(True, True)},
     # Handle properly jax.jit sub-jaxpr + inf constant.
     {
-        "fn": lambda x: jax.jit(lambda y: y + np.full((2,), np.inf))(x) + np.exp(2.0),
-        "status": ConstVarStatus.NonFinite,
+        "fn": lambda x: jax.jit(lambda y: y + jnp.full((2,), np.inf))(x) + np.exp(2.0),
+        "info": ConstVarInfo(True, True),
     },
     # TODO: test pmap, while, scan, cond.
 ]
@@ -36,17 +45,21 @@ find_constvars_test_functions = [
 @pytest.mark.parametrize("case", find_constvars_test_functions)
 def test__jaxpr_find_constvars__propagate_constants(case):
     test_fn = case["fn"]
-    expected_status = case["status"]
+    expected_const_info = case["info"]
     typed_jaxpr = jax.make_jaxpr(test_fn)(1.0)
 
+    print(typed_jaxpr.consts, typed_jaxpr.jaxpr.constvars)
+
     # All inputs consts, outputs should be consts!
-    constvars = {v: ConstVarStatus.Unknown for v in typed_jaxpr.jaxpr.invars}
-    constvars.update({v: ConstVarStatus.Unknown for v in typed_jaxpr.jaxpr.constvars})
+    constvars = {v: ConstVarInfo(False, True) for v in typed_jaxpr.jaxpr.invars}
+    constvars.update(
+        {v: ConstVarInfo(False, True) for v in typed_jaxpr.jaxpr.constvars}
+    )
 
     constvars = jaxpr_find_constvars(typed_jaxpr.jaxpr, constvars)
     for outvar in typed_jaxpr.jaxpr.outvars:
         assert outvar in constvars
-        assert constvars[outvar] == expected_status
+        assert constvars[outvar] == expected_const_info
 
 
 denorm_expected_add_mapping_op = [
@@ -81,9 +94,9 @@ denorm_linear_op_propagating = [
         "fn": lambda x: np.squeeze(np.expand_dims(1.0 - x, axis=0)),
         "expected_op": jax.lax.neg,
     },
-    {"fn": lambda x: jax.jit(lambda y: 1.0 - y)(x), "expected_op": jax.lax.neg},
+    # {"fn": lambda x: jax.jit(lambda y: 1.0 - y)(x), "expected_op": jax.lax.neg},
     {"fn": lambda x: np.full((2,), 2.0) * (1.0 - x), "expected_op": jax.lax.neg},
-    {"fn": lambda x: (1.0 - x) / 2.0, "expected_op": jax.lax.neg},
+    {"fn": lambda x: (1.0 - x) / (np.ones((2,)) * 2.0), "expected_op": jax.lax.neg},
 ]
 
 
