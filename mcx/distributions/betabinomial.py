@@ -29,5 +29,5 @@ class BetaBinomial(Distribution):
         return _random_binomial(rng_key, p, self.n, n_max, shape)
 
     @constraints.limit_to_support
-    def logpdf(self, x, loc: int = 0):
-        return stats.betabinom.logpmf(x, self.n, self.a, self.b, loc)
+    def logpdf(self, x):
+        return stats.betabinom.logpmf(x, self.n, self.a, self.b)
