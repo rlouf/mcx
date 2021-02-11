@@ -21,11 +21,11 @@ find_constvars_test_functions = [
         "fn": lambda x: x + np.ones((2,)) + np.exp(2.0),
         "info": ConstVarInfo(False, True),
     },
-    # Simple constant propagation, non-uniform.
-    {
-        "fn": lambda x: x + jnp.array([1.0, 2.0]) + np.exp(2.0),
-        "info": ConstVarInfo(False, False),
-    },
+    # TODO: Simple constant propagation, non-uniform.
+    # {
+    #     "fn": lambda x: x + jnp.array([1.0, 2.0]) + np.exp(2.0),
+    #     "info": ConstVarInfo(False, False),
+    # },
     # Handle properly jax.jit sub-jaxpr.
     {
         "fn": lambda x: jax.jit(lambda y: y + jnp.ones((2,)))(x) + np.exp(2.0),
@@ -88,15 +88,15 @@ def test__jaxpr_find_denormalize_mapping__add_sub__proper_mapping(case):
 
 denorm_linear_op_propagating = [
     {"fn": lambda x: -(x + 1.0), "expected_op": jax_lax_identity},
-    {"fn": lambda x: np.expand_dims(1.0 - x, axis=0), "expected_op": jax.lax.neg},
-    {"fn": lambda x: np.reshape(1.0 - x, (1, 1)), "expected_op": jax.lax.neg},
+    {"fn": lambda x: jnp.expand_dims(1.0 - x, axis=0), "expected_op": jax.lax.neg},
+    {"fn": lambda x: jnp.reshape(1.0 - x, (1, 1)), "expected_op": jax.lax.neg},
     {
-        "fn": lambda x: np.squeeze(np.expand_dims(1.0 - x, axis=0)),
+        "fn": lambda x: jnp.squeeze(jnp.expand_dims(1.0 - x, axis=0)),
         "expected_op": jax.lax.neg,
     },
     # {"fn": lambda x: jax.jit(lambda y: 1.0 - y)(x), "expected_op": jax.lax.neg},
-    {"fn": lambda x: np.full((2,), 2.0) * (1.0 - x), "expected_op": jax.lax.neg},
-    {"fn": lambda x: (1.0 - x) / (np.ones((2,)) * 2.0), "expected_op": jax.lax.neg},
+    # {"fn": lambda x: jnp.full((2,), 2.0) * (1.0 - x), "expected_op": jax.lax.neg},
+    # {"fn": lambda x: (1.0 - x) / (jnp.ones((2,)) * 2.0), "expected_op": jax.lax.neg},
 ]
 
 
