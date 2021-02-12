@@ -1,5 +1,6 @@
 from .bernoulli import Bernoulli
 from .beta import Beta
+from .betabinomial import BetaBinomial
 from .binomial import Binomial
 from .categorical import Categorical
 from .dirichlet import Dirichlet
@@ -16,6 +17,7 @@ __all__ = [
     "Distribution",
     "Bernoulli",
     "Beta",
+    "BetaBinomial",
     "Binomial",
     "Categorical",
     "Dirichlet",
