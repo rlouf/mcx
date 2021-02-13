@@ -77,7 +77,7 @@ def test__jaxpr_find_denormalize_mapping__add_sub__proper_mapping(case):
     constvar_state = jaxpr_find_constvars(typed_jaxpr.jaxpr, constvars)
 
     denorm_rec_state = jaxpr_find_denormalize_mapping(typed_jaxpr.jaxpr, constvar_state)
-    denorm_map = denorm_rec_state[0][0]
+    denorm_map, denorm_valid_vars, _ = denorm_rec_state[0]
 
     invar = typed_jaxpr.jaxpr.invars[0]
     outvar = typed_jaxpr.jaxpr.outvars[0]
@@ -87,6 +87,8 @@ def test__jaxpr_find_denormalize_mapping__add_sub__proper_mapping(case):
     assert outvar in denorm_map
     assert denorm_map[outvar][0] == case["expected_op"]
     assert denorm_map[outvar][1] == invar
+    # Input is a valid denorm variable (which could be propagated in sub-jaxpr).
+    assert denorm_valid_vars == {invar, outvar}
 
 
 denorm_linear_op_propagating = [

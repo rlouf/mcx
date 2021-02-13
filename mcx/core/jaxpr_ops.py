@@ -308,7 +308,6 @@ def jaxpr_find_constvars(
     """
     # Start with the collection of input constants.
     const_state = copy.copy(constvars)
-    print(jaxpr)
     const_rec_state = jaxpr_visitor(
         jaxpr,
         const_state,
