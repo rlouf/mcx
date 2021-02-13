@@ -331,14 +331,58 @@ DenormalizeRecState = Tuple[
     DenormalizeState, List[Optional[List["DenormalizeRecState"]]]
 ]
 
-denorm_supported_linear_ops = [
-    jax.lax.broadcast_in_dim_p,
-    jax.lax.broadcast_p,
-    jax.lax.neg_p,
-    jax.lax.reshape_p,
-    jax.lax.squeeze_p,
-    jax.lax.reduce_sum_p,
-]
+
+def jaxpr_eqn_denorm_propagate_basic_check(
+    eqn: jax.core.JaxprEqn, state: DenormalizeState
+) -> bool:
+    """fdsfafasd
+
+    fasdfasd
+    """
+    # Base check for back-propagate through a valid op: all outputs must be valid denorm variables.
+    _, denorm_valid_vars, _ = state
+    return all([o in denorm_valid_vars for o in eqn.outvars])
+
+
+def jaxpr_eqn_denorm_propagate_mul_check(
+    eqn: jax.core.JaxprEqn, state: DenormalizeState
+) -> bool:
+    """fdsfafasd
+
+    fasdfasd
+    """
+    _, denorm_valid_vars, constvar_full_state = state
+    constvar_state, _ = constvar_full_state
+
+    def is_var_constant(v: Any) -> bool:
+        return type(v) is jax.core.Literal or v in constvar_state
+
+    # Propagate denormalization if one of the input is a uniform constant.
+    all_valid_outvars = all([o in denorm_valid_vars for o in eqn.outvars])
+    any_invar_const = is_var_constant(eqn.invars[0]) or is_var_constant(eqn.invars[1])
+    return all_valid_outvars and any_invar_const
+
+
+def jaxpr_eqn_denorm_propagate_div_check(
+    eqn: jax.core.JaxprEqn, state: DenormalizeState
+) -> bool:
+    """fdsfafasd
+
+    fasdfasd
+    """
+
+
+jaxpr_eqn_denorm_propagate_ops = {
+    jax.lax.broadcast_in_dim_p: jaxpr_eqn_denorm_propagate_basic_check,
+    jax.lax.broadcast_p: jaxpr_eqn_denorm_propagate_basic_check,
+    jax.lax.neg_p: jaxpr_eqn_denorm_propagate_basic_check,
+    jax.lax.reshape_p: jaxpr_eqn_denorm_propagate_basic_check,
+    jax.lax.squeeze_p: jaxpr_eqn_denorm_propagate_basic_check,
+    jax.lax.reduce_sum_p: jaxpr_eqn_denorm_propagate_basic_check,
+    jax.lax.mul_p: jaxpr_eqn_denorm_propagate_mul_check,
+}
+"""
+"""
 
 
 def jaxpr_denorm_mapping_visitor_fn(
@@ -359,10 +403,13 @@ def jaxpr_denorm_mapping_visitor_fn(
         denorm_valid_vars.add(invar)
         denorm_map_dict[outvar] = (replace_op, invar)
 
-    if eqn.primitive in denorm_supported_linear_ops:
-        # Can continue denormalizing inputs if all outputs are in the linear vars collection.
-        if all([o in denorm_valid_vars for o in eqn.outvars]):
-            denorm_valid_vars |= set(eqn.invars)
+    if (
+        eqn.primitive in jaxpr_eqn_denorm_propagate_ops
+        and jaxpr_eqn_denorm_propagate_ops[eqn.primitive](eqn, state)
+    ):
+        # Can continue denormalizing input variables
+        denorm_valid_vars |= {v for v in eqn.invars if type(v) is not jax.core.Literal}
+
     elif eqn.primitive == jax.lax.add_p and eqn.outvars[0] in denorm_valid_vars:
         lhs_invar, rhs_invar = eqn.invars[0], eqn.invars[1]
         # Mapping the output to the non-const input.

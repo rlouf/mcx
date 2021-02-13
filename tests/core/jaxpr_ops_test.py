@@ -94,6 +94,8 @@ def test__jaxpr_find_denormalize_mapping__add_sub__proper_mapping(case):
 denorm_linear_op_propagating = [
     {"fn": lambda x: -(x + 1.0), "expected_op": jax_lax_identity},
     {"fn": lambda x: 2.0 * (x + 1.0), "expected_op": jax_lax_identity},
+    {"fn": lambda x: (x + 1.0) * 2.0, "expected_op": jax_lax_identity},
+    {"fn": lambda x: (x + 1.0) / 2.0, "expected_op": jax_lax_identity},
     {"fn": lambda x: jnp.expand_dims(1.0 - x, axis=0), "expected_op": jax.lax.neg},
     {"fn": lambda x: jnp.reshape(1.0 - x, (1, 1)), "expected_op": jax.lax.neg},
     {
@@ -113,6 +115,7 @@ def test__jaxpr_find_denormalize_mapping__linear_op_propagating__proper_mapping(
     constvar_state = jaxpr_find_constvars(typed_jaxpr.jaxpr, constvars)
 
     print(typed_jaxpr)
+    print(str(typed_jaxpr.jaxpr.eqns[-1].primitive))
 
     denorm_rec_state = jaxpr_find_denormalize_mapping(typed_jaxpr.jaxpr, constvar_state)
     denorm_map, denorm_valid_vars, _ = denorm_rec_state[0]
