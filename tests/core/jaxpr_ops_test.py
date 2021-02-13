@@ -56,7 +56,7 @@ def test__jaxpr_find_constvars__propagate_constants(case):
         {v: ConstVarInfo(False, True) for v in typed_jaxpr.jaxpr.constvars}
     )
 
-    constvars = jaxpr_find_constvars(typed_jaxpr.jaxpr, constvars)
+    constvars, _ = jaxpr_find_constvars(typed_jaxpr.jaxpr, constvars)
     for outvar in typed_jaxpr.jaxpr.outvars:
         assert outvar in constvars
         assert constvars[outvar] == expected_const_info
@@ -73,9 +73,12 @@ denorm_expected_add_mapping_op = [
 @pytest.mark.parametrize("case", denorm_expected_add_mapping_op)
 def test__jaxpr_find_denormalize_mapping__add_sub__proper_mapping(case):
     typed_jaxpr = jax.make_jaxpr(case["fn"])(1.0)
-    denorm_map = jaxpr_find_denormalize_mapping(
-        typed_jaxpr.jaxpr, typed_jaxpr.jaxpr.constvars
-    )
+    constvars = {v: ConstVarInfo(False, True) for v in typed_jaxpr.jaxpr.constvars}
+    constvar_state = jaxpr_find_constvars(typed_jaxpr.jaxpr, constvars)
+
+    denorm_rec_state = jaxpr_find_denormalize_mapping(typed_jaxpr.jaxpr, constvar_state)
+    denorm_map = denorm_rec_state[0][0]
+
     invar = typed_jaxpr.jaxpr.invars[0]
     outvar = typed_jaxpr.jaxpr.outvars[0]
 
@@ -103,13 +106,13 @@ denorm_linear_op_propagating = [
 @pytest.mark.parametrize("case", denorm_linear_op_propagating)
 def test__jaxpr_find_denormalize_mapping__linear_op_propagating__proper_mapping(case):
     typed_jaxpr = jax.make_jaxpr(case["fn"])(1.0)
-    denorm_map = jaxpr_find_denormalize_mapping(
-        typed_jaxpr.jaxpr, typed_jaxpr.jaxpr.constvars
-    )
+    constvars = {v: ConstVarInfo(False, True) for v in typed_jaxpr.jaxpr.constvars}
+    constvar_state = jaxpr_find_constvars(typed_jaxpr.jaxpr, constvars)
+
+    denorm_rec_state = jaxpr_find_denormalize_mapping(typed_jaxpr.jaxpr, constvar_state)
+    denorm_map = denorm_rec_state[0][0]
+
     invar = typed_jaxpr.jaxpr.invars[0]
-
-    print(typed_jaxpr)
-
     # Proper mapping of the output to the input.
     assert len(denorm_map) == 1
     map_op, map_invar = list(denorm_map.values())[0]

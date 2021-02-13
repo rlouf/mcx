@@ -10,7 +10,7 @@ import enum
 
 from dataclasses import dataclass
 from functools import wraps
-from typing import List, Dict, Tuple, Any, Type, TypeVar, Callable
+from typing import List, Dict, Optional, Set, Tuple, Any, Type, TypeVar, Callable
 
 Array = Any
 """Generic Array type.
@@ -18,7 +18,10 @@ Array = Any
 TState = TypeVar("TState")
 """Generic Jaxpr visitor state.
 """
-
+TRecState = Tuple[TState, List[Optional[List["TRecState"]]]]
+"""Full recursive state, representing the visitor state of the Jaxpr as well as
+the sub-states of all sub-jaxprs.
+"""
 
 jaxpr_high_order_primitives_to_subjaxprs = {
     jax.lax.cond_p: lambda jxpr: jxpr.params["branches"],
@@ -86,7 +89,7 @@ def jaxpr_visitor(
     map_sub_states_fn: Callable[[jax.core.JaxprEqn, TState], List[TState]],
     reduce_sub_states_fn: Callable[[jax.core.JaxprEqn, TState, List[TState]], TState],
     reverse: bool = False,
-) -> Tuple[TState, List[Any]]:
+) -> TRecState:
     """Visitor pattern on a Jaxpr, traversing equations and supporting higher-order primitives
     with sub-Jaxprs.
 
@@ -153,6 +156,10 @@ class ConstVarInfo:
 ConstVarState = Dict[jax.core.Var, ConstVarInfo]
 """Const variables visitor state: dictionary associating const variables with their info.
 """
+ConstVarRecState = Tuple[ConstVarState, List[Optional[List["ConstVarRecState"]]]]
+
+
+# Garthoks = Union[Garthok, Iterable['Garthoks']]
 
 
 def get_variable_const_info(v: Any, state: ConstVarState) -> ConstVarInfo:
@@ -287,7 +294,7 @@ def jaxpr_find_constvars_reduce_sub_states_fn(
 
 def jaxpr_find_constvars(
     jaxpr: jax.core.Jaxpr, constvars: Dict[jax.core.Var, ConstVarInfo]
-) -> Dict[jax.core.Var, ConstVarInfo]:
+) -> ConstVarRecState:
     """Find all intermediates variables in a JAX expression which are expected to be constants.
 
     Parameters
@@ -302,7 +309,7 @@ def jaxpr_find_constvars(
     # Start with the collection of input constants.
     const_state = copy.copy(constvars)
     print(jaxpr)
-    const_state, _ = jaxpr_visitor(
+    const_rec_state = jaxpr_visitor(
         jaxpr,
         const_state,
         jaxpr_find_constvars_visitor_fn,
@@ -310,10 +317,124 @@ def jaxpr_find_constvars(
         jaxpr_find_constvars_reduce_sub_states_fn,
         reverse=False,
     )
-    return const_state
+    return const_rec_state
+
+
+DenormalizeState = Tuple[
+    Dict[jax.core.Var, Tuple[Any, jax.core.Var]], Set[jax.core.Var], ConstVarRecState
+]
+"""Denormalization state, combination of:
+    - dictionary of variable mapping, corresponding to `add` or `sub` ops which can be simplified;
+    - set of variables which can be traverse backward for denormalization;
+    - full recursive const variable state of the Jaxpr.
+"""
+DenormalizeRecState = Tuple[
+    DenormalizeState, List[Optional[List["DenormalizeRecState"]]]
+]
+
+denorm_supported_linear_ops = [
+    jax.lax.broadcast_in_dim_p,
+    jax.lax.broadcast_p,
+    jax.lax.neg_p,
+    jax.lax.reshape_p,
+    jax.lax.squeeze_p,
+    jax.lax.reduce_sum_p,
+]
+
+
+def jaxpr_denorm_mapping_visitor_fn(
+    eqn: jax.core.JaxprEqn,
+    state: DenormalizeState,
+) -> DenormalizeState:
+    """pass
+    fdsafas
+    """
+    # Un-stack input complex input state!
+    denorm_map_dict, denorm_valid_vars, constvar_full_state = state
+    constvar_state, _ = constvar_full_state
+
+    def is_var_constant(v: Any) -> bool:
+        return type(v) is jax.core.Literal or v in constvar_state
+
+    if eqn.primitive in denorm_supported_linear_ops:
+        # Can continue denormalizing inputs if all outputs are in the linear vars collection.
+        if all([o in denorm_valid_vars for o in eqn.outvars]):
+            denorm_valid_vars |= set(eqn.invars)
+    elif eqn.primitive == jax.lax.add_p and eqn.outvars[0] in denorm_valid_vars:
+        lhs_invar, rhs_invar = eqn.invars[0], eqn.invars[1]
+        # Mapping the output to the non-const input.
+        if is_var_constant(lhs_invar):
+            denorm_valid_vars.add(rhs_invar)
+            denorm_map_dict[eqn.outvars[0]] = (jax_lax_identity, rhs_invar)
+        elif is_var_constant(rhs_invar):
+            denorm_valid_vars.add(lhs_invar)
+            denorm_map_dict[eqn.outvars[0]] = (jax_lax_identity, lhs_invar)
+    elif eqn.primitive == jax.lax.sub_p and eqn.outvars[0] in denorm_valid_vars:
+        lhs_invar, rhs_invar = eqn.invars[0], eqn.invars[1]
+        # Mapping the output to the non-const input (or the negative).
+        if is_var_constant(lhs_invar):
+            denorm_valid_vars.add(rhs_invar)
+            denorm_map_dict[eqn.outvars[0]] = (jax.lax.neg, rhs_invar)
+        elif is_var_constant(rhs_invar):
+            denorm_valid_vars.add(lhs_invar)
+            denorm_map_dict[eqn.outvars[0]] = (jax_lax_identity, lhs_invar)
+
+    # Re-construct updated state.
+    return (denorm_map_dict, denorm_valid_vars, constvar_full_state)
+
+
+def jaxpr_denorm_mapping_map_sub_states_fn(
+    eqn: jax.core.JaxprEqn, state: DenormalizeState
+) -> List[DenormalizeState]:
+    """"""
+    denorm_map_dict, denorm_valid_vars, constvar_full_state = state
+    sub_jaxprs = jaxpr_find_sub_jaxprs(eqn)
+    # TODO: fix properly.
+    return [state for _ in sub_jaxprs]
+
+
+def jaxpr_denorm_mapping_reduce_sub_states_fn(
+    eqn: jax.core.JaxprEqn, state: DenormalizeState, sub_states: List[DenormalizeState]
+) -> DenormalizeState:
+    """"""
+    # TODO: fix properly.
+    return state
 
 
 def jaxpr_find_denormalize_mapping(
+    jaxpr: jax.core.Jaxpr, constvar_state: ConstVarRecState
+) -> DenormalizeRecState:
+    """Find all assignment simplifications in a JAX expression when denormalizing.
+
+    More specifically, this method is looking to simplify `add` and `sub` operations, with output linear
+    with respect to the Jaxpr outputs, and where one of the input is constant. It returns the simplified mapping
+    between input and output of `add`/`sub` ops which can be removed.
+
+    Parameters
+    ----------
+    jaxpr: JAX expression.
+    consts: List of known constant variables in the JAX expression.
+
+    Returns
+    -------
+    Simplified mapping between `add` output and input (with the proper assignment lax op `identity` or `neg`).
+    """
+    # Initialize the denormalize state, starting from the ouput variables.
+    denormalize_mapping = {}
+    denorm_valid_vars = set(jaxpr.outvars)
+    denorm_state = (denormalize_mapping, denorm_valid_vars, constvar_state)
+    denorm_rec_state = jaxpr_visitor(
+        jaxpr,
+        denorm_state,
+        jaxpr_denorm_mapping_visitor_fn,
+        jaxpr_denorm_mapping_map_sub_states_fn,
+        jaxpr_denorm_mapping_reduce_sub_states_fn,
+        reverse=True,
+    )
+    return denorm_rec_state
+
+
+def jaxpr_find_denormalize_mapping_old(
     jaxpr: jax.core.Jaxpr, consts: List[jax.core.Var]
 ) -> Dict[jax.core.Var, Tuple[jax.core.Primitive, jax.core.Var]]:
     """Find all assignment simplifications in a JAX expression when denormalizing.
