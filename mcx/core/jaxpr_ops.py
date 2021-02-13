@@ -370,6 +370,16 @@ def jaxpr_eqn_denorm_propagate_div_check(
 
     fasdfasd
     """
+    _, denorm_valid_vars, constvar_full_state = state
+    constvar_state, _ = constvar_full_state
+
+    def is_var_constant(v: Any) -> bool:
+        return type(v) is jax.core.Literal or v in constvar_state
+
+    # Propagate denormalization if second input is a uniform constant.
+    all_valid_outvars = all([o in denorm_valid_vars for o in eqn.outvars])
+    second_invar_const = is_var_constant(eqn.invars[1])
+    return all_valid_outvars and second_invar_const
 
 
 jaxpr_eqn_denorm_propagate_ops = {
@@ -380,6 +390,7 @@ jaxpr_eqn_denorm_propagate_ops = {
     jax.lax.squeeze_p: jaxpr_eqn_denorm_propagate_basic_check,
     jax.lax.reduce_sum_p: jaxpr_eqn_denorm_propagate_basic_check,
     jax.lax.mul_p: jaxpr_eqn_denorm_propagate_mul_check,
+    jax.lax.div_p: jaxpr_eqn_denorm_propagate_div_check,
 }
 """
 """
