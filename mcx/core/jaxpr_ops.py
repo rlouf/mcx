@@ -355,7 +355,7 @@ def jaxpr_denorm_mapping_visitor_fn(
     def is_var_constant(v: Any) -> bool:
         return type(v) is jax.core.Literal or v in constvar_state
 
-    def denorm_add_sub_op(invar, outvar, replace_op):
+    def denorm_linear_op(invar, outvar, replace_op):
         denorm_valid_vars.add(invar)
         denorm_map_dict[outvar] = (replace_op, invar)
 
@@ -367,16 +367,16 @@ def jaxpr_denorm_mapping_visitor_fn(
         lhs_invar, rhs_invar = eqn.invars[0], eqn.invars[1]
         # Mapping the output to the non-const input.
         if is_var_constant(lhs_invar):
-            denorm_add_sub_op(rhs_invar, eqn.outvars[0], jax_lax_identity)
+            denorm_linear_op(rhs_invar, eqn.outvars[0], jax_lax_identity)
         elif is_var_constant(rhs_invar):
-            denorm_add_sub_op(lhs_invar, eqn.outvars[0], jax_lax_identity)
+            denorm_linear_op(lhs_invar, eqn.outvars[0], jax_lax_identity)
     elif eqn.primitive == jax.lax.sub_p and eqn.outvars[0] in denorm_valid_vars:
         lhs_invar, rhs_invar = eqn.invars[0], eqn.invars[1]
         # Mapping the output to the non-const input (or the negative).
         if is_var_constant(lhs_invar):
-            denorm_add_sub_op(rhs_invar, eqn.outvars[0], jax.lax.neg)
+            denorm_linear_op(rhs_invar, eqn.outvars[0], jax.lax.neg)
         elif is_var_constant(rhs_invar):
-            denorm_add_sub_op(lhs_invar, eqn.outvars[0], jax_lax_identity)
+            denorm_linear_op(lhs_invar, eqn.outvars[0], jax_lax_identity)
 
     # Re-construct updated state.
     return (denorm_map_dict, denorm_valid_vars, constvar_full_state)
