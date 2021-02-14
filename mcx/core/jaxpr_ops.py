@@ -407,7 +407,7 @@ def jaxpr_denorm_mapping_visitor_fn(
     """
     # Un-stack input complex input state!
     denorm_map_dict, denorm_valid_vars, constvar_full_state = state
-    constvar_state, _ = constvar_full_state
+    constvar_state, constvar_sub_states = constvar_full_state
 
     def is_var_constant(v: Any) -> bool:
         return type(v) is jax.core.Literal or v in constvar_state
@@ -423,9 +423,8 @@ def jaxpr_denorm_mapping_visitor_fn(
         # Valid variables on which to propagate the denormalization.
         denorm_valid_vars |= {v for v in eqn.invars if type(v) is not jax.core.Literal}
     else:
-        # Make sure we can not propagate the inputs. see for instance `x * sin(x+1)`
-        invalid_invars = {v for v in eqn.invars if type(v) is not jax.core.Literal}
-        denorm_valid_vars = denorm_valid_vars - invalid_invars
+        # Make sure we can not propagate the inputs. see for instance `x + sin(x + 1)`.
+        denorm_valid_vars -= {v for v in eqn.invars if type(v) is not jax.core.Literal}
 
     # Add and sub operations which can be simplified.
     if eqn.primitive == jax.lax.add_p and eqn.outvars[0] in denorm_valid_vars:
@@ -443,6 +442,9 @@ def jaxpr_denorm_mapping_visitor_fn(
         elif is_var_constant(rhs_invar):
             denorm_linear_op(lhs_invar, eqn.outvars[0], jax_lax_identity)
 
+    # Update the constvar sub-states list, to keep sync. with equations in the jaxpr.
+    constvar_sub_states = constvar_sub_states[:-1]
+    constvar_full_state = constvar_state, constvar_sub_states
     # Re-construct updated state.
     return (denorm_map_dict, denorm_valid_vars, constvar_full_state)
 
@@ -452,16 +454,50 @@ def jaxpr_denorm_mapping_map_sub_states_fn(
 ) -> List[DenormalizeState]:
     """"""
     denorm_map_dict, denorm_valid_vars, constvar_full_state = state
+    constvar_state, constvar_sub_states = constvar_full_state
+
     sub_jaxprs = jaxpr_find_sub_jaxprs(eqn)
-    # TODO: fix properly.
-    return [state for _ in sub_jaxprs]
+    assert len(constvar_sub_states[-1]) == len(sub_jaxprs)
+
+    primitive_type = type(eqn.primitive)
+    if primitive_type == jax.core.CallPrimitive:
+        # Jit compiled sub-jaxpr: map eqn outputs to sub-jaxpr outputs.
+        sub_jaxpr, sub_const_state = sub_jaxprs[0], constvar_sub_states[-1][0]
+        # Map the denorm valid vars to the output of the sub-jaxprs.
+        denorm_sub_valid_vars = {
+            sub_outvar
+            for eqn_outvar, sub_outvar in zip(eqn.outvars, sub_jaxpr.outvars)
+            if eqn_outvar in denorm_valid_vars
+        }
+        denorm_sub_state = ({}, denorm_sub_valid_vars, sub_const_state)
+        return [denorm_sub_state]
+    else:
+        # TODO: support other high primitives. No constants passed at the moment.
+        denorm_sub_states = [state for _ in sub_jaxprs]
+        return denorm_sub_states
 
 
 def jaxpr_denorm_mapping_reduce_sub_states_fn(
     eqn: jax.core.JaxprEqn, state: DenormalizeState, sub_states: List[DenormalizeState]
 ) -> DenormalizeState:
     """"""
+    sub_jaxprs = jaxpr_find_sub_jaxprs(eqn)
+    assert len(sub_states) == len(sub_jaxprs)
+
+    denorm_map_dict, denorm_valid_vars, constvar_full_state = state
+    primitive_type = type(eqn.primitive)
+    if primitive_type == jax.core.CallPrimitive:
+        # Jit compiled sub-jaxpr: map valid sub-jaxpr inputs to update denorm valid variables.
+        sub_jaxpr = sub_jaxprs[0]
+        _, sub_denorm_valid_vars, _ = sub_states[0]
+        denorm_valid_vars |= {
+            eqn_invar
+            for eqn_invar, sub_invar in zip(eqn.invars, sub_jaxpr.invars)
+            if sub_invar in sub_denorm_valid_vars
+        }
+
     # TODO: fix properly.
+    state = denorm_map_dict, denorm_valid_vars, constvar_full_state
     return state
 
 

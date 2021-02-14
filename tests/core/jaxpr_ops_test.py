@@ -129,6 +129,32 @@ def test__jaxpr_find_denormalize_mapping__linear_op_propagating__proper_mapping(
     assert invar in denorm_valid_vars
 
 
+denorm_sub_jaxprs_propagating = [
+    {"fn": lambda x: jax.jit(lambda y: 1.0 - y)(x), "expected_op": jax.lax.neg},
+    # {"fn": lambda x: jnp.full((2,), 2.0) * (1.0 - x), "expected_op": jax.lax.neg},
+    # {"fn": lambda x: (1.0 - x) / (jnp.ones((2,)) * 2.0), "expected_op": jax.lax.neg},
+]
+
+
+@pytest.mark.parametrize("case", denorm_sub_jaxprs_propagating)
+def test__jaxpr_find_denormalize_mapping__sub_jaxprs_propagating__proper_mapping(case):
+    typed_jaxpr = jax.make_jaxpr(case["fn"])(1.0)
+    constvars = {v: ConstVarInfo(False, True) for v in typed_jaxpr.jaxpr.constvars}
+    constvar_state = jaxpr_find_constvars(typed_jaxpr.jaxpr, constvars)
+
+    denorm_rec_state = jaxpr_find_denormalize_mapping(typed_jaxpr.jaxpr, constvar_state)
+    denorm_map, denorm_valid_vars, _ = denorm_rec_state[0]
+
+    # Proper mapping of the output to the input.
+    # assert len(denorm_map) == 1
+    # map_op, map_invar = list(denorm_map.values())[0]
+    # assert map_op == case["expected_op"]
+    # assert map_invar == invar
+    # Input is a valid denorm variable (which could be propagated in sub-jaxpr).
+    invar = typed_jaxpr.jaxpr.invars[0]
+    assert invar in denorm_valid_vars
+
+
 denorm_non_linear_fn = [
     {"fn": lambda x: jnp.sin(x + 1.0)},
     {"fn": lambda x: jnp.abs(x + 1.0)},
