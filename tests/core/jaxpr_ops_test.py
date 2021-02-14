@@ -94,6 +94,7 @@ def test__jaxpr_find_denormalize_mapping__add_sub__proper_mapping(case):
 denorm_linear_op_propagating = [
     {"fn": lambda x: -(x + 1.0), "expected_op": jax_lax_identity},
     {"fn": lambda x: x + (x + 1.0), "expected_op": jax_lax_identity},
+    {"fn": lambda x: x - (x + 1.0), "expected_op": jax_lax_identity},
     {"fn": lambda x: 2.0 * (x + 1.0), "expected_op": jax_lax_identity},
     {"fn": lambda x: (x + 1.0) * 2.0, "expected_op": jax_lax_identity},
     {"fn": lambda x: (x + 1.0) / 2.0, "expected_op": jax_lax_identity},
@@ -143,9 +144,13 @@ def test__jaxpr_find_denormalize_mapping__non_linear_fn__empty_mapping(case):
     constvars = {v: ConstVarInfo(False, True) for v in typed_jaxpr.jaxpr.constvars}
     constvar_state = jaxpr_find_constvars(typed_jaxpr.jaxpr, constvars)
 
+    invar = typed_jaxpr.jaxpr.invars[0]
     denorm_rec_state = jaxpr_find_denormalize_mapping(typed_jaxpr.jaxpr, constvar_state)
-    denorm_map, _, _ = denorm_rec_state[0]
+    denorm_map, denorm_valid_vars, _ = denorm_rec_state[0]
+    # Not simplifying mapping found.
     assert len(denorm_map) == 0
+    # Denormalization not propagating to the input.
+    assert invar not in denorm_valid_vars
 
 
 # denormalize_test_cases = [

@@ -389,6 +389,8 @@ jaxpr_eqn_denorm_propagate_ops = {
     jax.lax.reshape_p: jaxpr_eqn_denorm_propagate_basic_check,
     jax.lax.squeeze_p: jaxpr_eqn_denorm_propagate_basic_check,
     jax.lax.reduce_sum_p: jaxpr_eqn_denorm_propagate_basic_check,
+    jax.lax.add_p: jaxpr_eqn_denorm_propagate_basic_check,
+    jax.lax.sub_p: jaxpr_eqn_denorm_propagate_basic_check,
     jax.lax.mul_p: jaxpr_eqn_denorm_propagate_mul_check,
     jax.lax.div_p: jaxpr_eqn_denorm_propagate_div_check,
 }
@@ -418,10 +420,15 @@ def jaxpr_denorm_mapping_visitor_fn(
         eqn.primitive in jaxpr_eqn_denorm_propagate_ops
         and jaxpr_eqn_denorm_propagate_ops[eqn.primitive](eqn, state)
     ):
-        # Can continue denormalizing input variables
+        # Valid variables on which to propagate the denormalization.
         denorm_valid_vars |= {v for v in eqn.invars if type(v) is not jax.core.Literal}
+    else:
+        # Make sure we can not propagate the inputs. see for instance `x * sin(x+1)`
+        invalid_invars = {v for v in eqn.invars if type(v) is not jax.core.Literal}
+        denorm_valid_vars = denorm_valid_vars - invalid_invars
 
-    elif eqn.primitive == jax.lax.add_p and eqn.outvars[0] in denorm_valid_vars:
+    # Add and sub operations which can be simplified.
+    if eqn.primitive == jax.lax.add_p and eqn.outvars[0] in denorm_valid_vars:
         lhs_invar, rhs_invar = eqn.invars[0], eqn.invars[1]
         # Mapping the output to the non-const input.
         if is_var_constant(lhs_invar):
