@@ -337,6 +337,13 @@ def jax_is_literal(v: Any) -> bool:
     return type(v) is jax.core.Literal
 
 
+def jax_is_non_finite_constant(v: Any, const_state: ConstVarState):
+    """"""
+    return (jax_is_literal(v) and not np.isfinite(v.val)) or (
+        v in const_state and const_state[v].is_non_finite
+    )
+
+
 def jaxpr_eqn_denorm_no_propagate_invars(
     eqn: jax.core.JaxprEqn, state: DenormalizeState
 ) -> Tuple[Set[jax.core.Var], Set[jax.core.Var]]:
@@ -408,6 +415,33 @@ def jaxpr_eqn_denorm_propagate_div_check(
     return set(), invars
 
 
+def jaxpr_eqn_denorm_propagate_select_check(
+    eqn: jax.core.JaxprEqn, state: DenormalizeState
+) -> Tuple[Set[jax.core.Var], Set[jax.core.Var]]:
+    """fdsfafasd
+
+    fasdfasd
+    """
+    _, denorm_valid_vars, constvar_full_state = state
+    constvar_state, _ = constvar_full_state
+    invar_pred, invar_true, invar_false = eqn.invars
+    all_valid_outvars = all([o in denorm_valid_vars for o in eqn.outvars])
+
+    if jax_is_non_finite_constant(invar_true, constvar_state) and all_valid_outvars:
+        valid_vars = set() if jax_is_literal(invar_false) else {invar_false}
+        invalid_vars = set() if jax_is_literal(invar_pred) else {invar_pred}
+        return valid_vars, invalid_vars
+
+    if jax_is_non_finite_constant(invar_false, constvar_state) and all_valid_outvars:
+        valid_vars = set() if jax_is_literal(invar_true) else {invar_true}
+        invalid_vars = set() if jax_is_literal(invar_pred) else {invar_pred}
+        return valid_vars, invalid_vars
+
+    # Default case: blocking back-propagation of denormalization.
+    invars = {v for v in eqn.invars if not jax_is_literal(v)}
+    return set(), invars
+
+
 jaxpr_eqn_denorm_propagate_ops = {
     jax.lax.broadcast_in_dim_p: jaxpr_eqn_denorm_propagate_basic_check,
     jax.lax.broadcast_p: jaxpr_eqn_denorm_propagate_basic_check,
@@ -419,6 +453,7 @@ jaxpr_eqn_denorm_propagate_ops = {
     jax.lax.sub_p: jaxpr_eqn_denorm_propagate_basic_check,
     jax.lax.mul_p: jaxpr_eqn_denorm_propagate_mul_check,
     jax.lax.div_p: jaxpr_eqn_denorm_propagate_div_check,
+    jax.lax.select_p: jaxpr_eqn_denorm_propagate_select_check,
 }
 """
 """
