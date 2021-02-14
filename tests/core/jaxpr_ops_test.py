@@ -93,6 +93,7 @@ def test__jaxpr_find_denormalize_mapping__add_sub__proper_mapping(case):
 
 denorm_linear_op_propagating = [
     {"fn": lambda x: -(x + 1.0), "expected_op": jax_lax_identity},
+    {"fn": lambda x: x + (x + 1.0), "expected_op": jax_lax_identity},
     {"fn": lambda x: 2.0 * (x + 1.0), "expected_op": jax_lax_identity},
     {"fn": lambda x: (x + 1.0) * 2.0, "expected_op": jax_lax_identity},
     {"fn": lambda x: (x + 1.0) / 2.0, "expected_op": jax_lax_identity},
@@ -114,9 +115,6 @@ def test__jaxpr_find_denormalize_mapping__linear_op_propagating__proper_mapping(
     constvars = {v: ConstVarInfo(False, True) for v in typed_jaxpr.jaxpr.constvars}
     constvar_state = jaxpr_find_constvars(typed_jaxpr.jaxpr, constvars)
 
-    print(typed_jaxpr)
-    print(str(typed_jaxpr.jaxpr.eqns[-1].primitive))
-
     denorm_rec_state = jaxpr_find_denormalize_mapping(typed_jaxpr.jaxpr, constvar_state)
     denorm_map, denorm_valid_vars, _ = denorm_rec_state[0]
 
@@ -130,21 +128,24 @@ def test__jaxpr_find_denormalize_mapping__linear_op_propagating__proper_mapping(
     assert invar in denorm_valid_vars
 
 
-# denorm_non_linear_fn = [
-#     {"fn": lambda x: np.sin(x + 1.0)},
-#     {"fn": lambda x: np.abs(x + 1.0)},
-#     {"fn": lambda x: np.exp(x + 1.0)},
-#     {"fn": lambda x: x * (x + 1.0)},
-# ]
+denorm_non_linear_fn = [
+    {"fn": lambda x: jnp.sin(x + 1.0)},
+    {"fn": lambda x: jnp.abs(x + 1.0)},
+    {"fn": lambda x: jnp.exp(x + 1.0)},
+    {"fn": lambda x: x + jnp.sin(x + 1.0)},
+    {"fn": lambda x: x * (x + 1.0)},
+]
 
 
-# @pytest.mark.parametrize("case", denorm_non_linear_fn)
-# def test__jaxpr_find_denormalize_mapping__non_linear_fn__empty_mapping(case):
-#     typed_jaxpr = jax.make_jaxpr(case["fn"])(1.0)
-#     denorm_map = jaxpr_find_denormalize_mapping(
-#         typed_jaxpr.jaxpr, typed_jaxpr.jaxpr.constvars
-#     )
-#     assert len(denorm_map) == 0
+@pytest.mark.parametrize("case", denorm_non_linear_fn)
+def test__jaxpr_find_denormalize_mapping__non_linear_fn__empty_mapping(case):
+    typed_jaxpr = jax.make_jaxpr(case["fn"])(1.0)
+    constvars = {v: ConstVarInfo(False, True) for v in typed_jaxpr.jaxpr.constvars}
+    constvar_state = jaxpr_find_constvars(typed_jaxpr.jaxpr, constvars)
+
+    denorm_rec_state = jaxpr_find_denormalize_mapping(typed_jaxpr.jaxpr, constvar_state)
+    denorm_map, _, _ = denorm_rec_state[0]
+    assert len(denorm_map) == 0
 
 
 # denormalize_test_cases = [
