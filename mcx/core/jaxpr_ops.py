@@ -442,7 +442,7 @@ def jaxpr_denorm_propagate_select_eqn(
     return set(), invars
 
 
-jaxpr_eqn_denorm_propagate_ops = {
+jaxpr_eqn_denorm_propagate_rules = {
     jax.lax.broadcast_in_dim_p: jaxpr_denorm_propagate_linear_eqn,
     jax.lax.broadcast_p: jaxpr_denorm_propagate_linear_eqn,
     jax.lax.neg_p: jaxpr_denorm_propagate_linear_eqn,
@@ -478,7 +478,7 @@ def jaxpr_denorm_mapping_visitor_fn(
         denorm_map_dict[outvar] = (replace_op, invar)
 
     # Check which input variables to keep propagating the denormalization.
-    eqn_propagate_check_fn = jaxpr_eqn_denorm_propagate_ops.get(
+    eqn_propagate_check_fn = jaxpr_eqn_denorm_propagate_rules.get(
         eqn.primitive, jaxpr_denorm_propagate_blocking_eqn
     )
     valid_invars, invalid_invars = eqn_propagate_check_fn(eqn, state)
@@ -593,65 +593,6 @@ def jaxpr_find_denormalize_mapping(
         reverse=True,
     )
     return denorm_rec_state
-
-
-def jaxpr_find_denormalize_mapping_old(
-    jaxpr: jax.core.Jaxpr, consts: List[jax.core.Var]
-) -> Dict[jax.core.Var, Tuple[jax.core.Primitive, jax.core.Var]]:
-    """Find all assignment simplifications in a JAX expression when denormalizing.
-
-    More specifically, this method is looking to simplify `add` and `sub` operations, with output linear
-    with respect to the Jaxpr outputs, and where one of the input is constant. It returns the simplified mapping
-    between input and output of `add`/`sub` ops which can be removed.
-
-    Parameters
-    ----------
-    jaxpr: JAX expression.
-    consts: List of known constant variables in the JAX expression.
-
-    Returns
-    -------
-    Simplified mapping between `add` output and input (with the proper assignment lax op `identity` or `neg`).
-    """
-    denormalize_mapping = {}
-    # List of linear ops which can be traversed backward from the outputs.
-    denorm_supported_linear_ops = [
-        jax.lax.broadcast_in_dim_p,
-        jax.lax.broadcast_p,
-        jax.lax.neg_p,
-        jax.lax.reshape_p,
-        jax.lax.squeeze_p,
-        jax.lax.reduce_sum_p,
-    ]
-    # Collection of variables linear with respect to the Jaxpr final outputs.
-    linear_vars = set(jaxpr.outvars)
-
-    # Traversing backward the graph of operations.
-    for eqn in jaxpr.eqns[::-1]:
-        if eqn.primitive in denorm_supported_linear_ops:
-            # Can continue denormalizing inputs if all outputs are in the linear vars collection.
-            if all([o in linear_vars for o in eqn.outvars]):
-                linear_vars |= set(eqn.invars)
-        elif eqn.primitive == jax.lax.add_p and eqn.outvars[0] in linear_vars:
-            lhs_invar, rhs_invar = eqn.invars[0], eqn.invars[1]
-            # Mapping the output to the non-const input.
-            if lhs_invar in consts or type(lhs_invar) is jax.core.Literal:
-                linear_vars.add(rhs_invar)
-                denormalize_mapping[eqn.outvars[0]] = (jax_lax_identity, rhs_invar)
-            elif rhs_invar in consts or type(rhs_invar) is jax.core.Literal:
-                linear_vars.add(lhs_invar)
-                denormalize_mapping[eqn.outvars[0]] = (jax_lax_identity, lhs_invar)
-        elif eqn.primitive == jax.lax.sub_p and eqn.outvars[0] in linear_vars:
-            lhs_invar, rhs_invar = eqn.invars[0], eqn.invars[1]
-            # Mapping the output to the non-const input (or the negative).
-            if lhs_invar in consts or type(lhs_invar) is jax.core.Literal:
-                linear_vars.add(rhs_invar)
-                denormalize_mapping[eqn.outvars[0]] = (jax.lax.neg, rhs_invar)
-            elif rhs_invar in consts or type(rhs_invar) is jax.core.Literal:
-                linear_vars.add(lhs_invar)
-                denormalize_mapping[eqn.outvars[0]] = (jax_lax_identity, lhs_invar)
-
-    return denormalize_mapping
 
 
 def jaxpr_denormalize(jaxpr, consts, *args):
