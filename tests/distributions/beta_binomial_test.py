@@ -1,6 +1,7 @@
 import pytest
 from jax import numpy as np
 from jax import random
+
 from mcx.distributions import BetaBinomial
 
 
@@ -57,18 +58,219 @@ def test_sample_variance(rng_key, case):
     assert var == pytest.approx(case["expected"], abs=1e-2)
 
 
+# # #
+# # # LOGPDF CORRECTNESS
+# # #
+
+# out_of_support_cases = [
+#     {"a": 1, "b": 1, "n": 10, "x": 11, "expected": -np.inf},  # > 0
+#     {"a": 1, "b": 1, "n": 10, "x": -1, "expected": -np.inf},  # < 0
+#     {"a": 1, "b": 1, "n": 10, "x": 1.1, "expected": -np.inf},  # is integer
+# ]
+
+
+# @pytest.mark.parametrize("case", out_of_support_cases)
+# def test_logpdf_out_of_support(case):
+#     logprob = (
+#         BetaBinomial(n=case["n"], a=case["a"], b=case["b"])
+#         .logpdf(case["x"])
+#         )
+#     assert logprob == case["expected"]
+
 # #
-# # LOGPDF CORRECTNESS
+# # LOGPDF SHAPES
 # #
 
-out_of_support_cases = [
-    {"a": 1, "b": 1, "n": 10, "x": 11, "expected": -np.inf},  # > 0
-    {"a": 1, "b": 1, "n": 10, "x": -1, "expected": -np.inf},  # < 0
-    {"a": 1, "b": 1, "n": 10, "x": 1.1, "expected": -np.inf},  # is integer
+# expected_logpdf_shapes = [
+#     {"a": 1, "b": 1, "n": 10, "expected_shape": ()},
+#     {"a": np.array([1, 2]), "b": np.array([1, 2]), "n": 10, "expected_shape": (2,)}
+# ]
+
+
+# @pytest.mark.parametrize("case", expected_logpdf_shapes)
+# def test_logpdf_shape(case):
+#     logprob = (
+#         BetaBinomial(n=case["n"], a=case["a"], b=case["b"])
+#         .logpdf(case["x"])
+#         )
+#     assert logprob.shape == case["expected_shape"]
+
+
+#
+# SAMPLING SHAPE
+#
+
+expected_sample_shapes = [
+    {"sample_shape": (), "expected_shape": (1,)},
+    {"sample_shape": (100,), "expected_shape": (100, 1)},
+    {"sample_shape": (100, 10), "expected_shape": (100, 10, 1)},
+    {"sample_shape": (1, 100), "expected_shape": (1, 100, 1)},
 ]
 
 
-@pytest.mark.parametrize("case", out_of_support_cases)
-def test_logpdf_out_of_support(case):
-    logprob = BetaBinomial(n=case["n"], a=case["a"], b=case["b"]).logpdf(case["x"])
-    assert logprob == case["expected"]
+@pytest.mark.parametrize("case", expected_sample_shapes)
+def test_sample_shape_scalar_arguments(rng_key, case):
+    """Test the correctness of broadcasting when all three arguments are
+    scalars. We test scalars arguments separately from array arguments
+    since scalars are edge cases when it comes to broadcasting.
+
+    The trailing `1` in the result shapes stands for the batch size.
+    """
+    samples = BetaBinomial(n=1, a=1, b=1).sample(rng_key, case["sample_shape"])
+    assert samples.shape == case["expected_shape"]
+
+
+expected_sample_shapes_null = [
+    {
+        "n": 10,
+        "a": 1,
+        "b": np.array([1, 2, 3]),
+        "sample_shape": (),
+        "expected_shape": (3,),
+    },
+    {
+        "n": 10,
+        "a": np.array([1, 2, 3]),
+        "b": 1,
+        "sample_shape": (),
+        "expected_shape": (3,),
+    },
+    {
+        "n": np.array([10, 20, 30]),
+        "a": 2,
+        "b": 1,
+        "sample_shape": (),
+        "expected_shape": (3,),
+    },
+    {
+        "n": 10,
+        "a": 1,
+        "b": np.array([[1, 2], [3, 4]]),
+        "sample_shape": (),
+        "expected_shape": (2, 2),
+    },
+    {
+        "n": 10,
+        "a": np.array([1, 2]),
+        "b": np.array([[1, 2], [3, 4]]),
+        "sample_shape": (),
+        "expected_shape": (2, 2),
+    },
+    {
+        "n": np.array([[10, 10], [20, 20]]),
+        "a": np.array([1, 2]),
+        "b": np.array([[1, 2], [3, 4]]),
+        "sample_shape": (),
+        "expected_shape": (2, 2),
+    },
+]
+
+
+@pytest.mark.parametrize("case", expected_sample_shapes_null)
+def test_sample_shape_array_arguments_no_sample_shape(rng_key, case):
+    """Test the correctness of broadcasting when arguments can be arrays."""
+    samples = BetaBinomial(case["n"], case["a"], case["b"]).sample(
+        rng_key, case["sample_shape"]
+    )
+    assert samples.shape == case["expected_shape"]
+
+
+expected_sample_shapes_one_dim = [
+    {
+        "n": 10,
+        "a": 1,
+        "b": np.array([1, 2, 3]),
+        "sample_shape": (100,),
+        "expected_shape": (100, 3),
+    },
+    {
+        "n": 10,
+        "a": np.array([1, 2, 3]),
+        "b": 1,
+        "sample_shape": (100,),
+        "expected_shape": (100, 3),
+    },
+    {
+        "n": np.array([10, 20, 30]),
+        "a": 1,
+        "b": 1,
+        "sample_shape": (100,),
+        "expected_shape": (100, 3),
+    },
+    {
+        "n": 10,
+        "a": 1,
+        "b": np.array([[1, 2], [3, 4]]),
+        "sample_shape": (100,),
+        "expected_shape": (100, 2, 2),
+    },
+    {
+        "n": 10,
+        "a": np.array([1, 2]),
+        "b": np.array([[1, 2], [3, 4]]),
+        "sample_shape": (100,),
+        "expected_shape": (100, 2, 2),
+    },
+    {
+        "n": np.array([10, 20]),
+        "a": np.array([1, 2]),
+        "b": np.array([[1, 2], [3, 4]]),
+        "sample_shape": (100,),
+        "expected_shape": (100, 2, 2),
+    },
+]
+
+
+@pytest.mark.parametrize("case", expected_sample_shapes_one_dim)
+def test_sample_shape_array_arguments_1d_sample_shape(rng_key, case):
+    samples = BetaBinomial(case["n"], case["a"], case["b"]).sample(
+        rng_key, case["sample_shape"]
+    )
+    assert samples.shape == case["expected_shape"]
+
+
+expected_sample_shapes_two_dims = [
+    {
+        "n": 10,
+        "a": 1,
+        "b": np.array([1, 2, 3]),
+        "sample_shape": (100, 2),
+        "expected_shape": (100, 2, 3),
+    },
+    {
+        "n": 10,
+        "a": np.array([1, 2, 3]),
+        "b": 1,
+        "sample_shape": (100, 3),
+        "expected_shape": (100, 3, 3),
+    },
+    {
+        "n": np.array([10, 20, 30]),
+        "a": 1,
+        "b": 1,
+        "sample_shape": (100, 3),
+        "expected_shape": (100, 3, 3),
+    },
+    {
+        "n": 10,
+        "a": 1,
+        "b": np.array([[1, 2], [3, 4]]),
+        "sample_shape": (100, 2),
+        "expected_shape": (100, 2, 2, 2),
+    },
+    {
+        "n": np.array([10, 20]),
+        "a": np.array([1, 2]),
+        "b": np.array([[1, 2], [3, 4]]),
+        "sample_shape": (100, 2),
+        "expected_shape": (100, 2, 2, 2),
+    },
+]
+
+
+@pytest.mark.parametrize("case", expected_sample_shapes_two_dims)
+def test_sample_shape_array_arguments_2d_sample_shape(rng_key, case):
+    samples = BetaBinomial(case["n"], case["a"], case["b"]).sample(
+        rng_key, case["sample_shape"]
+    )
+    assert samples.shape == case["expected_shape"]
