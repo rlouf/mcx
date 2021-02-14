@@ -344,7 +344,7 @@ def jax_is_non_finite_constant(v: Any, const_state: ConstVarState):
     )
 
 
-def jaxpr_eqn_denorm_no_propagate_invars(
+def jaxpr_denorm_propagate_blocking_eqn(
     eqn: jax.core.JaxprEqn, state: DenormalizeState
 ) -> Tuple[Set[jax.core.Var], Set[jax.core.Var]]:
     """Default primitive propagation: blocking the denormalization of input variables."""
@@ -352,7 +352,7 @@ def jaxpr_eqn_denorm_no_propagate_invars(
     return set(), invalid_invars
 
 
-def jaxpr_eqn_denorm_propagate_basic_check(
+def jaxpr_denorm_propagate_linear_eqn(
     eqn: jax.core.JaxprEqn, state: DenormalizeState
 ) -> Tuple[Set[jax.core.Var], Set[jax.core.Var]]:
     """fdsfafasd
@@ -369,7 +369,7 @@ def jaxpr_eqn_denorm_propagate_basic_check(
     return set(), invars
 
 
-def jaxpr_eqn_denorm_propagate_mul_check(
+def jaxpr_denorm_propagate_mul_eqn(
     eqn: jax.core.JaxprEqn, state: DenormalizeState
 ) -> Tuple[Set[jax.core.Var], Set[jax.core.Var]]:
     """fdsfafasd
@@ -392,7 +392,7 @@ def jaxpr_eqn_denorm_propagate_mul_check(
     return set(), invars
 
 
-def jaxpr_eqn_denorm_propagate_div_check(
+def jaxpr_denorm_propagate_div_eqn(
     eqn: jax.core.JaxprEqn, state: DenormalizeState
 ) -> Tuple[Set[jax.core.Var], Set[jax.core.Var]]:
     """fdsfafasd
@@ -415,7 +415,7 @@ def jaxpr_eqn_denorm_propagate_div_check(
     return set(), invars
 
 
-def jaxpr_eqn_denorm_propagate_select_check(
+def jaxpr_denorm_propagate_select_eqn(
     eqn: jax.core.JaxprEqn, state: DenormalizeState
 ) -> Tuple[Set[jax.core.Var], Set[jax.core.Var]]:
     """fdsfafasd
@@ -443,17 +443,17 @@ def jaxpr_eqn_denorm_propagate_select_check(
 
 
 jaxpr_eqn_denorm_propagate_ops = {
-    jax.lax.broadcast_in_dim_p: jaxpr_eqn_denorm_propagate_basic_check,
-    jax.lax.broadcast_p: jaxpr_eqn_denorm_propagate_basic_check,
-    jax.lax.neg_p: jaxpr_eqn_denorm_propagate_basic_check,
-    jax.lax.reshape_p: jaxpr_eqn_denorm_propagate_basic_check,
-    jax.lax.squeeze_p: jaxpr_eqn_denorm_propagate_basic_check,
-    jax.lax.reduce_sum_p: jaxpr_eqn_denorm_propagate_basic_check,
-    jax.lax.add_p: jaxpr_eqn_denorm_propagate_basic_check,
-    jax.lax.sub_p: jaxpr_eqn_denorm_propagate_basic_check,
-    jax.lax.mul_p: jaxpr_eqn_denorm_propagate_mul_check,
-    jax.lax.div_p: jaxpr_eqn_denorm_propagate_div_check,
-    jax.lax.select_p: jaxpr_eqn_denorm_propagate_select_check,
+    jax.lax.broadcast_in_dim_p: jaxpr_denorm_propagate_linear_eqn,
+    jax.lax.broadcast_p: jaxpr_denorm_propagate_linear_eqn,
+    jax.lax.neg_p: jaxpr_denorm_propagate_linear_eqn,
+    jax.lax.reshape_p: jaxpr_denorm_propagate_linear_eqn,
+    jax.lax.squeeze_p: jaxpr_denorm_propagate_linear_eqn,
+    jax.lax.reduce_sum_p: jaxpr_denorm_propagate_linear_eqn,
+    jax.lax.add_p: jaxpr_denorm_propagate_linear_eqn,
+    jax.lax.sub_p: jaxpr_denorm_propagate_linear_eqn,
+    jax.lax.mul_p: jaxpr_denorm_propagate_mul_eqn,
+    jax.lax.div_p: jaxpr_denorm_propagate_div_eqn,
+    jax.lax.select_p: jaxpr_denorm_propagate_select_eqn,
 }
 """
 """
@@ -479,7 +479,7 @@ def jaxpr_denorm_mapping_visitor_fn(
 
     # Check which input variables to keep propagating the denormalization.
     eqn_propagate_check_fn = jaxpr_eqn_denorm_propagate_ops.get(
-        eqn.primitive, jaxpr_eqn_denorm_no_propagate_invars
+        eqn.primitive, jaxpr_denorm_propagate_blocking_eqn
     )
     valid_invars, invalid_invars = eqn_propagate_check_fn(eqn, state)
     # Update the global denorm valid vars accordingly.
