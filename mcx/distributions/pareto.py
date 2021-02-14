@@ -21,7 +21,7 @@ class Pareto(Distribution):
 
     def sample(self, rng_key, sample_shape=()):
         shape = sample_shape + self.batch_shape + self.event_shape
-        return random.pareto(key=rng_key, b=self.b, shape=shape)
+        return self.m * (1 + random.pareto(key=rng_key, b=self.b, shape=shape))
 
     @constraints.limit_to_support
     def logpdf(self, x):
