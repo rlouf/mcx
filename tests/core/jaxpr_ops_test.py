@@ -104,14 +104,13 @@ denorm_linear_op_propagating = [
         "fn": lambda x: jnp.squeeze(jnp.expand_dims(1.0 - x, axis=0)),
         "expected_op": jax.lax.neg,
     },
+    {"fn": lambda x: jnp.full((2,), 2.0) * (1.0 - x), "expected_op": jax.lax.neg},
+    {"fn": lambda x: (1.0 - x) / (jnp.ones((2,)) * 2.0), "expected_op": jax.lax.neg},
     # Typical case of support in distribution logpdf.
     {
         "fn": lambda x: jax.lax.select(1.0 > 0.0, 1.0 - x, -np.inf),
         "expected_op": jax.lax.neg,
     },
-    # {"fn": lambda x: jax.jit(lambda y: 1.0 - y)(x), "expected_op": jax.lax.neg},
-    # {"fn": lambda x: jnp.full((2,), 2.0) * (1.0 - x), "expected_op": jax.lax.neg},
-    # {"fn": lambda x: (1.0 - x) / (jnp.ones((2,)) * 2.0), "expected_op": jax.lax.neg},
 ]
 
 
@@ -123,8 +122,6 @@ def test__jaxpr_find_denormalize_mapping__linear_op_propagating__proper_mapping(
 
     denorm_rec_state = jaxpr_find_denormalize_mapping(typed_jaxpr.jaxpr, constvar_state)
     denorm_map, denorm_valid_vars, _ = denorm_rec_state[0]
-
-    print(typed_jaxpr)
 
     invar = typed_jaxpr.jaxpr.invars[0]
     # Proper mapping of the output to the input.
