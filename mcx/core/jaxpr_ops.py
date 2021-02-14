@@ -332,21 +332,39 @@ DenormalizeRecState = Tuple[
 ]
 
 
+def jax_is_literal(v: Any) -> bool:
+    """Is the input variable a Jax core literal?"""
+    return type(v) is jax.core.Literal
+
+
+def jaxpr_eqn_denorm_no_propagate_invars(
+    eqn: jax.core.JaxprEqn, state: DenormalizeState
+) -> Tuple[Set[jax.core.Var], Set[jax.core.Var]]:
+    """Default primitive propagation: blocking the denormalization of input variables."""
+    invalid_invars = {v for v in eqn.invars if not jax_is_literal(v)}
+    return set(), invalid_invars
+
+
 def jaxpr_eqn_denorm_propagate_basic_check(
     eqn: jax.core.JaxprEqn, state: DenormalizeState
-) -> bool:
+) -> Tuple[Set[jax.core.Var], Set[jax.core.Var]]:
     """fdsfafasd
 
     fasdfasd
     """
     # Base check for back-propagate through a valid op: all outputs must be valid denorm variables.
+    invars = {v for v in eqn.invars if not jax_is_literal(v)}
     _, denorm_valid_vars, _ = state
-    return all([o in denorm_valid_vars for o in eqn.outvars])
+    check_denorm_propagate = all([o in denorm_valid_vars for o in eqn.outvars])
+    if all([o in denorm_valid_vars for o in eqn.outvars]):
+        return invars, set()
+    # Default case: blocking back-propagation of denormalization.
+    return set(), invars
 
 
 def jaxpr_eqn_denorm_propagate_mul_check(
     eqn: jax.core.JaxprEqn, state: DenormalizeState
-) -> bool:
+) -> Tuple[Set[jax.core.Var], Set[jax.core.Var]]:
     """fdsfafasd
 
     fasdfasd
@@ -357,15 +375,19 @@ def jaxpr_eqn_denorm_propagate_mul_check(
     def is_var_constant(v: Any) -> bool:
         return type(v) is jax.core.Literal or v in constvar_state
 
+    invars = {v for v in eqn.invars if not jax_is_literal(v)}
     # Propagate denormalization if one of the input is a uniform constant.
     all_valid_outvars = all([o in denorm_valid_vars for o in eqn.outvars])
     any_invar_const = is_var_constant(eqn.invars[0]) or is_var_constant(eqn.invars[1])
-    return all_valid_outvars and any_invar_const
+    if all_valid_outvars and any_invar_const:
+        return invars, set()
+    # Default case: blocking back-propagation of denormalization.
+    return set(), invars
 
 
 def jaxpr_eqn_denorm_propagate_div_check(
     eqn: jax.core.JaxprEqn, state: DenormalizeState
-) -> bool:
+) -> Tuple[Set[jax.core.Var], Set[jax.core.Var]]:
     """fdsfafasd
 
     fasdfasd
@@ -376,10 +398,14 @@ def jaxpr_eqn_denorm_propagate_div_check(
     def is_var_constant(v: Any) -> bool:
         return type(v) is jax.core.Literal or v in constvar_state
 
+    invars = {v for v in eqn.invars if not jax_is_literal(v)}
     # Propagate denormalization if second input is a uniform constant.
     all_valid_outvars = all([o in denorm_valid_vars for o in eqn.outvars])
     second_invar_const = is_var_constant(eqn.invars[1])
-    return all_valid_outvars and second_invar_const
+    if all_valid_outvars and second_invar_const:
+        return invars, set()
+    # Default case: blocking back-propagation of denormalization.
+    return set(), invars
 
 
 jaxpr_eqn_denorm_propagate_ops = {
@@ -416,15 +442,14 @@ def jaxpr_denorm_mapping_visitor_fn(
         denorm_valid_vars.add(invar)
         denorm_map_dict[outvar] = (replace_op, invar)
 
-    if (
-        eqn.primitive in jaxpr_eqn_denorm_propagate_ops
-        and jaxpr_eqn_denorm_propagate_ops[eqn.primitive](eqn, state)
-    ):
-        # Valid variables on which to propagate the denormalization.
-        denorm_valid_vars |= {v for v in eqn.invars if type(v) is not jax.core.Literal}
-    else:
-        # Make sure we can not propagate the inputs. see for instance `x + sin(x + 1)`.
-        denorm_valid_vars -= {v for v in eqn.invars if type(v) is not jax.core.Literal}
+    # Check which input variables to keep propagating the denormalization.
+    eqn_propagate_check_fn = jaxpr_eqn_denorm_propagate_ops.get(
+        eqn.primitive, jaxpr_eqn_denorm_no_propagate_invars
+    )
+    valid_invars, invalid_invars = eqn_propagate_check_fn(eqn, state)
+    # Update the global denorm valid vars accordingly.
+    denorm_valid_vars |= valid_invars
+    denorm_valid_vars -= invalid_invars
 
     # Add and sub operations which can be simplified.
     if eqn.primitive == jax.lax.add_p and eqn.outvars[0] in denorm_valid_vars:
