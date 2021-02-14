@@ -1,6 +1,7 @@
 from jax import numpy as np
 from jax import random
 from jax.scipy import stats
+
 from mcx.distributions import constraints
 from mcx.distributions.binomial import _random_binomial
 from mcx.distributions.distribution import Distribution
