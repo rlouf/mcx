@@ -319,7 +319,7 @@ def jaxpr_find_constvars(
     return const_rec_state
 
 
-DenormalizeState = Tuple[
+DenormMapState = Tuple[
     Dict[jax.core.Var, Tuple[Any, jax.core.Var]], Set[jax.core.Var], ConstVarRecState
 ]
 """Denormalization state, combination of:
@@ -327,9 +327,7 @@ DenormalizeState = Tuple[
     - set of variables which can be traverse backward for denormalization;
     - full recursive const variable state of the Jaxpr.
 """
-DenormalizeRecState = Tuple[
-    DenormalizeState, List[Optional[List["DenormalizeRecState"]]]
-]
+DenormMapRecState = Tuple[DenormMapState, List[Optional[List["DenormMapRecState"]]]]
 
 
 def jax_is_literal(v: Any) -> bool:
@@ -345,7 +343,7 @@ def jax_is_non_finite_constant(v: Any, const_state: ConstVarState):
 
 
 def jaxpr_denorm_propagate_blocking_eqn(
-    eqn: jax.core.JaxprEqn, state: DenormalizeState
+    eqn: jax.core.JaxprEqn, state: DenormMapState
 ) -> Tuple[Set[jax.core.Var], Set[jax.core.Var]]:
     """Default primitive propagation: blocking the denormalization of input variables."""
     invalid_invars = {v for v in eqn.invars if not jax_is_literal(v)}
@@ -353,7 +351,7 @@ def jaxpr_denorm_propagate_blocking_eqn(
 
 
 def jaxpr_denorm_propagate_linear_eqn(
-    eqn: jax.core.JaxprEqn, state: DenormalizeState
+    eqn: jax.core.JaxprEqn, state: DenormMapState
 ) -> Tuple[Set[jax.core.Var], Set[jax.core.Var]]:
     """fdsfafasd
 
@@ -370,7 +368,7 @@ def jaxpr_denorm_propagate_linear_eqn(
 
 
 def jaxpr_denorm_propagate_mul_eqn(
-    eqn: jax.core.JaxprEqn, state: DenormalizeState
+    eqn: jax.core.JaxprEqn, state: DenormMapState
 ) -> Tuple[Set[jax.core.Var], Set[jax.core.Var]]:
     """fdsfafasd
 
@@ -393,7 +391,7 @@ def jaxpr_denorm_propagate_mul_eqn(
 
 
 def jaxpr_denorm_propagate_div_eqn(
-    eqn: jax.core.JaxprEqn, state: DenormalizeState
+    eqn: jax.core.JaxprEqn, state: DenormMapState
 ) -> Tuple[Set[jax.core.Var], Set[jax.core.Var]]:
     """fdsfafasd
 
@@ -416,7 +414,7 @@ def jaxpr_denorm_propagate_div_eqn(
 
 
 def jaxpr_denorm_propagate_select_eqn(
-    eqn: jax.core.JaxprEqn, state: DenormalizeState
+    eqn: jax.core.JaxprEqn, state: DenormMapState
 ) -> Tuple[Set[jax.core.Var], Set[jax.core.Var]]:
     """fdsfafasd
 
@@ -461,8 +459,8 @@ jaxpr_eqn_denorm_propagate_rules = {
 
 def jaxpr_denorm_mapping_visitor_fn(
     eqn: jax.core.JaxprEqn,
-    state: DenormalizeState,
-) -> DenormalizeState:
+    state: DenormMapState,
+) -> DenormMapState:
     """pass
     fdsafas
     """
@@ -510,8 +508,8 @@ def jaxpr_denorm_mapping_visitor_fn(
 
 
 def jaxpr_denorm_mapping_map_sub_states_fn(
-    eqn: jax.core.JaxprEqn, state: DenormalizeState
-) -> List[DenormalizeState]:
+    eqn: jax.core.JaxprEqn, state: DenormMapState
+) -> List[DenormMapState]:
     """"""
     denorm_map_dict, denorm_valid_vars, constvar_full_state = state
     constvar_state, constvar_sub_states = constvar_full_state
@@ -538,8 +536,8 @@ def jaxpr_denorm_mapping_map_sub_states_fn(
 
 
 def jaxpr_denorm_mapping_reduce_sub_states_fn(
-    eqn: jax.core.JaxprEqn, state: DenormalizeState, sub_states: List[DenormalizeState]
-) -> DenormalizeState:
+    eqn: jax.core.JaxprEqn, state: DenormMapState, sub_states: List[DenormMapState]
+) -> DenormMapState:
     """"""
     sub_jaxprs = jaxpr_find_sub_jaxprs(eqn)
     assert len(sub_states) == len(sub_jaxprs)
@@ -566,7 +564,7 @@ def jaxpr_denorm_mapping_reduce_sub_states_fn(
 
 def jaxpr_find_denormalize_mapping(
     jaxpr: jax.core.Jaxpr, constvar_state: ConstVarRecState
-) -> DenormalizeRecState:
+) -> DenormMapRecState:
     """Find all assignment simplifications in a JAX expression when denormalizing.
 
     More specifically, this method is looking to simplify `add` and `sub` operations, with output linear
