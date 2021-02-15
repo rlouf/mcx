@@ -596,6 +596,110 @@ def jaxpr_find_denormalize_mapping(
     return denorm_rec_state
 
 
+DenormRunState = Tuple[Dict[jax.core.Var, Any], DenormMapRecState]
+"""Denormalization run state.
+"""
+DenormRunRecState = Tuple[DenormRunState, List[Optional[List["DenormRunRecState"]]]]
+
+
+def jaxpr_denorm_run_visitor_fn(
+    eqn: jax.core.JaxprEqn,
+    state: DenormRunState,
+) -> DenormRunState:
+    """pass
+    fdsafas
+    """
+    denorm_env, denorm_map_rec_state = state
+    denorm_mapping, _, _ = denorm_map_rec_state[0]
+
+    def read_env(var):
+        if type(var) is jax.core.Literal:
+            return var.val
+        return read_env[var]
+
+    def write_env(var, val):
+        denorm_env[var] = val
+
+    if len(eqn.outvars) == 1 and eqn.outvars[0] in denorm_mapping:
+        # Output registered: skip the primitive and map directly to one of the input.
+        outvar = eqn.outvars[0]
+        map_primitive, map_invar = (
+            denorm_mapping[outvar][0],
+            denorm_mapping[outvar][1],
+        )
+        # Mapping the inval to output var (identity or neg).
+        inval = read_env(map_invar)
+        outval = map_primitive(inval)
+        write_env(outvar, outval)
+    else:
+        # Usual map: calling the primitive and mapping the output values.
+        invals = safe_map(read_env, eqn.invars)
+        outvals = eqn.primitive.bind(*invals, **eqn.params)
+        if not eqn.primitive.multiple_results:
+            outvals = [outvals]
+        safe_map(write_env, eqn.outvars, outvals)
+
+    # Returning updated environment.
+    return denorm_env, denorm_map_rec_state
+
+
+def jaxpr_denorm_run_map_sub_states_fn(
+    eqn: jax.core.JaxprEqn, state: DenormRunState
+) -> List[DenormRunState]:
+    """"""
+    # denorm_map_dict, denorm_valid_vars, constvar_full_state = state
+    # constvar_state, constvar_sub_states = constvar_full_state
+
+
+def jaxpr_denorm_run_reduce_sub_states_fn(
+    eqn: jax.core.JaxprEqn, state: DenormRunState, sub_states: List[DenormRunState]
+) -> DenormRunState:
+    """"""
+    # sub_jaxprs = jaxpr_find_sub_jaxprs(eqn)
+    # assert len(sub_states) == len(sub_jaxprs)
+
+
+def jaxpr_denormalize_run(jaxpr: jax.core.Jaxpr, consts, *args) -> DenormRunRecState:
+    """TODO
+
+    Parameters
+    ----------
+    jaxpr: JAX expression.
+    consts: List of known constant variables in the JAX expression.
+
+    Returns
+    -------
+    Simplified mapping between `add` output and input (with the proper assignment lax op `identity` or `neg`).
+    """
+    # Generate the denormalization simplifying mapping.
+    constvars = {v: ConstVarInfo(False, True) for v in jaxpr.constvars}
+    constvar_full_state = jaxpr_find_constvars(jaxpr, constvars)
+    denorm_map_state = jaxpr_find_denormalize_mapping(jaxpr, constvar_full_state)
+
+    # Initialize the denormalize env state, starting from the input variables.
+    denormalize_env = {}
+
+    def write_env(var, val):
+        denormalize_env[var] = val
+
+    # Bind args and consts to denormalization environment.
+    write_env(jax.core.unitvar, jax.core.unit)
+    safe_map(write_env, jaxpr.invars, args)
+    safe_map(write_env, jaxpr.constvars, consts)
+
+    denorm_init_state = (denormalize_env, denorm_map_state)
+    # NOTE: scanning the jaxpr in reverse order.
+    denorm_run_state = jaxpr_visitor(
+        jaxpr,
+        denorm_init_state,
+        jaxpr_denorm_run_visitor_fn,
+        jaxpr_denorm_run_map_sub_states_fn,
+        jaxpr_denorm_run_reduce_sub_states_fn,
+        reverse=False,
+    )
+    return denorm_run_state
+
+
 def jaxpr_denormalize(jaxpr, consts, *args):
     """Denormalize a Jaxpr, i.e. removing any normalizing constant added to the output.
 
