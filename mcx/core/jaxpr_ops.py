@@ -556,6 +556,9 @@ def jaxpr_denorm_mapping_reduce_sub_states_fn(
             if sub_invar in sub_denorm_valid_vars
         }
 
+    # Update the constvar sub-states list, to keep sync. with equations in the jaxpr.
+    constvar_state, constvar_sub_states = constvar_full_state
+    constvar_full_state = constvar_state, constvar_sub_states[:-1]
     # TODO: fix properly.
     state = denorm_map_dict, denorm_valid_vars, constvar_full_state
     return state

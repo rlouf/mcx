@@ -121,7 +121,7 @@ def test__jaxpr_find_denormalize_mapping__linear_op_propagating__proper_mapping(
     constvar_state = jaxpr_find_constvars(typed_jaxpr.jaxpr, constvars)
 
     denorm_rec_state = jaxpr_find_denormalize_mapping(typed_jaxpr.jaxpr, constvar_state)
-    denorm_map, denorm_valid_vars, _ = denorm_rec_state[0]
+    denorm_map, denorm_valid_vars, constvar_full_state = denorm_rec_state[0]
 
     invar = typed_jaxpr.jaxpr.invars[0]
     # Proper mapping of the output to the input.
@@ -131,6 +131,9 @@ def test__jaxpr_find_denormalize_mapping__linear_op_propagating__proper_mapping(
     assert map_invar == invar
     # Input is a valid denorm variable (which could be propagated in sub-jaxpr).
     assert invar in denorm_valid_vars
+    # Returned constvar sub states should be empty: consumed in the visitor loop.
+    _, constvar_sub_states = constvar_full_state
+    assert len(constvar_sub_states) == 0
 
 
 denorm_sub_jaxprs_propagating = [
@@ -147,16 +150,20 @@ def test__jaxpr_find_denormalize_mapping__sub_jaxprs_propagating__proper_mapping
     constvar_state = jaxpr_find_constvars(typed_jaxpr.jaxpr, constvars)
 
     denorm_rec_state = jaxpr_find_denormalize_mapping(typed_jaxpr.jaxpr, constvar_state)
-    denorm_map, denorm_valid_vars, _ = denorm_rec_state[0]
+    denorm_map, denorm_valid_vars, constvar_full_state = denorm_rec_state[0]
 
     # Proper mapping of the output to the input.
     # assert len(denorm_map) == 1
     # map_op, map_invar = list(denorm_map.values())[0]
     # assert map_op == case["expected_op"]
     # assert map_invar == invar
+
     # Input is a valid denorm variable (which could be propagated in sub-jaxpr).
     invar = typed_jaxpr.jaxpr.invars[0]
     assert invar in denorm_valid_vars
+    # Returned constvar sub states should be empty: consumed in the visitor loop.
+    _, constvar_sub_states = constvar_full_state
+    assert len(constvar_sub_states) == 0
 
 
 denorm_non_linear_fn = [
