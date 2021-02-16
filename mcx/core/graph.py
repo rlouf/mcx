@@ -54,7 +54,9 @@ class GraphicalModel(nx.DiGraph):
                 else:
                     self.add_edge(arg, node, type="kwarg", key=[key])
 
-    def merge(self, assigned_name: str, posargs, kwargs, model: "GraphicalModel") -> Union["GraphicalModel", Placeholder]:
+    def merge(
+        self, assigned_name: str, posargs, kwargs, model: "GraphicalModel"
+    ) -> Union["GraphicalModel", Placeholder]:
         """Merge a model with the current one.
 
         Parameters
@@ -102,13 +104,17 @@ class GraphicalModel(nx.DiGraph):
                     mapping[placeholder] = arg
                 else:
                     default = list(model.predecessors(placeholder))[0]
-                    mapping[placeholder] = Constant(lambda: default.to_ast(), placeholder.name)
+                    mapping[placeholder] = Constant(
+                        lambda: default.to_ast(), placeholder.name
+                    )
 
         if len(missing_arguments) > 0:
             num_missing = len(missing_arguments)
-            maybe_s = 's' if num_missing > 1 else ''
-            missing_names = ', '.join(missing_arguments)
-            raise TypeError(f"{model.name}() missing {num_missing} argument{maybe_s}: {missing_names}")
+            maybe_s = "s" if num_missing > 1 else ""
+            missing_names = ", ".join(missing_arguments)
+            raise TypeError(
+                f"{model.name}() missing {num_missing} argument{maybe_s}: {missing_names}"
+            )
 
         model = nx.relabel_nodes(model, mapping)
         merged_graph = nx.compose(model, self)
@@ -140,14 +146,28 @@ class GraphicalModel(nx.DiGraph):
 
     @property
     def args(self):
-        return tuple([node for node in self.placeholders if not next(self.predecessors(node), None)])
+        return tuple(
+            [
+                node
+                for node in self.placeholders
+                if not next(self.predecessors(node), None)
+            ]
+        )
 
     @property
     def kwargs(self):
-        return tuple([node for node in self.placeholders if next(self.predecessors(node), None)])
+        return tuple(
+            [node for node in self.placeholders if next(self.predecessors(node), None)]
+        )
 
     @property
     def random_variables(self):
-        """Returns the random variable nodes, represented by the "Sample" Op.
-        """
         return tuple([node for node in self.nodes() if isinstance(node, SampleOp)])
+
+    @property
+    def names(self):
+        return {
+            "args": tuple([n.name for n in self.args]),
+            "kwargs": tuple([n.name for n in self.kwargs]),
+            "random_variables": tuple([n.name for n in self.random_variables]),
+        }

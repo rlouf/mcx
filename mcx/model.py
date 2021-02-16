@@ -205,15 +205,15 @@ class model(Distribution):
 
     @property
     def args(self) -> Tuple[str]:
-        return tuple([node.name for node in self.ir.graph.args])
+        return self.ir.graph.names['args']
 
     @property
     def kwargs(self) -> Tuple[str]:
-        return tuple([node.name for node in self.ir.graph.kwargs])
+        return self.ir.graph.names['kwargs']
 
     @property
     def random_variables(self) -> Tuple[str]:
-        return tuple([node.name for node in self.ir.graph.random_variables])
+        return self.ir.graph.names['random_variables']
 
 
 def seed(model: "model", rng_key: jax.random.PRNGKey):

@@ -1,3 +1,4 @@
+"""Sample from the multivariate distribution defined by the model."""
 from typing import Callable, Dict, Iterator, Tuple
 
 from tqdm import tqdm
