@@ -1,16 +1,15 @@
 """Sample from the multivariate distribution defined by the model."""
-from typing import Any, Callable, Dict, Iterator, Tuple, Optional
+from typing import Any, Callable, Dict, Iterator, Optional, Tuple
 
+import numpy as np
 from tqdm import tqdm
 
 import jax
 import jax.numpy as jnp
 import mcx
-import numpy as np
 from jax.flatten_util import ravel_pytree as jax_ravel_pytree
 from mcx.jax import progress_bar_factory
 from mcx.jax import ravel_pytree as mcx_ravel_pytree
-from mcx.trace import Trace
 
 __all__ = ["sample_joint", "sampler"]
 
@@ -50,7 +49,7 @@ def sample_joint(
             sampler_args += (arg,)
         in_axes += (None,)
 
-    samples = jax.vmap(model.sample_fn, in_axes, out_axes)(*sampler_args)
+    samples = jax.vmap(mcx.joint_sampler(model), in_axes, out_axes)(*sampler_args)
     samples = {key: value.squeeze() for key, value in samples.items()}
 
     return samples
@@ -140,7 +139,7 @@ class sampler(object):
             The key passed to JAX's random number generator. The runtime is
             in charge of splitting the key as it is being used.
         model
-            The model whose posterior we want to sample.
+            The model whose posterior distribution we want to sample.
         model_args
             The arguments to pass to the model.
         observations
@@ -307,7 +306,7 @@ class sampler(object):
             chain=warmup_chain, unravel_fn=self.unravel_fn
         )
 
-        trace = Trace(
+        trace = mcx.Trace(
             warmup_samples=samples,
             warmup_sampling_info=sampling_info,
             warmup_info=warmup_info,
@@ -380,7 +379,7 @@ class sampler(object):
         samples, sampling_info = self.evaluator.make_trace(
             chain=chain, unravel_fn=self.unravel_fn
         )
-        trace = Trace(
+        trace = mcx.Trace(
             samples=samples,
             sampling_info=sampling_info,
             loglikelihood_contributions_fn=self.loglikelihood_contributions,
@@ -613,8 +612,7 @@ def build_loglikelihood(model, args, observations):
     do a quick experiment to confirm that is the case.
 
     """
-    logpdf, _ = mcx.core.logpdf(model)
-    loglikelihood = jax.partial(logpdf, **observations, **args)
+    loglikelihood = jax.partial(mcx.log_prob(model), **observations, **args)
     return loglikelihood
 
 
@@ -623,7 +621,7 @@ def build_loglikelihoods(model, args, observations):
     of each variable.
     """
     logpdfs, _ = mcx.core.logpdf_contributions(model)
-    loglikelihoods = jax.partial(logpdfs, **observations, **args)
+    loglikelihoods = jax.partial(mcx.log_prob_contribs(model), **observations, **args)
     return loglikelihoods
 
 

@@ -199,7 +199,7 @@ class model(Distribution):
         """
         return self.call_fn(rng_key, *args, **kwargs)
 
-    def logpdf(self, *rv_and_args, **kwargs) -> float:
+    def logpdf(self, *rv_and_args, **kwargs) -> jnp.DeviceArray:
         """Logpdf of the multivariate distribution defined by the model."""
         return self.logpdf_fn(*rv_and_args, **kwargs)
 
@@ -236,9 +236,6 @@ class model(Distribution):
         self.call = MethodType(seeded_call, self)
         self.sample = MethodType(seeded_sample, self)
 
-    def do(self, **kwargs) -> "model":
-        pass
-
     @property
     def args(self) -> Tuple[str]:
         return self.graph.names['args']
@@ -262,3 +259,28 @@ def seed(model: "model", rng_key: jax.random.PRNGKey):
 
 def evaluate(model: "model", trace: mcx.Trace):
     pass
+
+
+# -----------------------------------------------
+#             == RAW FUNCTIONS ==
+# -----------------------------------------------
+
+
+def log_prob(model) -> FunctionType:
+    logpdf_fn, _ = mcx.core.logpdf(model)
+    return logpdf_fn
+
+
+def log_prob_contribs(model) -> FunctionType:
+    logpdf_fn, _ = mcx.core.logpdf_contributions(model)
+    return logpdf_fn
+
+
+def joint_sampler(model) -> FunctionType:
+    sample_fn, _ = mcx.core.sample_joint(model)
+    return sample_fn
+
+
+def predictive_sampler(model) -> FunctionType:
+    call_fn, _ = mcx.core.generate(model)
+    return call_fn

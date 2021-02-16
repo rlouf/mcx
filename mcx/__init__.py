@@ -1,10 +1,11 @@
 import mcx.core
 import mcx.distributions
-from mcx.inference.hmc import HMC
-from mcx.trace import Trace
-from mcx.model import evaluate, model, seed
-from mcx.sample import sampler, sample_joint
+import mcx.inference
+from mcx.model import (evaluate, joint_sampler, log_prob, log_prob_contribs,
+                       model, predictive_sampler, seed)
 from mcx.predict import predict
+from mcx.sample import sample_joint, sampler
+from mcx.trace import Trace
 
 __version__ = "0.0.1"
 
@@ -14,7 +15,10 @@ __all__ = [
     "evaluate",
     "predict",
     "sample_joint",
+    "log_prob",
+    "log_prob_contribs",
+    "predictive_sampler",
+    "joint_sampler",
     "sampler",
     "Trace",
-    "HMC",
 ]

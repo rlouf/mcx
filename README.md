@@ -22,7 +22,7 @@ MCX's philosophy
 2. Models should be modular and re-usable.
 3. Inference should be performant and should leverage GPUs.
 
-See the [documentation](https://rlouf.github.io/mcx) for more information.  See [this issue](https://github.com/rlouf/mcx/issues/1) for an updated roadmap for v0.1.
+See the [documentation](https://rlouf.github.io/mcx) for more information. See [this issue](https://github.com/rlouf/mcx/issues/1) for an updated roadmap for v0.1.
 
 ## Current API
 
@@ -34,7 +34,8 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import mcx
-import mcx.distributions as dist
+from mcx.distributions import Exponential, Normal
+from mcx.inference import HMC
 
 rng_key = jax.random.PRNGKey(0)
 
@@ -45,21 +46,23 @@ observations = {'x': x_data, 'predictions': y_data}
 
 @mcx.model
 def linear_regression(x, lmbda=1.):
-    sigma <~ dist.Exponential(lmbda)
-    coeffs_init = jnp.ones(x.shape[-1])
-    coeffs <~ dist.Normal(coeffs_init, sigma)
-    y = jnp.dot(x, coeffs)
-    predictions <~ dist.Normal(y, sigma)
-    return predictions
+    scale <~ Exponential(lmbda)
+    coefs <~ Normal(np.zeros(np.shape(x)[-1]))
+    preds <~ Normal(np.dot(x, coefs), scale)
+    return preds
+    
+prior_predictive = mcx.predict(rng_key, model, args)
 
-kernel = mcx.HMC(100)
-sampler = mcx.sampler(
+posterior = mcx.sampler(
     rng_key,
     linear_regression,
-    kernel,
-    **observations
-)
-posterior = sampler.run()
+    args,
+    observations,
+    HMC(100),
+).run()
+
+evaluated_model = mcx.evaluate(model, posterior)
+posterior_predictive = mcx.predict(rng_key, evaluated_model, args)
 ```
 
 ## MCX's future
@@ -149,7 +152,7 @@ that of the batch sampler. However, both can be used successively:
 ```python
 trace = mcx.Trace()
 for i, sample in enumerate(samples):
-  print(do_something(sample)
+  print(do_something(sample))
   trace.append(sample)
   if i % 10 == 0:
     trace += sampler.run(100_000, compile=True)

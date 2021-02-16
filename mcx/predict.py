@@ -1,10 +1,8 @@
 from typing import Any, Tuple
 
 import jax
-import numpy
+import jax.numpy as jnp
 import mcx
-from jax import numpy as jnp
-
 from mcx.sample import validate_model_args
 
 __all__ = ["predict"]
@@ -14,7 +12,7 @@ def predict(
     rng_key: jax.random.PRNGKey,
     model: mcx.model,
     model_args: Tuple[Any],
-    num_samples: int = 10,
+    num_samples: int = 1000,
 ):
     """Provides a unified interface to sample from the prior and posterior
     predictive distributions.
@@ -58,6 +56,10 @@ def predict(
             sampler_args += (arg,)
         in_axes += (None,)
 
-    samples = jax.vmap(model.call_fn, in_axes, out_axes=0)(*sampler_args)
+    # TODO(remi): Handle the case where multiple values are returned.
+
+    samples = jax.vmap(mcx.predictive_sampler(model), in_axes, out_axes=0)(
+        *sampler_args
+    )
 
     return samples
