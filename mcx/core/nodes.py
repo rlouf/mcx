@@ -103,3 +103,14 @@ class FunctionOp(object):
     def __init__(self, ast_generator, name) -> None:
         self.to_ast = ast_generator
         self.name = name
+
+
+class ModelOp(object):
+    """Model node.
+
+    Standard python functions are stored in nodes.
+
+    """
+    def __init__(self, ast_generator, name) -> None:
+        self.to_ast = ast_generator
+        self.name = name

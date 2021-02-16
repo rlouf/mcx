@@ -1,13 +1,10 @@
 import functools
-import types
-from typing import Callable, Dict
+from typing import Callable, Dict, Tuple
 
 import jax
 import jax.numpy as jnp
-
 import mcx
 from mcx.distributions import Distribution
-
 
 __all__ = ["model"]
 
@@ -192,24 +189,34 @@ class model(Distribution):
         return self.call_fn(rng_key, *args, **kwargs)
 
     def logpdf(self, *rv_and_args, **kwargs) -> float:
-        """Logpdf of the multivariate distribution defined by the model.
-        """
+        """Logpdf of the multivariate distribution defined by the model."""
         return self.logpdf_fn(*rv_and_args, **kwargs)
 
     def sample(self, rng_key, *args, **kwargs) -> Dict:
-        """Sample from the multivariate distribution.
-        """
+        """Sample from the multivariate distribution."""
         return self.sample_fn(rng_key, *args, **kwargs)
 
     def forward(self, rng_key, args, num_samples=1):
         """Returns forward samples from the prior distribution."""
         pass
 
-    def do(self, **kwargs) -> 'model':
+    def do(self, **kwargs) -> "model":
         pass
 
+    @property
+    def args(self) -> Tuple[str]:
+        return tuple([node.name for node in self.ir.graph.args])
 
-def seed(model: 'model', rng_key: jax.random.PRNGKey):
+    @property
+    def kwargs(self) -> Tuple[str]:
+        return tuple([node.name for node in self.ir.graph.kwargs])
+
+    @property
+    def random_variables(self) -> Tuple[str]:
+        return tuple([node.name for node in self.ir.graph.random_variables])
+
+
+def seed(model: "model", rng_key: jax.random.PRNGKey):
     """Wrap the model's calling function to do the rng splitting automatically.
 
     TODO: Extend this to all methods in `linear_regression` that require a rng_key:
@@ -218,6 +225,7 @@ def seed(model: 'model', rng_key: jax.random.PRNGKey):
     - forward
 
     """
+
     def key_splitter(rng_key):
         while True:
             _, rng_key = jax.random.split(rng_key)
@@ -232,9 +240,9 @@ def seed(model: 'model', rng_key: jax.random.PRNGKey):
     return seeded_call
 
 
-def evaluate(model: 'model', trace: mcx.Trace):
+def evaluate(model: "model", trace: mcx.Trace):
     pass
 
 
-def sampler(rng_key, model: 'model', args):
+def sampler(rng_key, model: "model", args):
     pass

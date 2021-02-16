@@ -1,18 +1,70 @@
-from typing import Callable, Iterator, Tuple
+from typing import Callable, Dict, Iterator, Tuple
+
+from tqdm import tqdm
 
 import jax
 import jax.numpy as jnp
-from jax.flatten_util import ravel_pytree as jax_ravel_pytree
-from tqdm import tqdm
-
 import mcx
-from mcx import sample_forward
+from jax.flatten_util import ravel_pytree as jax_ravel_pytree
 from mcx.jax import progress_bar_factory
-from mcx.core import compile_to_loglikelihoods, compile_to_logpdf
 from mcx.jax import ravel_pytree as mcx_ravel_pytree
 from mcx.trace import Trace
 
 __all__ = ["sampler"]
+
+
+def sampler(*args, **kwargs):
+    """The poor man's multiple dispatch."""
+
+    posterior_only_keys = ["evaluator", "num_chains"]
+    for key in posterior_only_keys:
+        if key in kwargs:
+            return posterior_sampler(*args, **kwargs)
+
+    if (len(args) + len(kwargs)) > 4:
+        return posterior_sampler(*args, **kwargs)
+
+    return prior_sampler(*args, **kwargs)
+
+
+# -------------------------------------------------------------------
+#                 == THE PRIOR SAMPLER ==
+# -------------------------------------------------------------------
+
+
+class prior_sampler(object):
+    """The prior sampling runtime."""
+
+    def __init__(
+        self, rng_key: jax.random.PRNGKey, model: mcx.model, model_args: Tuple
+    ):
+        self.sampler = model.sample_fn
+        self.model = model
+        self.model_args = model_args
+        self.rng_key = rng_key
+        _ = validate_model_args(model, model_args)
+
+    def run(self, num_samples=1000):
+        _, self.rng_key = jax.random.split(self.rng_key)
+        keys = jax.random.split(self.rng_key, num_samples)
+
+        # Set vmap's out axes for the random variables
+        out_axes = {rv: 1 for rv in self.model.random_variables}
+
+        # Set vmap's in axes for the arguments
+        in_axes = (0,)
+        sampler_args = (keys,)
+        print(keys.shape)
+        for arg in self.model_args:
+            try:
+                sampler_args += (jnp.atleast_1d(arg),)
+            except RuntimeError:
+                sampler_args += (arg,)
+            in_axes += (None,)
+
+        samples = jax.vmap(self.sampler, in_axes, out_axes)(*sampler_args)
+
+        return samples
 
 
 # -------------------------------------------------------------------
@@ -20,8 +72,8 @@ __all__ = ["sampler"]
 # -------------------------------------------------------------------
 
 
-class sampler(object):
-    """The linear sampling runtime.
+class posterior_sampler(object):
+    """The linear posterior sampling runtime.
 
     This runtime is encountered in every probabilistic programming library
     (PPL). It allows the user to fetch a pre-defined number of samples from the
@@ -73,9 +125,10 @@ class sampler(object):
         self,
         rng_key: jax.random.PRNGKey,
         model: mcx.model,
+        model_args: Tuple,
+        observations: Dict,
         evaluator,
         num_chains: int = 4,
-        **observations,
     ):
         """Initialize the batch sampling runtime.
 
@@ -99,28 +152,33 @@ class sampler(object):
             in charge of splitting the key as it is being used.
         model
             The model whose posterior we want to sample.
+        model_args
+            The arguments to pass to the model.
+        observations
+            A dictionary that contains the variables we condition on and their value.
         evaluator
             The evaluator that will be used to sampler the posterior.
         num_chains
             The number of chains that will be used concurrently for sampling.
-        observations
-            The variables we condition on and their values.
 
         Returns
         -------
         A sampler object.
 
         """
-        validate_conditioning_variables(model, **observations)
+        model_args = validate_model_args(model, model_args)
+        validate_conditioning_variables(model, observations)
 
         print("sampler: build the loglikelihood")
         transformed_model = evaluator.transform(model)
-        loglikelihood = build_loglikelihood(transformed_model, **observations)
-        loglikelihood_contributions = build_loglikelihoods(model, **observations)
+        loglikelihood = build_loglikelihood(transformed_model, model_args, observations)
+        loglikelihood_contributions = build_loglikelihoods(
+            model, model_args, observations
+        )
 
         print("sampler: find the initial states")
         initial_positions, unravel_fn = get_initial_position(
-            rng_key, model, num_chains, **observations
+            rng_key, model, model_args, observations, num_chains
         )
         loglikelihood = flatten_loglikelihood(loglikelihood, unravel_fn)
         initial_state = evaluator.states(initial_positions, loglikelihood)
@@ -502,66 +560,96 @@ def sample_loop(
     return last_state, chain
 
 
-def validate_conditioning_variables(model, **kwargs):
-    """Check that all variables passed as arguments to the sampler
-    are random variables or arguments to the sampler. And converserly
-    that all of the model definition's positional arguments are given
-    a value.
+def validate_model_args(model, args):
+    """Validate the model arguments passed to the sampler."""
+    model_args = model.args
+    model_kwargs = model.kwargs
+    num_passed_args = len(args)
 
-    TODO: Move to model.py?
+    if num_passed_args < len(model_args):
+        num_missing = len(model_args) - num_passed_args
+        if num_missing == 1:
+            raise TypeError(
+                f"{model.__name__}() missing 1 positional arguments: '{model_args[-1]}'"
+            )
+        else:
+            raise TypeError(
+                f"{model.__name__}() missing {num_missing} positional arguments: {', '.join(model_args[num_passed_args:])}"
+            )
+
+    all_args = model_args + model_kwargs
+    num_args = len(all_args)
+    if num_passed_args > num_args:
+        raise TypeError(
+            f"{model.__name__}() takes from {len(model_args)} to"
+            f" {num_args} positional arguments"
+            f" but {num_passed_args} were given"
+        )
+
+    args_dict = {}
+    for i, arg in enumerate(args):
+        args_dict[all_args[i]] = arg
+
+    return args_dict
+
+
+def validate_conditioning_variables(model, observations):
+    """Validate the conditioning variables passed to the sampler.
+
+    Conditioning variables must be random variables of the model.
+    MCX does not support conditioning on deterministic variables.
+
+    Note
+    ----
+    It seems that Oryx, the JAX-based PPL in the experimental section of the
+    Tensorflow Probability repo is able to do this by manipulating Jaxprs.
+
     """
-    conditioning_vars = set(kwargs.keys())
-    model_randvars = set(model.random_variables)
-    model_args = set(model.arguments)
-    available_vars = model_randvars.union(model_args)
-
-    # The variables passed as an argument to the initialization (variables
-    # on which the logpdf is conditionned) must be either a random variable
-    # or an argument to the model definition.
-    if not available_vars.issuperset(conditioning_vars):
-        unknown_vars = list(conditioning_vars.difference(available_vars))
-        unknown_str = ", ".join(unknown_vars)
-        raise AttributeError(
-            f"You passed a value for {unknown_str} which are neither random variables "
-            "nor arguments to the model definition."
-        )
-
-    # The user must provide a value for all of the model definition's
-    # positional arguments.
-    model_posargs = set(model.posargs)
-    if model_posargs.difference(conditioning_vars):
-        missing_vars = model_posargs.difference(conditioning_vars)
-        missing_str = ", ".join(missing_vars)
-        raise AttributeError(
-            f"You need to specify a value for the following arguments: {missing_str}"
-        )
+    model_randvars = model.random_variables
+    for rv in observations.keys():
+        if rv not in model_randvars:
+            raise KeyError(
+                f"The variable '{rv}' you are trying to condition on is not a random variable."
+                f" Expected one of {', '.join(model_randvars)}."
+            )
 
 
-def build_loglikelihood(model, **kwargs):
-    artifact = compile_to_logpdf(model.graph, model.namespace)
-    logpdf = artifact.compiled_fn
-    loglikelihood = jax.partial(logpdf, **kwargs)
+def build_loglikelihood(model, args, observations):
+    """We build the likelihood by partially applying the data.
+
+    TODO
+    ----
+    I am not 100% convinced that partially applying the data this
+    way allow to pre-compute gradients at compile time. We should
+    do a quick experiment to confirm that is the case.
+
+    """
+    logpdf = model.logpdf_fn
+    loglikelihood = jax.partial(logpdf, **observations, **args)
     return loglikelihood
 
 
-def build_loglikelihoods(model, **kwargs):
+def build_loglikelihoods(model, args, observations):
     """Function to compute the loglikelihood contribution
     of each variable.
     """
-    artifact = compile_to_loglikelihoods(model.graph, model.namespace)
-    logpdf = artifact.compiled_fn
-    loglikelihoods = jax.partial(logpdf, **kwargs)
+    logpdfs, _ = mcx.core.logpdf_contributions(model)
+    loglikelihoods = jax.partial(logpdfs, **observations, **args)
     return loglikelihoods
 
 
-def get_initial_position(rng_key, model, num_chains, **kwargs):
-    conditioning_vars = set(kwargs.keys())
-    model_randvars = set(model.random_variables)
-    to_sample_vars = model_randvars.difference(conditioning_vars)
+def get_initial_position(rng_key, model, model_args, observations, num_chains):
 
-    samples = sample_forward(rng_key, model, num_samples=num_chains, **kwargs)
-    initial_positions = dict((var, samples[var]) for var in to_sample_vars)
+    initial_positions = mcx.sampler(
+        rng_key, model, model_args, num_samples=num_chains
+    ).run(num_chains)
+    for observed_var in observations.keys():
+        initial_positions.pop(observed_var)
 
+    # We need to ravel the positions *for each chain separately*.
+    # When using `vmap` we need to have flat chains.
+    # I am not sure what this is about anymore. I have to re-work what
+    # happens with sample_forward and what I need for sampling.
     # A naive way to go about flattening the positions is to transform the
     # dictionary of arrays that contain the parameter value to a list of
     # dictionaries, one per position and then unravel the dictionaries.
@@ -575,7 +663,8 @@ def get_initial_position(rng_key, model, num_chains, **kwargs):
     # a single dictionary that contains the parameters value and use it to get
     # the unraveling function using `unravel_pytree`.
     positions = jnp.stack(
-        [jnp.ravel(samples[s]) for s in sorted(initial_positions.keys())], axis=1
+        [jnp.ravel(initial_positions[s]) for s in sorted(initial_positions.keys())],
+        axis=1,
     )
 
     # jnp.atleast_1d is necessary to handle single chains

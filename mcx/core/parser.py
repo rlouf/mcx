@@ -221,7 +221,7 @@ class ModelDefinitionParser(cst.CSTVisitor):
         # Standard python functions need to be included as is in the
         # resulting source code.
         # Models also need to be included in the source code.
-        if self.graph is not None:
+        if hasattr(self, "graph"):
             if is_model_definition(node, self.namespace):
                 graph_node = ModelOp(lambda: node, node.name)
                 name = node.name
@@ -231,6 +231,7 @@ class ModelDefinitionParser(cst.CSTVisitor):
 
             self.graph.add(graph_node)
             self.named_variables[node.name] = graph_node
+            return False  # don't visit the node's children
 
         # Each time we enter a model definition we create a new Graphical Model
         # which is returned after the definition's children have been visited.

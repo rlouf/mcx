@@ -136,10 +136,18 @@ class GraphicalModel(nx.DiGraph):
 
     @property
     def placeholders(self):
-        return [node for node in self.nodes() if isinstance(node, Placeholder)]
+        return tuple([node for node in self.nodes() if isinstance(node, Placeholder)])
+
+    @property
+    def args(self):
+        return tuple([node for node in self.placeholders if not next(self.predecessors(node), None)])
+
+    @property
+    def kwargs(self):
+        return tuple([node for node in self.placeholders if next(self.predecessors(node), None)])
 
     @property
     def random_variables(self):
         """Returns the random variable nodes, represented by the "Sample" Op.
         """
-        return [node for node in self.nodes() if isinstance(node, SampleOp)]
+        return tuple([node for node in self.nodes() if isinstance(node, SampleOp)])

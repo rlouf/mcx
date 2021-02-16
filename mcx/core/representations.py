@@ -199,7 +199,7 @@ def sample_forward(ir: GraphicalModel):
     """Obtain forward samples from the multivariate distribution implied by the model."""
     graph = copy.deepcopy(ir.graph)
 
-    random_variables = [node for node in graph if isinstance(node, SampleOp)]
+    random_variables = graph.random_variables
 
     def to_ast(*_):
         scopes = [rv.scope for rv in random_variables]
