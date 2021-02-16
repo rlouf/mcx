@@ -24,9 +24,10 @@ __all__ = ["logpdf", "logpdf_contributions", "generate", "sample_joint"]
 # --------------------------------------------------------
 
 
-def logpdf(graph: GraphicalModel, namespace: Dict):
+def logpdf(model):
     """Returns a function that compute the model's logpdf."""
-    graph = copy.deepcopy(graph)
+    graph = copy.deepcopy(model.graph)
+    namespace = model.namespace
 
     # Create a new 'logpdf' node that is the sum of the individual variables'
     # contributions.
@@ -65,7 +66,7 @@ def logpdf(graph: GraphicalModel, namespace: Dict):
     return compile_graph(graph, namespace, f"{graph.name}_logpdf")
 
 
-def logpdf_contributions(graph: GraphicalModel, namespace: Dict):
+def logpdf_contributions(model):
     """Return the variables' individual constributions to the logpdf.
 
     The function returns a dictionary {'var_name': logpdf_contribution}. When
@@ -79,7 +80,8 @@ def logpdf_contributions(graph: GraphicalModel, namespace: Dict):
     and scope name) at compilation.
 
     """
-    graph = copy.deepcopy(graph)
+    graph = copy.deepcopy(model.graph)
+    namespace = model.namespace
 
     logpdf_contribs = [node for node in graph if isinstance(node, SampleOp)]
 
@@ -100,7 +102,7 @@ def logpdf_contributions(graph: GraphicalModel, namespace: Dict):
             scope = scopes[0]
             return t.dict(
                 {
-                    t.string(var_name): t.name(contrib_name)
+                    cst.SimpleString(f"'{var_name}'"): cst.Name(contrib_name)
                     for var_name, contrib_name in scoped[scope].items()
                 }
             )
@@ -109,9 +111,9 @@ def logpdf_contributions(graph: GraphicalModel, namespace: Dict):
         # the scope, and then the variables.
         return t.dict(
             {
-                t.string(scope): t.dict(
+                cst.SimpleString(f"'{scope}'"): t.dict(
                     {
-                        t.string(var_name): t.name(contrib_name)
+                        cst.SimpleString(f"'{var_name}'"): cst.Name(contrib_name)
                         for var_name, contrib_name in scoped[scope].items()
                     }
                 )
@@ -141,7 +143,9 @@ def _logpdf_core(graph: GraphicalModel):
 
     def sample_to_logpdf(to_ast, *args, **kwargs):
         name = kwargs.pop("var_name")
-        return t.call(cst.Attribute(to_ast(*args, **kwargs), cst.Name("logpdf_sum")), name)
+        return t.call(
+            cst.Attribute(to_ast(*args, **kwargs), cst.Name("logpdf_sum")), name
+        )
 
     def placeholder_to_param(name: str):
         return t.param(name)
@@ -188,16 +192,17 @@ def _logpdf_core(graph: GraphicalModel):
 # --------------------------------------------------------
 
 
-def generate(graph: GraphicalModel, namespace: Dict):
+def generate(model):
     """Execute the generative model."""
-    graph = copy.deepcopy(graph)
+    graph = copy.deepcopy(model.graph)
     graph = _sampler_core(graph)
-    return compile_graph(graph, namespace, f"{graph.name}_sample")
+    return compile_graph(graph, model.namespace, f"{graph.name}_sample")
 
 
-def sample_joint(graph: GraphicalModel, namespace: Dict):
+def sample_joint(model):
     """Obtain forward samples from the joint distribution defined by the model."""
-    graph = copy.deepcopy(graph)
+    graph = copy.deepcopy(model.graph)
+    namespace = model.namespace
 
     random_variables = graph.random_variables
 
@@ -290,13 +295,13 @@ def _sampler_core(graph: GraphicalModel):
 # --------------------------------------------------------
 
 
-def sample_posterior_predictive(ir: GraphicalModel):
+def sample_posterior_predictive(model):
     """Sample from the posterior predictive distribution.
 
     Any SampleOp whose output value is not returned (i.e. is not observed)is
     removed from the graph, and Ops with a degree equal to 0 subsequently.
     """
-    graph = copy.deepcopy(ir.graph)
+    graph = copy.deepcopy(model.graph)
 
     rng_node = Placeholder("rng_key", lambda: cst.Param(name=cst.Name(value="rng_key")))
     graph.add(rng_node)

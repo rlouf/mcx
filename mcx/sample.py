@@ -25,12 +25,19 @@ def sample_joint(
     model_args: Tuple,
     num_samples=1,
 ):
+    """Sample from the joint prior distribution.
+
+    Returns
+    -------
+    A dictionary {'var_name': samples} where the `samples` array is of
+    shape (num_samples, var_shape).
+    """
     _ = validate_model_args(model, model_args)
 
     keys = jax.random.split(rng_key, num_samples)
 
     # Set vmap's out axes for the random variables
-    out_axes = {rv: 1 for rv in model.random_variables}
+    out_axes = {rv: 0 for rv in model.random_variables}
 
     # Set vmap's in axes for the arguments
     in_axes: Tuple[Optional[int], ...] = (0,)
@@ -146,14 +153,14 @@ class sampler(object):
         A sampler object.
 
         """
-        model_args = validate_model_args(model, model_args)
+        args_dict = validate_model_args(model, model_args)
         validate_conditioning_variables(model, observations)
 
         print("sampler: build the loglikelihood")
         transformed_model = evaluator.transform(model)
-        loglikelihood = build_loglikelihood(transformed_model, model_args, observations)
+        loglikelihood = build_loglikelihood(transformed_model, args_dict, observations)
         loglikelihood_contributions = build_loglikelihoods(
-            model, model_args, observations
+            model, args_dict, observations
         )
 
         print("sampler: find the initial states")
@@ -604,7 +611,7 @@ def build_loglikelihood(model, args, observations):
     do a quick experiment to confirm that is the case.
 
     """
-    logpdf = model.logpdf_fn
+    logpdf, _ = mcx.core.logpdf(model)
     loglikelihood = jax.partial(logpdf, **observations, **args)
     return loglikelihood
 
@@ -620,16 +627,18 @@ def build_loglikelihoods(model, args, observations):
 
 def get_initial_position(rng_key, model, model_args, observations, num_chains):
 
-    initial_positions = mcx.sampler(
+    initial_positions = mcx.sample_joint(
         rng_key, model, model_args, num_samples=num_chains
-    ).run(num_chains)
+    )
     for observed_var in observations.keys():
         initial_positions.pop(observed_var)
 
-    # We need to ravel the positions *for each chain separately*.
-    # When using `vmap` we need to have flat chains.
-    # I am not sure what this is about anymore. I have to re-work what
-    # happens with sample_forward and what I need for sampling.
+    # MCX's inference algorithms work on flat arrays, we thus have to ravel the
+    # positions before feeding them to the evaluators. We need to ravel the
+    # positions *for each chain separately*. However, if we naively use JAX's
+    # `ravel_pytree` function on the dictionary with prior samples we will obtain
+    # a single array with all positions for all chains.
+    #
     # A naive way to go about flattening the positions is to transform the
     # dictionary of arrays that contain the parameter value to a list of
     # dictionaries, one per position and then unravel the dictionaries.

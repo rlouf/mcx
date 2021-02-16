@@ -44,8 +44,7 @@ def predict(
 
     Returns
     -------
-    `num_samples` from the predictive distribution.
-
+    An array of shape (num_samples, var_shape) from the predictive distribution.
     """
     _ = validate_model_args(model, model_args)
     keys = jax.random.split(rng_key, num_samples)

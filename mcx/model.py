@@ -177,9 +177,9 @@ class model(Distribution):
         self.graph, self.namespace = mcx.core.parse(model_fn)
         self.model_fn = model_fn
 
-        self.logpdf_fn, self.logpdf_src = mcx.core.logpdf(self.graph, self.namespace)
-        self.sample_fn, self.sample_src = mcx.core.sample_joint(self.graph, self.namespace)
-        self.call_fn, self.src = mcx.core.generate(self.graph, self.namespace)
+        self.logpdf_fn, self.logpdf_src = mcx.core.logpdf(self)
+        self.sample_fn, self.sample_src = mcx.core.sample_joint(self)
+        self.call_fn, self.src = mcx.core.generate(self)
 
         self.sample_fn = jax.jit(self.sample_fn)
         self.call_fn = jax.jit(self.call_fn)
