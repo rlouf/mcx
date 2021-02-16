@@ -172,7 +172,7 @@ class ModelDefinitionParser(cst.CSTVisitor):
         self.named_variables: Dict = {}
         self.sample_this_op = True
 
-    def visit_FunctionDef(self, node: cst.FunctionDef) -> None:
+    def visit_FunctionDef(self, node: cst.FunctionDef) -> Union[None, bool]:
         """Visit a function definition.
 
         When we traverse the Concrete Syntax Tree of a MCX model, a function definition
@@ -243,21 +243,20 @@ class ModelDefinitionParser(cst.CSTVisitor):
         # as is in the resulting source code. So do submodels.
         if hasattr(self, "graph"):
             if is_model_definition(node, self.namespace):
-                graph_node = ModelOp(lambda: node, node.name)
-                name = node.name
+                model_node = ModelOp(lambda: node, node.name.value)
+                self.graph.add(model_node)
+                self.named_variables[node.name] = model_node
             else:
-                graph_node = FunctionOp(lambda: node, node.name)
-                name = node.name
+                function_node = FunctionOp(lambda: node, node.name.value)
+                self.graph.add(function_node)
+                self.named_variables[node.name] = function_node
 
-            self.graph.add(graph_node)
-            self.named_variables[node.name] = graph_node
             return False  # don't visit the node's children
 
         # Each time we enter a model definition we create a new GraphicalModel
         # which is returned after the definition's children have been visited.
         # The current version does not support nested models but will.
-        self.graph = GraphicalModel()
-        self.graph.namespace = self.namespace
+        self.graph: GraphicalModel = GraphicalModel()
         self.graph.name = node.name.value
         self.scope = node.name.value
 
@@ -270,13 +269,17 @@ class ModelDefinitionParser(cst.CSTVisitor):
 
             try:  # parse argument default value is any
                 default = self.recursive_visit(argument.default)
-                node = Placeholder(partial(argument_cst, name), name, False, True)
+                argument_node = Placeholder(
+                    partial(argument_cst, name), name, False, True
+                )
                 self.graph.add(node, default)
             except TypeError:
-                node = Placeholder(partial(argument_cst, name), name)
-                self.graph.add(node)
+                argument_node = Placeholder(partial(argument_cst, name), name)
+                self.graph.add(argument_node)
 
             self.named_variables[name] = node
+
+        return None
 
     # ----------------------------------------------------------------
     #                        PARSE COMMENTS
@@ -353,8 +356,10 @@ class ModelDefinitionParser(cst.CSTVisitor):
         if len(node.targets) > 1:
             raise SyntaxError(MULTIPLE_RETURNED_VALUES_ERROR)
 
-        op.name = node.targets[0].target.value
-        self.named_variables[op.name] = op
+        single_target = node.targets[0].target
+        if isinstance(single_target, cst.Name):
+            op.name = single_target.value
+            self.named_variables[op.name] = op
 
     # ----------------------------------------------------------------
     #         PARSE RANDOM VARIABLE ASSIGNMENTS (Sample Ops)
@@ -396,7 +401,11 @@ class ModelDefinitionParser(cst.CSTVisitor):
             if isinstance(node.left, cst.Tuple):
                 raise SyntaxError(MULTIPLE_RETURNED_VALUES_ERROR)
 
-            variable_name = node.left.value
+            if isinstance(node.left, cst.Name):
+                variable_name = node.left.value
+            else:
+                return
+
             expression = comparator.expression
 
             if variable_name in self.named_variables:
@@ -406,38 +415,38 @@ class ModelDefinitionParser(cst.CSTVisitor):
             # This eval is necessary to check whether object sampled
             # from is a model or a distribution. And in the former case
             # to merge to the current graph.
-            try:
+            if isinstance(expression, cst.Call):
                 fn_call_path = unroll_call_path(expression.func)
-            except AttributeError as err:
+            else:
                 raise SyntaxError(
                     "Expressions on the right-hand-side of <~ must be models or distributions. "
                     f"Found the node {expression} instead."
-                ) from err
+                )
 
             fn_obj = eval(fn_call_path, self.namespace)
             if isinstance(fn_obj, mcx.model):
                 op = self.recursive_visit(comparator.expression)
-                sample_op = SampleModelOp(
+                modelsample_op = SampleModelOp(
                     op.cst_generator,
                     self.scope,
                     variable_name,
                     fn_call_path,
                     fn_obj.graph,
                 )
-                self.graph = nx.relabel_nodes(self.graph, {op: sample_op})
+                self.graph = nx.relabel_nodes(self.graph, {op: modelsample_op})
+                self.named_variables[variable_name] = modelsample_op
             elif issubclass(fn_obj, mcx.distributions.Distribution):
                 op = self.recursive_visit(comparator.expression)
                 sample_op = SampleOp(
                     op.cst_generator, self.scope, variable_name, fn_obj
                 )
                 self.graph = nx.relabel_nodes(self.graph, {op: sample_op})
+                self.named_variables[variable_name] = sample_op
             else:
                 raise SyntaxError(
                     "Expressions on the right-hand-side of <~ must be models or distributions. "
                     f"Found {fn_call_path} instead."
                 )
-
-            self.named_variables[variable_name] = sample_op
 
     # ----------------------------------------------------------------
     #            RECURSIVELY PARSE THE RHS OF STATEMENTS
@@ -603,10 +612,10 @@ class ModelDefinitionParser(cst.CSTVisitor):
         We mark the referenced named Op as returned.
         """
         value = node.value
-        if not isinstance(value, cst.Name):
+        if isinstance(value, cst.Name):
+            returned_name = value.value
+        else:
             raise SyntaxError(MULTIPLE_RETURNED_VALUES_ERROR)
-
-        returned_name = node.value.value
 
         try:
             returned_node = self.named_variables[returned_name]
@@ -680,9 +689,7 @@ def is_model_definition(node: cst.FunctionDef, namespace: Dict) -> bool:
     return False
 
 
-def unroll_call_path(
-    node: Union[cst.Attribute, cst.Call], name: Optional[List[str]] = None
-) -> str:
+def unroll_call_path(node: cst.BaseExpression, name: Optional[List[str]] = None) -> str:
     """Unroll a function's call path.
 
     When we call a function using a path from the module in which it is defined

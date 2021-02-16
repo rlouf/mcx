@@ -175,7 +175,7 @@ def _logpdf_core(graph: GraphicalModel):
         chosen_sample = Op(
             partial(sample_index, rv_name, returned_var_name),
             graph.name,
-            rv_name + "_value",
+            f"{rv_name}_value",
         )
 
         original_edges = []
