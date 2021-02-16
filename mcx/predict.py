@@ -4,10 +4,19 @@ import jax
 import numpy
 from jax import numpy as jnp
 
+import mcx
 import mcx.core as core
 from mcx.trace import Trace
 
-__all__ = ["predict", "sample_forward"]
+__all__ = ["predict", "sample_forward", "sample_predictive"]
+
+
+def sample_predictive(
+    rng_key: jax.random.PRNGKey, model: mcx.model, args: Tuple[Any], num_samples: int
+):
+    """Sample from the predictive distribution of the generative function.
+    """
+    pass
 
 
 # -------------------------------------------------------------------

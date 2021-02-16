@@ -14,14 +14,14 @@ import inspect
 import textwrap
 from collections import defaultdict
 from functools import partial
-from typing import Callable, Dict, List, Optional, Union
+from typing import Any, Dict, List, NamedTuple, Optional, Union
 
 import libcst as cst
 import mcx
 import networkx as nx
 from mcx.core.graph import GraphicalModel
-from mcx.core.nodes import Constant, Name, Op, Placeholder, SampleOp
-
+from mcx.core.nodes import (Constant, FunctionOp, ModelOp, Name, Op,
+                            Placeholder, SampleOp)
 
 MODEL_BADLY_FORMED_ERROR = SyntaxError(
     "A MCX model should be defined in a single function. This exception is completely unexpected."
@@ -34,8 +34,24 @@ MULTIPLE_RETURNED_VALUES_ERROR = SyntaxError(
 )
 
 
-def parse(model_fn: Callable) -> GraphicalModel:
-    """Parse the model definition to build a graphical model."""
+class IR(NamedTuple):
+    graph: GraphicalModel
+    namespace: Dict
+
+
+def parse(model_fn: Any) -> IR:
+    """Parse the model definition to build a graphical model.
+
+    Parameter
+    ---------
+    model
+        A live function object that contains the model definition.
+
+    Returns
+    -------
+    The intermediate representation of the model.
+
+    """
     source = inspect.getsource(model_fn)
     source = textwrap.dedent(source)  # not sure we need this now
     tree = cst.parse_module(source)
@@ -46,7 +62,7 @@ def parse(model_fn: Callable) -> GraphicalModel:
     tree.visit(definition_visitor)
     graph = definition_visitor.graph
 
-    return graph
+    return IR(graph, namespace)
 
 
 class ModelDefinitionParser(cst.CSTVisitor):
@@ -113,15 +129,31 @@ class ModelDefinitionParser(cst.CSTVisitor):
     that are called within the current model, or models that are defined via
     a closure.
 
+    Attributes
+    ----------
+    current_scope:
+        Name of the model being currently parsed.
+    scopes:
+        Counts the number of times each scope has been encountered. Important in
+        situations like deep learning where the same module can be called
+        several times.
+    namespace:
+        Dictionnary that contains the global namespace in which the model is
+        called.
+    sample_this_op:
+        Whether the Op currently being traversed should appear in forward sampling
+        and whether we should include them in the posterior samples.
+    named_variables:
+        Dictionary that associates the name of each Op to its node.
+
     """
 
     def __init__(self, namespace: Dict):
-        self.current_scope = None  # name of the current model
-        self.scopes: Dict = defaultdict(int)  # number of times each scope has been encountered
         self.namespace = namespace
-
+        self.current_scope: Optional[str] = None
+        self.scopes: Dict = defaultdict(int)
+        self.named_variables: Dict = {}
         self.sample_this_op = True
-        self.named_variables: Dict = {}  # retrieve named Op nodes
 
     def visit_FunctionDef(self, node: cst.FunctionDef) -> None:
         """There's an issue if a model is defined inside the model.
@@ -185,35 +217,43 @@ class ModelDefinitionParser(cst.CSTVisitor):
 
         """
 
-        # Leave standard python functions alone.
-        #
-        # Actually, they will need to be included if they are called within the
-        # model. This is an annoying corner case that can probably be handled by
-        # a simple FunctionOp.
+        # If we are visiting a function within the model definition
+        # Standard python functions need to be included as is in the
+        # resulting source code.
+        # Models also need to be included in the source code.
+        if self.graph is not None:
+            if is_model_definition(node, self.namespace):
+                graph_node = ModelOp(lambda: node, node.name)
+                name = node.name
+            else:
+                graph_node = FunctionOp(lambda: node, node.name)
+                name = node.name
 
-        # if not is_model_definition(node, self.namespace):
-        # return
+            self.graph.add(graph_node)
+            self.named_variables[node.name] = graph_node
 
         # Each time we enter a model definition we create a new Graphical Model
         # which is returned after the definition's children have been visited.
         # The current version does not support nested graph but will.
         self.graph = GraphicalModel()
+        self.graph.namespace = self.namespace
         self.graph.name = node.name.value
         self.scope = node.name.value
 
-        def to_ast(name, default):
-            return cst.Param(
-                name=cst.Name(value=name),
-                default=default,
-            )
+        def to_ast(name, default=None):
+            return cst.Param(cst.Name(name), default=default)
 
         function_args = node.params.params
         for i, argument in enumerate(function_args):
             name = argument.name.value
-            default = argument.default
-            node = Placeholder(name, partial(to_ast, name, default))
+            node = Placeholder(name, partial(to_ast, name))
             self.named_variables[name] = node
-            self.graph.add(node)
+
+            try:
+                default = self.recursive_visit(argument.default)
+                self.graph.add(node, default)
+            except TypeError:
+                self.graph.add(node)
 
     def visit_SimpleStatementLine(self, node: cst.SimpleStatementLine) -> None:
         """Read comments.
@@ -227,7 +267,7 @@ class ModelDefinitionParser(cst.CSTVisitor):
         if comment is not None and "sample: ignore" in comment.value:
             self.sample_this_op = False
 
-    def leave_SimpleStatement(self, node: cst.SimpleStatementLine) -> None:
+    def leave_SimpleStatementLine(self, node: cst.SimpleStatementLine) -> None:
         """Re-enable sampling after the line has been parsed."""
         self.sample_this_op = True
 
@@ -325,22 +365,32 @@ class ModelDefinitionParser(cst.CSTVisitor):
                 raise MULTIPLE_RETURNED_VALUES_ERROR
 
             variable_name = node.left.value
+            expression = comparator.expression
 
             # Eval the object on the righ-hand side of the <~ operator
             # This eval is necessary to check whether object sampled
             # from is a model or a distribution. And in the former case
             # to merge to the current graph.
-            fn_call_path = unroll_call_path(comparator.expression.func)
+            fn_call_path = unroll_call_path(expression.func)
             fn_obj = eval(fn_call_path, self.namespace)
             if isinstance(fn_obj, mcx.model):
-                sample_op = self.graph.merge(
-                    variable_name, fn_obj.graph
-                )  # returns the return Op
+                posargs = [
+                    self.recursive_visit(arg)
+                    for arg in expression.args
+                    if not arg.keyword
+                ]
+                kwargs = {
+                    arg.keyword: self.recursive_visit(arg)
+                    for arg in expression.args
+                    if arg.keyword
+                }
+                self.graph, sample_op = self.graph.merge(
+                    variable_name, posargs, kwargs, fn_obj.graph
+                )
             else:
                 op = self.recursive_visit(comparator.expression)
                 sample_op = SampleOp(variable_name, self.scope, op.to_ast)
-                mapping = {op: sample_op}
-                self.graph = nx.relabel_nodes(self.graph, mapping)
+                self.graph = nx.relabel_nodes(self.graph, {op: sample_op})
 
             self.named_variables[variable_name] = sample_op
 
@@ -392,13 +442,10 @@ class ModelDefinitionParser(cst.CSTVisitor):
             func = self.recursive_visit(node.func)
             args = [self.recursive_visit(arg) for arg in node.args]
 
-            def to_ast(func, *args):
-                return cst.Call(
-                    func=func,
-                    args=args,
-                )
+            def to_call_ast(func, *args):
+                return cst.Call(func, args)
 
-            op = Op(to_ast, self.scope)
+            op = Op(to_call_ast, self.scope)
             self.graph.add(op, func, *args)
 
             return op
@@ -406,13 +453,10 @@ class ModelDefinitionParser(cst.CSTVisitor):
         if isinstance(node, cst.Arg):
             value = self.recursive_visit(node.value)
 
-            def to_ast(value):
-                return cst.Arg(
-                    value=value,
-                    keyword=node.keyword,
-                )
+            def to_arg_ast(value):
+                return cst.Arg(value, node.keyword)
 
-            op = Op(to_ast, self.scope)
+            op = Op(to_arg_ast, self.scope)
             self.graph.add(op, value)
             return op
 
@@ -420,10 +464,10 @@ class ModelDefinitionParser(cst.CSTVisitor):
             value = self.recursive_visit(node.value)
             attr = self.recursive_visit(node.attr)
 
-            def to_ast(value, attr):
-                return cst.Attribute(value=value, attr=attr)
+            def to_attribute_ast(value, attr):
+                return cst.Attribute(value, attr)
 
-            op = Op(to_ast, self.scope)
+            op = Op(to_attribute_ast, self.scope)
             self.graph.add(op, value, attr)
             return op
 
@@ -433,13 +477,10 @@ class ModelDefinitionParser(cst.CSTVisitor):
             value = self.recursive_visit(node.value)
             slice_elements = [self.recursive_visit(s) for s in node.slice]
 
-            def to_ast(value, *slice_elements):
-                return cst.Subscript(
-                    value=value,
-                    slice=slice_elements,
-                )
+            def to_subscript_ast(value, *slice_elements):
+                return cst.Subscript(value, slice_elements)
 
-            op = Op(to_ast, self.scope)
+            op = Op(to_subscript_ast, self.scope)
             self.graph.add(op, value, *slice_elements)
 
             return op
@@ -447,10 +488,10 @@ class ModelDefinitionParser(cst.CSTVisitor):
         if isinstance(node, cst.SubscriptElement):
             sl = self.recursive_visit(node.slice)
 
-            def to_ast(sl):
-                return cst.SubscriptElement(slice=sl)
+            def to_subscript_element_ast(slice):
+                return cst.SubscriptElement(slice)
 
-            op = Op(to_ast, self.scope)
+            op = Op(to_subscript_element_ast, self.scope)
             self.graph.add(op, sl)
 
             return op
@@ -458,10 +499,10 @@ class ModelDefinitionParser(cst.CSTVisitor):
         if isinstance(node, cst.Index):
             value = self.recursive_visit(node.value)
 
-            def to_ast(value):
-                return cst.Index(value=value)
+            def to_index_ast(value):
+                return cst.Index(value)
 
-            op = Op(to_ast, self.scope)
+            op = Op(to_index_ast, self.scope)
             self.graph.add(op, value)
 
             return op
@@ -472,27 +513,20 @@ class ModelDefinitionParser(cst.CSTVisitor):
             left = self.recursive_visit(node.left)
             right = self.recursive_visit(node.right)
 
-            def to_ast(left, right):
-                return cst.BinaryOperation(
-                    left=left,
-                    operator=node.operator,
-                    right=right,
-                )
+            def to_binary_operation_ast(left, right):
+                return cst.BinaryOperation(left, node.operator, right=right)
 
-            op = Op(to_ast, self.scope)
+            op = Op(to_binary_operation_ast, self.scope)
             self.graph.add(op, left, right)
             return op
 
         if isinstance(node, cst.UnaryOperation):
             expression = self.recursive_visit(node.expression)
 
-            def to_ast(expression):
-                return cst.UnaryOperation(
-                    operator=node.operator,
-                    expression=expression,
-                )
+            def to_unary_operation_ast(expression):
+                return cst.UnaryOperation(node.operator, expression)
 
-            op = Op(to_ast, self.scope)
+            op = Op(to_unary_operation_ast, self.scope)
             self.graph.add(op, expression)
             return op
 
@@ -511,11 +545,14 @@ class ModelDefinitionParser(cst.CSTVisitor):
         """We currently return all the leaves of the (directed) graph when
         calling the function, in the order in which they appear. The return
         statement has thus no effect on how the graph is processed.
-
-        TODO: Tag the returned variables to be able to return them in function
-        calls.
-
         """
+        value = node.value
+        if not isinstance(value, cst.Name):
+            raise MULTIPLE_RETURNED_VALUES_ERROR
+
+        returned_name = node.value.value
+        returned_node = self.named_variables[returned_name]
+        returned_node.is_returned = True
 
     # ----------------------------------------------------------------
     #           EXPLICITLY EXCLUDE CONTROL FLOW (for now)

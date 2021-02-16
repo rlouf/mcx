@@ -1,17 +1,15 @@
-import ast
-import astor
 import functools
-from typing import Any, Callable, List, Tuple, Union
+import types
+from typing import Callable, Dict
 
 import jax
 import jax.numpy as jnp
-import numpy
 
 import mcx
 from mcx.distributions import Distribution
-from mcx.predict import sample_forward
 
-__all__ = ["model", "seed"]
+
+__all__ = ["model"]
 
 
 class model(Distribution):
@@ -21,10 +19,10 @@ class model(Distribution):
     a (multivariate) probability distribution, and as such inherits from the
     `Distribution` class. It implements the `sample` and `logpdf` methods.
 
-    Models are expressed as functions. The expression of the model within the
-    function should be as close to the mathematical expression as possible. The
-    only difference with standard python code is the use of the "<~" operator
-    for random variable assignments.
+    Models are expressed as generative functions. The expression of the model
+    within the function should be as close to the mathematical expression as
+    possible. The only difference with standard python code is the use of the
+    "<~" operator for random variable assignments.
 
     The models are then parsed into an internal graph representation that can
     be conditioned on data, compiled into a logpdf or a forward sampler. The
@@ -158,9 +156,14 @@ class model(Distribution):
     ... def linear_model(X):
     ...     weights <~ prior(1)
     ...     sigma <~ HalfNormal(0, 1)
-    ...     z = mult(X, weights)
+    ...     z = np.dot(X, weights)
     ...     y <~ Normal(z, sigma)
     ...     return y
+
+
+    The `model` class gives a no-fuss access to MCX's models. It is not
+    compulsory, for instance, to use JAX's key splitting mechanism to obtain
+    many samples.
 
     References
     ----------
@@ -172,180 +175,51 @@ class model(Distribution):
            Framework." (2019).
     """
 
-    def __init__(self, fn: Callable) -> None:
-        self.model_fn = fn
-        self.namespace = fn.__globals__  # type: ignore
-        self.graph = mcx.core.parse(fn, self.namespace)
-        _ = mcx.core.logpdf(self.graph, self.namespace)
-        self.rng_key = jax.random.PRNGKey(53)
-        # self.logpdf, self.logpdf_src = mcx.compiler.logpdf.compile_logpdf(self.graph, self.namespace)
-        functools.update_wrapper(self, fn)
+    def __init__(self, model_fn: Callable) -> None:
+        self.ir = mcx.core.parse(model_fn)
 
-    # def __call__(self, *args, **kwargs) -> numpy.ndarray:
-        # """Return a sample from the prior predictive distribution. A different
-        # value is returned at each all.
-        # """
-        # _, self.rng_key = jax.random.split(self.rng_key)
+        self.logpdf_fn, self.logpdf_src = mcx.core.logpdf(self.ir)
+        self.sample_fn, self.sample_src = mcx.core.sample_forward(self.ir)
+        self.call_fn, self.src = mcx.core.sample(self.ir)
 
-        # # convert all numbers to arrays
-        # arguments: Tuple[Any, ...] = ()
-        # for arg in args:
-            # try:
-                # arguments += (np.atleast_1d(arg),)
-            # except Exception:
-                # arguments += (arg,)
+        self.sample_fn = jax.jit(self.sample_fn)
+        self.call_fn = jax.jit(self.call_fn)
 
-        # prior_sampler, _, _, _ = compiler.compile_to_prior_sampler(
-            # self.graph, self.namespace
-        # )
-        # samples = prior_sampler(self.rng_key, *arguments, **kwargs)
-        # return numpy.asarray(samples).squeeze()
+        functools.update_wrapper(self, model_fn)
 
-    def __getitem__(self, name: str):
-        """Access the graph by variable name."""
-        nodes = self.graph.nodes(data=True)
-        return nodes[name]["content"]
+    def __call__(self, rng_key, *args, **kwargs) -> jnp.DeviceArray:
+        """Call the model as a generative function."""
+        return self.call_fn(rng_key, *args, **kwargs)
 
-    def __setitem__(self, name: str, expression_str: str) -> None:
-        """Change the distribution of one of the model's variables.
-
-        The distribution and its arguments must be expressed within
-        a string:
-
-        >>> model['x'] = "dist.Normal(0, 1)"
-
-        Note
-        ----
-        The parsing logic should be moved to the core.
+    def logpdf(self, *rv_and_args, **kwargs) -> float:
+        """Logpdf of the multivariate distribution defined by the model.
         """
-        expression_ast = ast.parse(expression_str).body[0]
-        if isinstance(expression_ast, ast.Expr):
-            expression = expression_ast.value
-            if isinstance(expression, ast.Call):
-                expression_arguments = expression.args
+        return self.logpdf_fn(*rv_and_args, **kwargs)
 
-        self.graph.remove_node(name)
-        distribution = expression
-        arguments: List[Union[str, float, int, complex]] = []
-        for arg in expression_arguments:
-            if isinstance(arg, ast.Name):
-                arguments.append(arg.id)
-            elif isinstance(arg, ast.Constant):
-                arguments.append(arg.value)
-            elif isinstance(arg, ast.Num):
-                arguments.append(arg.n)
-        self.graph.add_randvar(name, distribution, arguments)
-
-    def do(self, **kwargs) -> "model":
-        """Apply the do operator to the graph and return a copy of the model.
-
-        The do-operator :math:`do(X=x)` sets the value of the variable X to x and
-        removes all edges between X and its parents [1]_. Applying the do-operator
-        may be useful to analyze the behavior of the model before inference.
-
-        References
-        ----------
-        .. [1]: Pearl, Judea. Causality. Cambridge university press, 2009.
+    def sample(self, rng_key, *args, **kwargs) -> Dict:
+        """Sample from the multivariate distribution.
         """
-        conditionned_graph = self.graph.do(**kwargs)
-        new_model = model(self.model_fn)
-        new_model.graph = conditionned_graph
-        return new_model
+        return self.sample_fn(rng_key, *args, **kwargs)
 
-    def forward(self, **kwargs):
-        _, self.rng_key = jax.random.split(self.rng_key)
-        return sample_forward(self.rng_key, self, **kwargs)
+    def forward(self, args, num_samples=1):
+        """Returns forward samples from the prior distribution."""
+        pass
 
-    # @property
-    # def forward_src(self) -> str:
-        # artifact = compiler.compile_to_sampler(self.graph, self.namespace)
-        # return artifact.fn_source
-
-    def sample(self, *args, sample_shape=(1000,)) -> jax.numpy.DeviceArray:
-        return 1.
-        # """Return forward samples from the distribution."""
-        # sampler, _, _, _ = compiler.compile_to_sampler(self.graph, self.namespace)
-        # _, self.rng_key = jax.random.split(self.rng_key)
-        # samples = sampler(self.rng_key, sample_shape, *args)
-        # return samples
-
-    def logpdf(self, *args, **kwargs) -> float:
-        return 1.
-        # """Compute the value of the distribution's logpdf."""
-        # logpdf, _, _, _ = compiler.compile_to_logpdf(self.graph, self.namespace)
-        # return logpdf(*args, **kwargs)
-
-    # @property
-    # def logpdf_src(self) -> str:
-        # """Return the source code of the log-probability density funtion
-        # generated by the compiler.
-        # """
-        # artifact = compiler.compile_to_logpdf(self.graph, self.namespace)
-        # return artifact.fn_source
-
-    @property
-    def loglikelihoods_src(self) -> str:
-        """Return the source code of the log-probability density funtion
-        generated by the compiler.
-        """
-        artifact = compiler.compile_to_loglikelihoods(self.graph, self.namespace)
-        return artifact.fn_source
-
-    @property
-    def sampler_src(self) -> str:
-        """Return the source code of the forward sampling funtion
-        generated by the compiler.
-        """
-        artifact = compiler.compile_to_sampler(self.graph, self.namespace)
-        return artifact.fn_source
-
-    @property
-    def posterior_sampler_src(self) -> str:
-        """Return the source code of the forward sampling funtion
-        generated by the compiler.
-        """
-        artifact = compiler.compile_to_posterior_sampler(self.graph, self.namespace)
-        return artifact.fn_source
-
-    @property
-    def nodes(self):
-        """Return the names of the nodes in the graph."""
-        return self.graph.nodes
-
-    @property
-    def arguments(self):
-        """Return the names of the graph's arguments."""
-        return self.graph.arguments
-
-    @property
-    def posargs(self):
-        """Return the names of the graph's positional arguments."""
-        return self.graph.posargs
-
-    @property
-    def returned_variables(self):
-        """Return the names of the graph's return variables."""
-        return self.graph.returned_variables
-
-    @property
-    def variables(self):
-        """Return the names of the random variables and transformed variables
-        in the order in which they are returned by the sampler.
-        """
-        return self.graph.variables
-
-    @property
-    def random_variables(self):
-        """Return the names of the random variables."""
-        return self.graph.random_variables
-
-    @property
-    def posterior_variables(self):
-        """Return the names of the random variables whose posterior we sample."""
-        return self.graph.posterior_variables
+    def do(self, **kwargs) -> 'model':
+        pass
 
 
-def seed(model: model, rng_key: jax.random.PRNGKey) -> model:
-    """Set the random seed of the model."""
-    model.rng_key = rng_key
-    return model
+def seed(model: 'model', rng_key: jax.random.PRNGKey):
+    """Wrap the model's calling function to do the rng splitting automatically."""
+    rng_key = rng_key
+    call = model.__call__
+
+    def wrapped(*args, **kwargs):
+        _, rng_key = jax.random.split(rng_key)
+        return call(rng_key, call)
+
+    model.__call__ = types.MethodType(wrapped, model)
+
+
+def evaluate(model: 'model', trace: mcx.Trace):
+    pass

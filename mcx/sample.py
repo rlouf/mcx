@@ -161,7 +161,7 @@ class sampler(object):
 
         Note
         ----
-        `update_chains` will be JIT-compiled every time the iterator is
+        `update_one_chain` will be JIT-compiled every time the iterator is
         initialized. Just watch for the overhead with big models.
 
         Returns
@@ -174,7 +174,7 @@ class sampler(object):
             _ = self.warmup(default_warmup_steps, compile=False)
 
         @jax.jit
-        def update_chains(rng_key, parameters, state):
+        def update_one_chain(rng_key, parameters, state):
             kernel = self.kernel_factory(*parameters)
             new_states, info = kernel(rng_key, state)
             return new_states, info
@@ -183,7 +183,7 @@ class sampler(object):
             while True:
                 _, rng_key = jax.random.split(rng_key)
                 keys = jax.random.split(rng_key, self.num_chains)
-                state, info = jax.vmap(update_chains, in_axes=(0, 0, 0))(
+                state, info = jax.vmap(update_one_chain, in_axes=(0, 0, 0))(
                     keys, parameters, state
                 )
                 yield (state, info)
@@ -307,7 +307,7 @@ class sampler(object):
             self.warmup(num_warmup_steps, compile, **warmup_kwargs)
 
         @jax.jit
-        def update_chain(rng_key, parameters, chain_state):
+        def update_one_chain(rng_key, parameters, chain_state):
             kernel = self.kernel_factory(*parameters)
             new_chain_state, info = kernel(rng_key, chain_state)
             return new_chain_state, info
@@ -323,11 +323,11 @@ class sampler(object):
         # samples increases.
         if compile:
             last_state, chain = sample_scan(
-                update_chain, self.state, self.parameters, rng_keys, self.num_chains
+                update_one_chain, self.state, self.parameters, rng_keys, self.num_chains
             )
         else:
             last_state, chain = sample_loop(
-                update_chain, self.state, self.parameters, rng_keys, self.num_chains
+                update_one_chain, self.state, self.parameters, rng_keys, self.num_chains
             )
 
         samples, sampling_info = self.evaluator.make_trace(
