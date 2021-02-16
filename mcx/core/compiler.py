@@ -25,7 +25,9 @@ def compile_graph(graph: GraphicalModel, namespace: dict, fn_name):
     model_args = [
         compile_placeholder(node, graph)
         for node in graph.placeholders
-        if not node.is_random_variable and node.name != "rng_key" and not node.has_default
+        if not node.is_random_variable
+        and node.name != "rng_key"
+        and not node.has_default
     ]
     model_kwargs = [
         compile_placeholder(node, graph)

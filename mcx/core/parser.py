@@ -29,8 +29,8 @@ from mcx.core.nodes import (
     Name,
     Op,
     Placeholder,
-    SampleOp,
     SampleModelOp,
+    SampleOp,
 )
 
 MODEL_BADLY_FORMED_ERROR = (
@@ -53,9 +53,7 @@ TRANSFORMED_RETURNED_VALUE_ERROR = (
     "open an issue on https://github.com/rlouf/mcx to signal your interest in having this feature"
 )
 
-DUPLICATE_VARIABLE_NAME_ERROR = (
-    "you cannot reuse the name of random variables."
-)
+DUPLICATE_VARIABLE_NAME_ERROR = "you cannot reuse the name of random variables."
 
 
 def parse(model_fn: FunctionType) -> Tuple[GraphicalModel, dict]:
@@ -419,11 +417,19 @@ class ModelDefinitionParser(cst.CSTVisitor):
             fn_obj = eval(fn_call_path, self.namespace)
             if isinstance(fn_obj, mcx.model):
                 op = self.recursive_visit(comparator.expression)
-                sample_op = SampleModelOp(op.cst_generator, self.scope, variable_name, fn_call_path, fn_obj.graph)
+                sample_op = SampleModelOp(
+                    op.cst_generator,
+                    self.scope,
+                    variable_name,
+                    fn_call_path,
+                    fn_obj.graph,
+                )
                 self.graph = nx.relabel_nodes(self.graph, {op: sample_op})
             elif issubclass(fn_obj, mcx.distributions.Distribution):
                 op = self.recursive_visit(comparator.expression)
-                sample_op = SampleOp(op.cst_generator, self.scope, variable_name, fn_obj)
+                sample_op = SampleOp(
+                    op.cst_generator, self.scope, variable_name, fn_obj
+                )
                 self.graph = nx.relabel_nodes(self.graph, {op: sample_op})
             else:
                 raise SyntaxError(

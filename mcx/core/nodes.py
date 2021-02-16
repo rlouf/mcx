@@ -1,10 +1,13 @@
 from dataclasses import dataclass
 from typing import Callable, Optional
 
+from .graph import GraphicalModel
+
 
 @dataclass(frozen=True)
 class Name:
     """Name of an attribute or a function."""
+
     cst_generator: Callable
     name: str
 
@@ -17,6 +20,7 @@ class Placeholder:
     execution. Placeholders are collected at compilation time to be used as
     argument to the function being compiled.
     """
+
     cst_generator: Callable
     name: str
     is_random_variable: bool = False
@@ -30,6 +34,7 @@ class Constant(object):
     program's execution, whether when computing the log-probability
     or sampling from prior & posterior distributions.
     """
+
     def __init__(self, cst_generator: Callable, name: Optional[str] = None):
         self.cst_generator = cst_generator
         self.name = name
@@ -109,7 +114,7 @@ class SampleModelOp(SampleOp):
         scope: str,
         name: str,
         model_name: str,
-        graph: "GraphicalModel",
+        graph: GraphicalModel,
         is_returned=False,
     ) -> None:
         self.cst_generator = cst_generator
@@ -126,6 +131,7 @@ class FunctionOp:
 
     Stores a standard python function as is.
     """
+
     cst_generator: Callable
     name: str
 
@@ -136,5 +142,6 @@ class ModelOp(object):
 
     Stores a MCX model (a function decorated with @mcx.model) as is.
     """
+
     cst_generator: Callable
     name: str

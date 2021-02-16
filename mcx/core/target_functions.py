@@ -12,7 +12,7 @@ import libcst as cst
 
 from mcx.core.compiler import compile_graph
 from mcx.core.graph import GraphicalModel
-from mcx.core.nodes import Op, Placeholder, SampleOp, SampleModelOp
+from mcx.core.nodes import Op, Placeholder, SampleModelOp, SampleOp
 
 __all__ = [
     "logpdf",
@@ -167,9 +167,16 @@ def _logpdf_core(graph: GraphicalModel):
         returned_var_name = node.graph.returned_variables[0].name
 
         def sample_index(rv, returned_var, *_):
-            return cst.Subscript(cst.Name(rv), [cst.SubscriptElement(cst.SimpleString(f"'{returned_var}'"))])
+            return cst.Subscript(
+                cst.Name(rv),
+                [cst.SubscriptElement(cst.SimpleString(f"'{returned_var}'"))],
+            )
 
-        chosen_sample = Op(partial(sample_index, rv_name, returned_var_name), graph.name, rv_name + "_value")
+        chosen_sample = Op(
+            partial(sample_index, rv_name, returned_var_name),
+            graph.name,
+            rv_name + "_value",
+        )
 
         original_edges = []
         data = []
@@ -186,7 +193,6 @@ def _logpdf_core(graph: GraphicalModel):
         graph.add(chosen_sample, node)
         for e, d in zip(out_nodes, data):
             graph.add_edge(chosen_sample, e, **d)
-
 
     # We need to loop through the nodes in reverse order because of the compilation
     # quirk which makes it that nodes added first to the graph appear first in the
@@ -247,7 +253,6 @@ def _logpdf_core(graph: GraphicalModel):
         for e in to_remove:
             graph.remove_edge(*e)
 
-
     # The original MCX model may return one or many variables. None of
     # these variables should be returned, so we turn the `is_returned` flag
     # to `False`.
@@ -281,8 +286,7 @@ def sample(model):
     def model_to_sampler(model_name, *args, **kwargs):
         rng_key = kwargs.pop("rng_key")
         return cst.Call(
-            func=cst.Name(value=model_name),
-            args=[cst.Arg(value=rng_key)] + list(args)
+            func=cst.Name(value=model_name), args=[cst.Arg(value=rng_key)] + list(args)
         )
 
     random_variables = []
@@ -353,7 +357,6 @@ def sample_joint(model):
         if isinstance(node, Op):
             node.is_returned = False
 
-
     rng_node = Placeholder(lambda: cst.Param(cst.Name(value="rng_key")), "rng_key")
 
     # Update the SampleOps to return a sample from the distribution so that
@@ -369,7 +372,7 @@ def sample_joint(model):
         rng_key = kwargs.pop("rng_key")
         return cst.Call(
             func=cst.Attribute(cst.Name(value=model_name), cst.Name("sample")),
-            args=[cst.Arg(value=rng_key)] + list(args)
+            args=[cst.Arg(value=rng_key)] + list(args),
         )
 
     random_variables = []
@@ -393,9 +396,16 @@ def sample_joint(model):
         returned_var_name = node.graph.returned_variables[0].name
 
         def sample_index(rv, returned_var, *_):
-            return cst.Subscript(cst.Name(rv), [cst.SubscriptElement(cst.SimpleString(f"'{returned_var}'"))])
+            return cst.Subscript(
+                cst.Name(rv),
+                [cst.SubscriptElement(cst.SimpleString(f"'{returned_var}'"))],
+            )
 
-        chosen_sample = Op(partial(sample_index, rv_name, returned_var_name), graph.name, rv_name + "_value")
+        chosen_sample = Op(
+            partial(sample_index, rv_name, returned_var_name),
+            graph.name,
+            rv_name + "_value",
+        )
 
         original_edges = []
         data = []
@@ -413,7 +423,12 @@ def sample_joint(model):
         for e, d in zip(out_nodes, data):
             graph.add_edge(chosen_sample, e, **d)
 
-    tuple_node = Op(partial(to_dictionary_of_samples, graph.random_variables), graph.name, "forward_samples", is_returned=True)
+    tuple_node = Op(
+        partial(to_dictionary_of_samples, graph.random_variables),
+        graph.name,
+        "forward_samples",
+        is_returned=True,
+    )
     graph.add(tuple_node, *graph.random_variables)
 
     return compile_graph(graph, namespace, f"{graph.name}_sample_forward")
@@ -497,7 +512,9 @@ def sample_posterior_predictive(model, node_names):
 
         # Add the placeholder
         placeholder = Placeholder(
-            partial(lambda name: cst.Param(cst.Name(name)), rv_name), rv_name, is_random_variable=True
+            partial(lambda name: cst.Param(cst.Name(name)), rv_name),
+            rv_name,
+            is_random_variable=True,
         )
         graph.add_node(placeholder)
 
@@ -526,7 +543,9 @@ def sample_posterior_predictive(model, node_names):
     def to_sampler(cst_generator, *args, **kwargs):
         rng_key = kwargs.pop("rng_key")
         return cst.Call(
-            func=cst.Attribute(value=cst_generator(*args, **kwargs), attr=cst.Name("sample")),
+            func=cst.Attribute(
+                value=cst_generator(*args, **kwargs), attr=cst.Name("sample")
+            ),
             args=[cst.Arg(value=rng_key)],
         )
 

@@ -2,6 +2,7 @@ from typing import Any, Tuple, Union
 
 import jax
 import jax.numpy as jnp
+
 import mcx
 from mcx.sample import validate_model_args
 
