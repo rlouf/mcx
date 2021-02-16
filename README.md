@@ -1,5 +1,5 @@
 <h2 align="center">
-  /ˈmɪks/   
+  MCX
 </h2>
 
 <h3 align="center">
