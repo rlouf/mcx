@@ -165,11 +165,11 @@ class model(Distribution):
         old_sample = self.sample
         old_call = self.call
 
-        def seeded_call(self, *args, **kwargs):
+        def seeded_call(_, *args, **kwargs):
             rng_key = next(keys)
             return old_call(rng_key, *args, **kwargs)
 
-        def seeded_sample(self, *args, **kwargs):
+        def seeded_sample(_, *args, **kwargs):
             rng_key = next(keys)
             return old_sample(rng_key, *args, **kwargs)
 
@@ -189,7 +189,7 @@ class model(Distribution):
         return self.graph.names["random_variables"]
 
 
-def seed(model: "model", rng_key: jax.random.PRNGKey):
+def seed(model: "model", rng_key: jnp.ndarray):
     """Wrap the model's calling function to do the rng splitting automatically."""
     seeded_model = mcx.model(model.model_fn)  # type: ignore
     seeded_model.seed(rng_key)

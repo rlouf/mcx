@@ -1,12 +1,11 @@
 """Sample from the multivariate distribution defined by the model."""
 from typing import Any, Callable, Dict, Iterator, Optional, Tuple
 
-import jax
-import jax.numpy as jnp
 import numpy as np
-from jax.flatten_util import ravel_pytree as jax_ravel_pytree
 from tqdm import tqdm
 
+import jax
+import jax.numpy as jnp
 import mcx
 from jax.flatten_util import ravel_pytree as jax_ravel_pytree
 from mcx.jax import progress_bar_factory
@@ -21,7 +20,7 @@ __all__ = ["sample_joint", "sampler"]
 
 
 def sample_joint(
-    rng_key: jax.random.PRNGKey,
+    rng_key: jnp.ndarray,
     model: mcx.model,
     model_args: Tuple,
     num_samples=1,
@@ -112,7 +111,7 @@ class sampler(object):
 
     def __init__(
         self,
-        rng_key: jax.random.PRNGKey,
+        rng_key: jnp.ndarray,
         model: mcx.model,
         model_args: Tuple,
         observations: Dict,
@@ -322,7 +321,7 @@ class sampler(object):
         num_warmup_steps: int = 1000,
         compile: bool = False,
         **warmup_kwargs,
-    ) -> jnp.DeviceArray:
+    ) -> mcx.Trace:
         """Run the posterior inference.
 
         For convenience we automatically run the warmup if it hasn't been run
@@ -430,7 +429,7 @@ def sample_scan(
     The last state of the chain as well as the full chain.
 
     """
-    num_samples = rng_keys.shape[0]
+    num_samples = jnp.shape(rng_keys)[0]
 
     progress_bar = tqdm(range(num_samples))
     progress_bar.set_description(
@@ -515,7 +514,7 @@ def sample_loop(
     The last state of the chain as well as the full chain.
 
     """
-    num_samples = rng_keys.shape[0]
+    num_samples = jnp.shape(rng_keys)[0]
 
     @jax.jit
     def update_loop(state, key):
