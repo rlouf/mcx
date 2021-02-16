@@ -1,16 +1,36 @@
-from typing import Any, Tuple
+from typing import Any, Tuple, Union
 
 import jax
 import jax.numpy as jnp
-
 import mcx
 from mcx.sample import validate_model_args
 
-__all__ = ["predict"]
+__all__ = ["posterior_predict", "predict", "prior_predict"]
+
+
+def prior_predict(
+    rng_key: jnp.ndarray,
+    model: mcx.model,
+    model_args: Tuple[Any],
+    num_samples: int = 100,
+):
+    return predict(rng_key, model, model_args, num_samples)
+
+
+def posterior_predict(
+    rng_key: jnp.ndarray,
+    model: mcx.model,
+    model_args: Tuple[Any],
+    trace: mcx.Trace,
+    num_samples: int = 100,
+):
+    evaluated_model = mcx.evaluate(model, trace)
+    return predict(rng_key, evaluated_model, model_args, num_samples)
+
 
 def predict(
-    rng_key: jax.random.PRNGKey,
-    model: mcx.model,
+    rng_key: jnp.ndarray,
+    model: Union[mcx.model, mcx.generative_function],
     model_args: Tuple[Any],
     num_samples: int = 100,
 ):
@@ -58,7 +78,6 @@ def predict(
         in_axes += (None,)
 
     # TODO(remi): Handle the case where multiple values are returned.
-
     samples = jax.vmap(model, in_axes, out_axes=0)(*sampler_args)
 
     return samples

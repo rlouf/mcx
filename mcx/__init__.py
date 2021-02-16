@@ -9,7 +9,7 @@ from mcx.model import (
     predictive_sampler,
     seed,
 )
-from mcx.predict import predict
+from mcx.predict import posterior_predict, predict, prior_predict
 from mcx.sample import sample_joint, sampler
 from mcx.trace import Trace
 
@@ -25,6 +25,8 @@ __all__ = [
     "generative_function",
     "seed",
     "evaluate",
+    "prior_predict",
+    "posterior_predict",
     "predict",
     "sample_joint",
     "log_prob",
