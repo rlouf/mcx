@@ -54,7 +54,6 @@ class prior_sampler(object):
         # Set vmap's in axes for the arguments
         in_axes = (0,)
         sampler_args = (keys,)
-        print(keys.shape)
         for arg in self.model_args:
             try:
                 sampler_args += (jnp.atleast_1d(arg),)
