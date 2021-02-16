@@ -1,5 +1,5 @@
 """Sample from the multivariate distribution defined by the model."""
-from typing import Callable, Dict, Iterator, Tuple
+from typing import Any, Callable, Dict, Iterator, Tuple, Optional
 
 from tqdm import tqdm
 
@@ -11,21 +11,7 @@ from mcx.jax import progress_bar_factory
 from mcx.jax import ravel_pytree as mcx_ravel_pytree
 from mcx.trace import Trace
 
-__all__ = ["sampler"]
-
-
-def sampler(*args, **kwargs):
-    """The poor man's multiple dispatch."""
-
-    posterior_only_keys = ["evaluator", "num_chains"]
-    for key in posterior_only_keys:
-        if key in kwargs:
-            return posterior_sampler(*args, **kwargs)
-
-    if (len(args) + len(kwargs)) > 4:
-        return posterior_sampler(*args, **kwargs)
-
-    return prior_sampler(*args, **kwargs)
+__all__ = ["sample_joint", "sampler"]
 
 
 # -------------------------------------------------------------------
@@ -33,38 +19,32 @@ def sampler(*args, **kwargs):
 # -------------------------------------------------------------------
 
 
-class prior_sampler(object):
-    """The prior sampling runtime."""
+def sample_joint(
+    rng_key: jax.random.PRNGKey,
+    model: mcx.model,
+    model_args: Tuple,
+    num_samples=1,
+):
+    _ = validate_model_args(model, model_args)
 
-    def __init__(
-        self, rng_key: jax.random.PRNGKey, model: mcx.model, model_args: Tuple
-    ):
-        self.sampler = model.sample_fn
-        self.model = model
-        self.model_args = model_args
-        self.rng_key = rng_key
-        _ = validate_model_args(model, model_args)
+    keys = jax.random.split(rng_key, num_samples)
 
-    def run(self, num_samples=1000):
-        _, self.rng_key = jax.random.split(self.rng_key)
-        keys = jax.random.split(self.rng_key, num_samples)
+    # Set vmap's out axes for the random variables
+    out_axes = {rv: 1 for rv in model.random_variables}
 
-        # Set vmap's out axes for the random variables
-        out_axes = {rv: 1 for rv in self.model.random_variables}
+    # Set vmap's in axes for the arguments
+    in_axes: Tuple[Optional[int], ...] = (0,)
+    sampler_args: Tuple[Any, ...] = (keys,)
+    for arg in model_args:
+        try:
+            sampler_args += (np.atleast_1d(arg),)
+        except RuntimeError:
+            sampler_args += (arg,)
+        in_axes += (None,)
 
-        # Set vmap's in axes for the arguments
-        in_axes = (0,)
-        sampler_args = (keys,)
-        for arg in self.model_args:
-            try:
-                sampler_args += (jnp.atleast_1d(arg),)
-            except RuntimeError:
-                sampler_args += (arg,)
-            in_axes += (None,)
+    samples = jax.vmap(model.sample_fn, in_axes, out_axes)(*sampler_args)
 
-        samples = jax.vmap(self.sampler, in_axes, out_axes)(*sampler_args)
-
-        return samples
+    return samples
 
 
 # -------------------------------------------------------------------
@@ -72,10 +52,10 @@ class prior_sampler(object):
 # -------------------------------------------------------------------
 
 
-class posterior_sampler(object):
-    """The linear posterior sampling runtime.
+class sampler(object):
+    """Linear runtime to sample from the posterior distribution.
 
-    This runtime is encountered in every probabilistic programming library
+    The linear runtime is encountered in every probabilistic programming library
     (PPL). It allows the user to fetch a pre-defined number of samples from the
     model's posterior distribution. The output is one or several chains that
     contain the successive samples from the posterior.
