@@ -33,6 +33,7 @@ slightly.
 import jax
 import jax.numpy as jnp
 import numpy as np
+
 import mcx
 from mcx.distributions import Exponential, Normal
 from mcx.inference import HMC
@@ -43,7 +44,6 @@ x_data = np.random.normal(0, 5, size=(1000,1))
 y_data = 3 * x_data + np.random.normal(size=x_data.shape)
 observations = {'x': x_data, 'predictions': y_data}
 
-
 @mcx.model
 def linear_regression(x, lmbda=1.):
     scale <~ Exponential(lmbda)
@@ -51,18 +51,19 @@ def linear_regression(x, lmbda=1.):
     preds <~ Normal(np.dot(x, coefs), scale)
     return preds
     
+rng_key = jax.random.PRNGKey(0)
 prior_predictive = mcx.predict(rng_key, model, args)
 
 posterior = mcx.sampler(
     rng_key,
     linear_regression,
-    args,
-    observations,
+    (x_data, 3),
+    {'pred': y_data},
     HMC(100),
 ).run()
 
-evaluated_model = mcx.evaluate(model, posterior)
-posterior_predictive = mcx.predict(rng_key, evaluated_model, args)
+predict = mcx.evaluate(model, trace)
+posterior_predictive = mcx.predict(rng_key, predict, x_data)
 ```
 
 ## MCX's future
