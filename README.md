@@ -52,7 +52,7 @@ def linear_regression(x, lmbda=1.):
     return preds
     
 rng_key = jax.random.PRNGKey(0)
-prior_predictive = mcx.predict(rng_key, model, args)
+prior_predictive = mcx.prior_predict(rng_key, model, (x_data,))
 
 posterior = mcx.sampler(
     rng_key,
@@ -62,8 +62,7 @@ posterior = mcx.sampler(
     HMC(100),
 ).run()
 
-predict = mcx.evaluate(model, trace)
-posterior_predictive = mcx.predict(rng_key, predict, x_data)
+posterior_predictive = mcx.posterior_predict(rng_key, predict, (x_data,), trace)
 ```
 
 ## MCX's future

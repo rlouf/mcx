@@ -1,3 +1,4 @@
+"""Sample from the predictive distributions defined by the generative function."""
 from typing import Any, Tuple, Union
 
 import jax
