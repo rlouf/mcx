@@ -1,9 +1,9 @@
 """The McxST symbolic graph."""
-from typing import Union
+from typing import Tuple
 
 import networkx as nx
 
-from mcx.core.nodes import Constant, SampleOp, Op, Placeholder
+from mcx.core.nodes import Constant, Op, Placeholder, SampleOp
 
 
 class GraphicalModel(nx.DiGraph):
@@ -56,7 +56,7 @@ class GraphicalModel(nx.DiGraph):
 
     def merge(
         self, assigned_name: str, posargs, kwargs, model: "GraphicalModel"
-    ) -> Union["GraphicalModel", Placeholder]:
+    ) -> Tuple["GraphicalModel", Op]:
         """Merge a model with the current one.
 
         Parameters
@@ -117,7 +117,7 @@ class GraphicalModel(nx.DiGraph):
             )
 
         model = nx.relabel_nodes(model, mapping)
-        merged_graph = nx.compose(model, self)
+        merged_graph: GraphicalModel = nx.compose(model, self)
 
         return merged_graph, return_node
 

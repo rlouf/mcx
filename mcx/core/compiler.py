@@ -2,7 +2,7 @@ import libcst as cst
 import networkx as nx
 
 from mcx.core.graph import GraphicalModel
-from mcx.core.nodes import Op, Placeholder, Constant
+from mcx.core.nodes import Constant, Op, Placeholder
 
 
 def compile_graph(graph: GraphicalModel, namespace: dict, fn_name):

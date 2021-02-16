@@ -4,6 +4,7 @@ from typing import Dict, Tuple
 
 import jax
 import jax.numpy as jnp
+
 import mcx
 from mcx.distributions import Distribution
 from mcx.trace import Trace

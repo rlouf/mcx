@@ -14,12 +14,13 @@ import inspect
 import textwrap
 from collections import defaultdict
 from functools import partial
-from typing import Dict, List, Optional, Union, Tuple
 from types import FunctionType
+from typing import Dict, List, Optional, Tuple, Union
 
 import libcst as cst
-import mcx
 import networkx as nx
+
+import mcx
 from mcx.core.graph import GraphicalModel
 from mcx.core.nodes import (
     Constant,

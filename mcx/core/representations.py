@@ -9,6 +9,7 @@ from collections import defaultdict
 from functools import partial
 
 import libcst as cst
+
 import mcx.core.translation as t
 from mcx.core.compiler import compile_graph
 from mcx.core.graph import GraphicalModel
@@ -157,7 +158,7 @@ def _logpdf_core(graph: GraphicalModel):
         return t.param(name)
 
     for node in reversed(list(graph.nodes())):
-        if not isinstance(node, SampleOp):
+        if isinstance(node, SampleOp):
             continue
 
         # Create a new placeholder node with the random variable's name
@@ -367,9 +368,7 @@ def sample_posterior_predictive(model, node_names):
         graph.add_node(placeholder)
 
         def choose_ast(placeholder, idx):
-            return cst.Subscript(
-                placeholder, [cst.SubscriptElement(cst.Index(idx))]
-            )
+            return cst.Subscript(placeholder, [cst.SubscriptElement(cst.Index(idx))])
 
         chosen_sample = Op(choose_ast, graph.name, rv_name + "_sample")
         graph.add(chosen_sample, placeholder, choice_node)
@@ -431,3 +430,16 @@ def remove_dangling_nodes(graph) -> GraphicalModel:
         return remove_dangling_nodes(graph)
     else:
         return graph
+
+
+# -------------------------------------------------------
+#         == SAMPLE DETERMINISTIC VARIABLES ==
+# --------------------------------------------------------
+
+
+def sample_deterministic(model):
+    """Return the value of the deterministic variables in the model.
+
+    Every random variable becomes
+    """
+    pass

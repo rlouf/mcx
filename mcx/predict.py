@@ -2,6 +2,7 @@ from typing import Any, Tuple
 
 import jax
 import jax.numpy as jnp
+
 import mcx
 from mcx.sample import validate_model_args
 
@@ -59,8 +60,6 @@ def predict(
 
     # TODO(remi): Handle the case where multiple values are returned.
 
-    samples = jax.vmap(model, in_axes, out_axes=0)(
-        *sampler_args
-    )
+    samples = jax.vmap(model, in_axes, out_axes=0)(*sampler_args)
 
     return samples

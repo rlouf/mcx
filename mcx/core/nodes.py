@@ -86,7 +86,12 @@ class SampleOp(Op):
     """
 
     def __init__(
-            self, name: str, scope: str, ast_generator: Callable, distribution, is_returned=False
+        self,
+        name: str,
+        scope: str,
+        ast_generator: Callable,
+        distribution,
+        is_returned=False,
     ) -> None:
         self.name = name
         self.scope = scope
@@ -101,6 +106,7 @@ class FunctionOp(object):
     Standard python functions are stored in nodes.
 
     """
+
     def __init__(self, ast_generator, name) -> None:
         self.to_ast = ast_generator
         self.name = name
@@ -112,6 +118,7 @@ class ModelOp(object):
     Standard python functions are stored in nodes.
 
     """
+
     def __init__(self, ast_generator, name) -> None:
         self.to_ast = ast_generator
         self.name = name

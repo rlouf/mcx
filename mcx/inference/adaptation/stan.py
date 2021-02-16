@@ -4,7 +4,6 @@ from typing import Callable, List, NamedTuple, Tuple
 import jax
 import jax.numpy as jnp
 
-from mcx.inference.kernels import HMCInfo, HMCState
 from mcx.inference.adaptation.mass_matrix_adaptation import (
     MassMatrixAdaptationState,
     mass_matrix_adaptation,
@@ -14,6 +13,7 @@ from mcx.inference.adaptation.step_size_adaptation import (
     dual_averaging,
     find_reasonable_step_size,
 )
+from mcx.inference.kernels import HMCInfo, HMCState
 
 __all__ = ["stan_hmc_warmup", "stan_warmup_schedule"]
 
