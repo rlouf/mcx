@@ -7,8 +7,8 @@ from tqdm import tqdm
 
 import mcx
 from mcx import sample_forward
-from mcx.compiler import compile_to_loglikelihoods, compile_to_logpdf
 from mcx.jax import progress_bar_factory
+from mcx.core import compile_to_loglikelihoods, compile_to_logpdf
 from mcx.jax import ravel_pytree as mcx_ravel_pytree
 from mcx.trace import Trace
 

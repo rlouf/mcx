@@ -4,8 +4,6 @@ import re
 import textwrap
 from typing import Any, Callable, Dict, List, Optional, Union
 
-import astor
-
 import mcx
 from mcx.compiler.graph import GraphicalModel
 
