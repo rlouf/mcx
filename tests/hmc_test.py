@@ -16,10 +16,8 @@ from mcx import HMC
 @mcx.model
 def linear_regression(x, lmbda=1.0):
     sigma <~ dist.Exponential(lmbda)
-    coeffs_init = jnp.ones(x.shape[-1])
-    coeffs <~ dist.Normal(coeffs_init, sigma)
-    y = jnp.dot(x, coeffs)
-    predictions <~ dist.Normal(y, sigma)
+    coeffs <~ dist.Normal(jnp.zeros(x.shape[-1]), 1)
+    predictions <~ dist.Normal(x * coeffs, sigma)
     return predictions
 # fmt: on
 
@@ -36,16 +34,16 @@ def test_linear_regression():
         inverse_mass_matrix=jnp.array([1.0, 1.0]),
     )
 
-    observations = {"x": x_data, "predictions": y_data}
     rng_key = jax.random.PRNGKey(2)
 
     # Batch sampler
     sampler = mcx.sampler(
         rng_key,
         linear_regression,
+        (x_data,),
+        {"predictions": y_data},
         kernel,
         num_chains=2,
-        **observations,
     )
     trace = sampler.run(num_samples=3000)
 
