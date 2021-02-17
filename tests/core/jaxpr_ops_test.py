@@ -227,6 +227,11 @@ denormalize_simple_test_cases = [
         "denorm_fn": lambda x: jax.lax.select(1.0 > 0.0, -x, -np.inf),
         "inval": 2.0,
     },
+    {
+        "fn": lambda x: jax.jit(lambda y: 1.0 - y)(x),
+        "denorm_fn": lambda x: -x,
+        "inval": 2.0,
+    },
 ]
 
 
