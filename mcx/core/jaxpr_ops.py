@@ -615,7 +615,7 @@ def jaxpr_denorm_run_visitor_fn(
     def read_env(var):
         if type(var) is jax.core.Literal:
             return var.val
-        return read_env[var]
+        return denorm_env[var]
 
     def write_env(var, val):
         denorm_env[var] = val
@@ -623,10 +623,9 @@ def jaxpr_denorm_run_visitor_fn(
     if len(eqn.outvars) == 1 and eqn.outvars[0] in denorm_mapping:
         # Output registered: skip the primitive and map directly to one of the input.
         outvar = eqn.outvars[0]
-        map_primitive, map_invar = (
-            denorm_mapping[outvar][0],
-            denorm_mapping[outvar][1],
-        )
+        outvar_mapping = denorm_mapping[outvar]
+        map_primitive, map_invar = (outvar_mapping[0], outvar_mapping[1])
+        print(denorm_mapping, map_primitive, map_invar)
         # Mapping the inval to output var (identity or neg).
         inval = read_env(map_invar)
         outval = map_primitive(inval)
@@ -639,6 +638,9 @@ def jaxpr_denorm_run_visitor_fn(
             outvals = [outvals]
         safe_map(write_env, eqn.outvars, outvals)
 
+    # Pop first element in the recursive denorm state, to keep in sync.
+    denorm_map_sub_states = denorm_map_rec_state[1][1:]
+    denorm_map_rec_state = (denorm_map_rec_state[0], denorm_map_sub_states)
     # Returning updated environment.
     return denorm_env, denorm_map_rec_state
 
@@ -687,6 +689,10 @@ def jaxpr_denormalize_run(jaxpr: jax.core.Jaxpr, consts, *args) -> DenormRunRecS
     safe_map(write_env, jaxpr.invars, args)
     safe_map(write_env, jaxpr.constvars, consts)
 
+    print(denormalize_env)
+    print(jaxpr)
+    print(denorm_map_state)
+
     denorm_init_state = (denormalize_env, denorm_map_state)
     # NOTE: scanning the jaxpr in reverse order.
     denorm_run_state = jaxpr_visitor(
@@ -697,10 +703,12 @@ def jaxpr_denormalize_run(jaxpr: jax.core.Jaxpr, consts, *args) -> DenormRunRecS
         jaxpr_denorm_run_reduce_sub_states_fn,
         reverse=False,
     )
-    return denorm_run_state
+    denorm_outenv = denorm_run_state[0][0]
+    outvals = [denorm_outenv[v] for v in jaxpr.outvars]
+    return outvals
 
 
-def jaxpr_denormalize(jaxpr, consts, *args):
+def jaxpr_denormalize_old(jaxpr, consts, *args):
     """Denormalize a Jaxpr, i.e. removing any normalizing constant added to the output.
 
     This method is analysing the Jaxpr graph, simplifying it by skipping any unnecessary constant
@@ -770,7 +778,7 @@ def denormalize(logpdf_fn):
     def wrapped(*args, **kwargs):
         # TODO: flattening/unflattening of inputs/outputs?
         closed_jaxpr = jax.make_jaxpr(logpdf_fn)(*args, **kwargs)
-        out = jaxpr_denormalize(closed_jaxpr.jaxpr, closed_jaxpr.literals, *args)
+        out = jaxpr_denormalize_run(closed_jaxpr.jaxpr, closed_jaxpr.literals, *args)
         # Assuming a single output at the moment?
         return out[0]
 

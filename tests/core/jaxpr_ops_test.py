@@ -190,29 +190,51 @@ def test__jaxpr_find_denormalize_mapping__non_linear_fn__empty_mapping(case):
     assert invar not in denorm_valid_vars
 
 
-# denormalize_test_cases = [
-#     {"fn": lambda x: x + 1.0, "denorm_fn": lambda x: x, "inval": 2.0},
-#     {
-#         "fn": lambda x: 2.0 - np.sin(x + 1.0),
-#         "denorm_fn": lambda x: -np.sin(x + 1.0),
-#         "inval": 2.0,
-#     },
-#     {
-#         "fn": lambda x: 2.0 - np.sin(x + 1.0),
-#         "denorm_fn": lambda x: -np.sin(x + 1.0),
-#         "inval": 2.0,
-#     },
-#     {
-#         "fn": lambda x: np.sum(x + 2.0),
-#         "denorm_fn": lambda x: np.sum(x),
-#         "inval": np.ones((10,)),
-#     },
-# ]
+denormalize_simple_test_cases = [
+    {"fn": lambda x: x + 1.0, "denorm_fn": lambda x: x, "inval": 2.0},
+    {
+        "fn": lambda x: 2.0 - jnp.sin(x + 1.0),
+        "denorm_fn": lambda x: -jnp.sin(x + 1.0),
+        "inval": 2.0,
+    },
+    {
+        "fn": lambda x: 2.0 + x - jnp.sin(x + 1.0),
+        "denorm_fn": lambda x: x - jnp.sin(x + 1.0),
+        "inval": 2.0,
+    },
+    {
+        "fn": lambda x: np.sum(x + 2.0),
+        "denorm_fn": lambda x: np.sum(x),
+        "inval": np.ones((10,)),
+    },
+    {
+        "fn": lambda x: (x + 1.0) * 2.0,
+        "denorm_fn": lambda x: x * 2.0,
+        "inval": 3.0,
+    },
+    {
+        "fn": lambda x: (x + 1.0) / 2.0,
+        "denorm_fn": lambda x: x / 2.0,
+        "inval": 3.0,
+    },
+    {
+        "fn": lambda x: jnp.squeeze(jnp.expand_dims(1.0 - x, axis=0)),
+        "denorm_fn": lambda x: jnp.squeeze(jnp.expand_dims(-x, axis=0)),
+        "inval": 3.0,
+    },
+    {
+        "fn": lambda x: jax.lax.select(1.0 > 0.0, 1.0 - x, -np.inf),
+        "denorm_fn": lambda x: jax.lax.select(1.0 > 0.0, -x, -np.inf),
+        "inval": 2.0,
+    },
+]
 
 
-# @pytest.mark.parametrize("case", denormalize_test_cases)
-# def test__denormalize__proper_simplication(case):
-#     denorm_fn = denormalize(case["fn"])
-#     expected_denorm_fn = case["denorm_fn"]
-#     inval = case["inval"]
-#     assert np.allclose(denorm_fn(inval), expected_denorm_fn(inval))
+@pytest.mark.parametrize("case", denormalize_simple_test_cases)
+def test__denormalize__simple_methods__proper_simplication(case):
+    denorm_fn = denormalize(case["fn"])
+    expected_denorm_fn = case["denorm_fn"]
+    inval = case["inval"]
+
+    denorm_fn_outval = denorm_fn(inval)
+    assert np.allclose(denorm_fn_outval, expected_denorm_fn(inval))
