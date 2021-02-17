@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from dataclasses import dataclass
 from typing import Callable, Optional
 
@@ -114,7 +112,7 @@ class SampleModelOp(SampleOp):
         scope: str,
         name: str,
         model_name: str,
-        graph: GraphicalModel,
+        graph,
         is_returned=False,
     ) -> None:
         self.cst_generator = cst_generator
