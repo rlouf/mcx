@@ -6,6 +6,7 @@ import jax.numpy as jnp
 
 import mcx
 from mcx.sample import validate_model_args
+from mcx.trace import Trace
 
 __all__ = ["posterior_predict", "predict", "prior_predict"]
 
@@ -23,7 +24,7 @@ def posterior_predict(
     rng_key: jnp.ndarray,
     model: mcx.model,
     model_args: Tuple[Any],
-    trace: mcx.Trace,
+    trace: Trace,
     num_samples: int = 100,
 ):
     evaluated_model = mcx.evaluate(model, trace)

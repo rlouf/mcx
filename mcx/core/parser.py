@@ -272,12 +272,12 @@ class ModelDefinitionParser(cst.CSTVisitor):
                 argument_node = Placeholder(
                     partial(argument_cst, name), name, False, True
                 )
-                self.graph.add(node, default)
+                self.graph.add(argument_node, default)
             except TypeError:
                 argument_node = Placeholder(partial(argument_cst, name), name)
                 self.graph.add(argument_node)
 
-            self.named_variables[name] = node
+            self.named_variables[name] = argument_node
 
         return None
 

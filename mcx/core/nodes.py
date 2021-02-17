@@ -1,7 +1,7 @@
+from __future__ import annotations
+
 from dataclasses import dataclass
 from typing import Callable, Optional
-
-from .graph import GraphicalModel
 
 
 @dataclass(frozen=True)

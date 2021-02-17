@@ -10,6 +10,7 @@ from tqdm import tqdm
 import mcx
 from mcx.jax import progress_bar_factory
 from mcx.jax import ravel_pytree as mcx_ravel_pytree
+from mcx.trace import Trace
 
 __all__ = ["sample_joint", "sampler"]
 
@@ -306,7 +307,7 @@ class sampler(object):
             chain=warmup_chain, unravel_fn=self.unravel_fn
         )
 
-        trace = mcx.Trace(
+        trace = Trace(
             warmup_samples=samples,
             warmup_sampling_info=sampling_info,
             warmup_info=warmup_info,
@@ -321,7 +322,7 @@ class sampler(object):
         num_warmup_steps: int = 1000,
         compile: bool = False,
         **warmup_kwargs,
-    ) -> mcx.Trace:
+    ) -> Trace:
         """Run the posterior inference.
 
         For convenience we automatically run the warmup if it hasn't been run
@@ -379,7 +380,7 @@ class sampler(object):
         samples, sampling_info = self.evaluator.make_trace(
             chain=chain, unravel_fn=self.unravel_fn
         )
-        trace = mcx.Trace(
+        trace = Trace(
             samples=samples,
             sampling_info=sampling_info,
             loglikelihood_contributions_fn=self.loglikelihood_contributions,
