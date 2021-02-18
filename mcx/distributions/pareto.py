@@ -9,20 +9,22 @@ from mcx.distributions.shapes import broadcast_batch_shape
 
 class Pareto(Distribution):
     parameters = {
-        "b": constraints.strictly_positive,
+        "shape": constraints.strictly_positive,
+        "scale": constraints.strictly_positive,
     }
 
-    def __init__(self, a, m):
-        self.support = constraints.closed_interval(m, np.inf)
+    def __init__(self, shape, scale, loc=0):
+        self.support = constraints.closed_interval(scale, np.inf)
         self.event_shape = ()
-        self.batch_shape = broadcast_batch_shape(np.shape(a), np.shape(m))
-        self.a = a
-        self.m = m
+        self.batch_shape = broadcast_batch_shape(np.shape(shape), np.shape(scale))
+        self.shape = shape
+        self.scale = scale
+        self.loc = loc
 
     def sample(self, rng_key, sample_shape=()):
         shape = sample_shape + self.batch_shape + self.event_shape
-        return self.m * (1 + random.pareto(key=rng_key, b=self.b, shape=shape))
+        return self.scale * (random.pareto(key=rng_key, b=self.shape, shape=shape))
 
     @constraints.limit_to_support
     def logpdf(self, x):
-        return stats.pareto.logpdf(x=x, b=self.b, loc=self.m)
+        return stats.pareto.logpdf(x=x, b=self.shape, loc=self.loc, scale=self.scale)
