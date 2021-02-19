@@ -5,7 +5,7 @@ from .categorical import Categorical
 from .dirichlet import Dirichlet
 from .discrete_uniform import DiscreteUniform
 from .distribution import Distribution
-# from .exponential import Exponential
+from .exponential import Exponential
 # from .lognormal import LogNormal
 # from .mvnormal import MvNormal
 from .normal import Normal
