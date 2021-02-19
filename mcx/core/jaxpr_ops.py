@@ -26,11 +26,9 @@ from typing import (
 Array = Any
 """Generic Array type.
 """
+
 TState = TypeVar("TState")
 """Generic Jaxpr visitor state.
-"""
-"""Full recursive state, representing the visitor state of the Jaxpr as well as
-the sub-states of all sub-jaxprs.
 """
 
 
@@ -196,10 +194,6 @@ class ConstVarInfo:
 ConstVarState = Dict[jax.core.Var, ConstVarInfo]
 """Const variables visitor state: dictionary associating const variables with their info.
 """
-# ConstVarRecState = Tuple[ConstVarState, List[Optional[List["ConstVarRecState"]]]]
-
-
-# Garthoks = Union[Garthok, Iterable['Garthoks']]
 
 
 def get_variable_const_info(v: Any, state: ConstVarState) -> ConstVarInfo:
@@ -369,7 +363,6 @@ DenormMapState = Tuple[
     - set of variables which can be traverse backward for denormalization;
     - full recursive const variable state of the Jaxpr.
 """
-# DenormMapRecState = Tuple[DenormMapState, List[Optional[List["DenormMapRecState"]]]]
 
 
 def jax_is_literal(v: Any) -> bool:
@@ -639,7 +632,6 @@ def jaxpr_find_denormalize_mapping(
 DenormRunState = Tuple[Dict[jax.core.Var, Any], RecState[DenormMapState]]
 """Denormalization run state.
 """
-# DenormRunRecState = Tuple[DenormRunState, List[Optional[List["DenormRunRecState"]]]]
 
 
 def jaxpr_denorm_run_visitor_fn(
