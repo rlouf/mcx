@@ -1,5 +1,5 @@
 from .bernoulli import Bernoulli
-# from .beta import Beta
+from .beta import Beta
 # from .binomial import Binomial
 # from .categorical import Categorical
 # from .dirichlet import Dirichlet
