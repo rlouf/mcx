@@ -4,7 +4,6 @@ from jax.scipy.special import xlogy
 
 from mcx.distributions import constraints
 from mcx.distributions.distribution import Distribution
-from mcx.distributions.shapes import broadcast_batch_shape
 
 
 class Categorical(Distribution):
@@ -13,7 +12,7 @@ class Categorical(Distribution):
     def __init__(self, probs):
         self.support = constraints.integer_interval(0, jnp.shape(probs)[-1] - 1)
         self.event_shape = ()
-        self.batch_shape = broadcast_batch_shape(jnp.shape(probs)[:-1])
+        self.batch_shape = jnp.shape(probs)[:-1]
         self.probs = probs
 
     def sample(self, rng_key, sample_shape):
