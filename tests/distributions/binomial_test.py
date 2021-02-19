@@ -129,26 +129,6 @@ def test_logpdf_shape(case):
 # SAMPLING SHAPE
 #
 
-scalar_argument_expected_shapes = [
-    {"sample_shape": (), "expected_shape": (1,)},
-    {"sample_shape": (100,), "expected_shape": (100, 1)},
-    {"sample_shape": (100, 10), "expected_shape": (100, 10, 1)},
-    {"sample_shape": (1, 100), "expected_shape": (1, 100, 1)},
-]
-
-
-@pytest.mark.parametrize("case", scalar_argument_expected_shapes)
-def test_sample_shape_scalar_arguments(rng_key, case):
-    """Test the correctness of broadcasting when both arguments are
-    scalars. We test scalars arguments separately from array arguments
-    since scalars are edge cases when it comes to broadcasting.
-
-    The trailing `1` in the result shapes stands for the batch size.
-    """
-    samples = Binomial(0.5, 10).sample(rng_key, case["sample_shape"])
-    assert samples.shape == case["expected_shape"]
-
-
 array_argument_expected_shapes = [
     {
         "p": 0.5,

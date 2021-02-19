@@ -7,7 +7,7 @@ from jax.scipy.special import gammaln, xlog1py, xlogy
 
 from mcx.distributions import constraints
 from mcx.distributions.distribution import Distribution
-from mcx.distributions.shapes import broadcast_batch_shape
+from mcx.distributions.shapes import promote_shapes
 
 
 class Binomial(Distribution):
@@ -20,9 +20,10 @@ class Binomial(Distribution):
         self.support = constraints.integer_interval(0, n)
 
         self.event_shape = ()
-        self.batch_shape = broadcast_batch_shape(jnp.shape(p), jnp.shape(n))
-        self.n = n
-        self.p = p
+        batch_shape, (p, n) = promote_shapes(p, n)
+        self.batch_shape = batch_shape
+        self.n = jnp.broadcast_to(n, batch_shape)
+        self.p = jnp.broadcast_to(p, batch_shape)
 
     def sample(self, rng_key, sample_shape=()):
         shape = sample_shape + self.batch_shape + self.event_shape

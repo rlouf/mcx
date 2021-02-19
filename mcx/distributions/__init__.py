@@ -1,6 +1,6 @@
 from .bernoulli import Bernoulli
 from .beta import Beta
-# from .binomial import Binomial
+from .binomial import Binomial
 # from .categorical import Categorical
 # from .dirichlet import Dirichlet
 # from .discrete_uniform import DiscreteUniform
