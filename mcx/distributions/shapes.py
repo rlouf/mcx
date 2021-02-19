@@ -24,7 +24,8 @@ def promote_shapes(*args):
 
     """
     if len(args) < 2:
-        return args
+        arg = args[0]
+        return jnp.shape(arg), (arg,)
     else:
         shapes = [jnp.shape(arg) for arg in args]
         batch_shape = lax.broadcast_shapes(*shapes)
