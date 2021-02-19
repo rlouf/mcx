@@ -46,6 +46,18 @@ class RecState(Generic[TState]):
     state: TState
     sub: List[Optional[List["RecState[TState]"]]]
 
+    def pop_first_sub(self) -> Optional[List["RecState[TState]"]]:
+        """Pop the first element in the sub-states collection."""
+        sub_states = self.sub[0]
+        self.sub = self.sub[1:]
+        return sub_states
+
+    def pop_last_sub(self) -> Optional[List["RecState[TState]"]]:
+        """Pop the first element in the sub-states collection."""
+        sub_states = self.sub[-1]
+        self.sub = self.sub[:-1]
+        return sub_states
+
 
 jaxpr_high_order_primitives_to_subjaxprs = {
     jax.lax.cond_p: lambda jxpr: jxpr.params["branches"],
@@ -527,9 +539,8 @@ def jaxpr_denorm_mapping_visitor_fn(
         elif is_var_constant(rhs_invar):
             denorm_linear_op(lhs_invar, eqn.outvars[0], jax_lax_identity)
 
-    # Update the constvar sub-states list, to keep sync. with equations in the jaxpr.
-    constvar_sub_states = constvar_rec_state.sub[:-1]
-    constvar_rec_state = RecState(constvar_rec_state.state, constvar_sub_states)
+    # Always update the constvar sub-states list, to keep sync. with equations in the jaxpr.
+    constvar_rec_state.pop_last_sub()
     # Re-construct updated state.
     return (denorm_map_dict, denorm_valid_vars, constvar_rec_state)
 
@@ -668,8 +679,7 @@ def jaxpr_denorm_run_visitor_fn(
         safe_map(write_env, eqn.outvars, outvals)
 
     # Pop first element in the recursive denorm state, to keep in sync.
-    denorm_map_sub_states = denorm_map_rec_state.sub[1:]
-    denorm_map_rec_state = RecState(denorm_map_rec_state.state, denorm_map_sub_states)
+    denorm_map_rec_state.pop_first_sub()
     # Returning updated environment.
     return denorm_env, denorm_map_rec_state
 
@@ -714,8 +724,7 @@ def jaxpr_denorm_run_reduce_sub_states_fn(
     safe_map(write_env, eqn.outvars, outvals)
 
     # Pop first element in the recursive denorm state, to keep in sync.
-    denorm_map_sub_states = denorm_map_rec_state[1][1:]
-    denorm_map_rec_state = (denorm_map_rec_state[0], denorm_map_sub_states)
+    denorm_map_rec_state.pop_first_sub()
     # Returning updated environment.
     return denorm_env, denorm_map_rec_state
 
