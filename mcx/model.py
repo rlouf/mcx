@@ -140,10 +140,7 @@ class model(Distribution):
         return self.sample_joint_fn(rng_key, *args, **kwargs)
 
     def logpdf(self, *rv_and_args, **kwargs) -> jnp.DeviceArray:
-        """Value of the log-probability density function of the distribution.
-
-        TODO: Figure out the right interface for the logpdf, and document it.
-        """
+        """Value of the log-probability density function of the distribution."""
         return self.logpdf_fn(*rv_and_args, **kwargs)
 
     def seed(self, rng_key):

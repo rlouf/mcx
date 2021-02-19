@@ -534,6 +534,30 @@ class ModelDefinitionParser(cst.CSTVisitor):
             self.graph.add(op, value, attr)
             return op
 
+        # Parse lists and tuples
+
+        if isinstance(node, cst.List):
+            elements = [self.recursive_visit(e) for e in node.elements]
+
+            def to_list_cst(*list_elements):
+                return cst.List(list_elements)
+
+            op = Op(to_list_cst, self.scope)
+            self.graph.add(op, *elements)
+
+            return op
+
+        if isinstance(node, cst.Element):
+            value = self.recursive_visit(node.value)
+
+            def to_element_cst(value):
+                return cst.Element(value)
+
+            op = Op(to_element_cst, self.scope)
+            self.graph.add(op, value)
+
+            return op
+
         # Parse slices and subscripts
 
         if isinstance(node, cst.Subscript):
