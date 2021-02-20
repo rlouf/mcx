@@ -6,7 +6,7 @@ from .dirichlet import Dirichlet
 from .discrete_uniform import DiscreteUniform
 from .distribution import Distribution
 from .exponential import Exponential
-# from .lognormal import LogNormal
+from .lognormal import LogNormal
 # from .mvnormal import MvNormal
 from .normal import Normal
 # from .poisson import Poisson
