@@ -1,3 +1,4 @@
+from jax import lax
 from jax import numpy as jnp
 from jax import random
 from jax.scipy import stats
@@ -13,7 +14,8 @@ class Laplace(Distribution):
 
     def __init__(self, loc, scale):
         self.event_shape = ()
-        batch_shape, (loc, scale) = promote_shapes(loc, scale)
+        loc, scale = promote_shapes(loc, scale)
+        batch_shape = lax.broadcast_shapes(jnp.shape(loc), jnp.shape(scale))
         self.batch_shape = batch_shape
         self.loc = jnp.broadcast_to(loc, batch_shape)
         self.scale = jnp.broadcast_to(scale, batch_shape)

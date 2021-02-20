@@ -1,3 +1,4 @@
+from jax import lax
 from jax import numpy as jnp
 from jax import random
 
@@ -15,7 +16,8 @@ class DiscreteUniform(Distribution):
         self.support = constraints.integer_interval(lower, upper)
 
         self.event_shape = ()
-        batch_shape, (lower, upper) = promote_shapes(lower, upper)
+        lower, upper = promote_shapes(lower, upper)
+        batch_shape = lax.broadcast_shapes(jnp.shape(lower), jnp.shape(upper))
         self.batch_shape = batch_shape
         self.lower = jnp.broadcast_to(jnp.floor(lower), batch_shape)
         self.upper = jnp.broadcast_to(jnp.floor(upper), batch_shape)
