@@ -4,7 +4,7 @@ from jax.scipy import stats
 
 from mcx.distributions import constraints
 from mcx.distributions.distribution import Distribution
-from mcx.distributions.shapes import broadcast_batch_shape
+from mcx.distributions.shapes import promote_shapes
 
 
 class Laplace(Distribution):
@@ -13,9 +13,10 @@ class Laplace(Distribution):
 
     def __init__(self, loc, scale):
         self.event_shape = ()
-        self.batch_shape = broadcast_batch_shape(jnp.shape(loc), jnp.shape(scale))
-        self.loc = loc
-        self.scale = scale
+        batch_shape, (loc, scale) = promote_shapes(loc, scale)
+        self.batch_shape = batch_shape
+        self.loc = jnp.broadcast_to(loc, batch_shape)
+        self.scale = jnp.broadcast_to(scale, batch_shape)
 
     def sample(self, rng_key, sample_shape=()):
         shape = sample_shape + self.batch_shape + self.event_shape
