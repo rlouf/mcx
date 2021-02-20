@@ -10,7 +10,7 @@ from .lognormal import LogNormal
 # from .mvnormal import MvNormal
 from .normal import Normal
 from .poisson import Poisson
-# from .uniform import Uniform
+from .uniform import Uniform
 
 __all__ = [
     "Distribution",
