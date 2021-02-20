@@ -9,7 +9,7 @@ from .exponential import Exponential
 from .lognormal import LogNormal
 # from .mvnormal import MvNormal
 from .normal import Normal
-# from .poisson import Poisson
+from .poisson import Poisson
 # from .uniform import Uniform
 
 __all__ = [
@@ -22,8 +22,8 @@ __all__ = [
     "DiscreteUniform",
     "Exponential",
     "LogNormal",
+    "MvNormal",
     "Normal",
     "Poisson",
     "Uniform",
-    "MvNormal",
 ]
