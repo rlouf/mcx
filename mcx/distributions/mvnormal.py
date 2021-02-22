@@ -31,7 +31,7 @@ class MvNormal(Distribution):
 
     def __init__(self, mu, covariance_matrix):
 
-        if jnp.ndim(mu) < 2:
+        if jnp.ndim(mu) < 1:
             mu = jnp.reshape(mu, (1,) + jnp.shape(mu))
 
         (mu_event_shape,) = jnp.shape(mu)[-1:]
@@ -67,7 +67,6 @@ class MvNormal(Distribution):
 
     # no need to check on support ]-infty, +infty[
     def logpdf(self, x):
-        print(self.mu, self.covariance_matrix, x)
         return scipy.stats.multivariate_normal.logpdf(
             x, mean=self.mu, cov=self.covariance_matrix
         )
