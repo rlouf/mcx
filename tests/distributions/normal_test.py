@@ -33,8 +33,20 @@ def test_logpdf_shape(case):
 scalar_argument_expected_shapes = [
     {"sample_shape": (), "expected_shape": ()},
     {"sample_shape": (100,), "expected_shape": (100,)},
-    {"sample_shape": (100, 10), "expected_shape": (100, 10,)},
-    {"sample_shape": (1, 100), "expected_shape": (1, 100,)},
+    {
+        "sample_shape": (100, 10),
+        "expected_shape": (
+            100,
+            10,
+        ),
+    },
+    {
+        "sample_shape": (1, 100),
+        "expected_shape": (
+            1,
+            100,
+        ),
+    },
 ]
 
 

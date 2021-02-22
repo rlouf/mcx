@@ -1,6 +1,7 @@
 from jax import numpy as jnp
 from jax import random
 from jax.scipy.special import xlog1py, xlogy
+
 from mcx.distributions import constraints
 from mcx.distributions.distribution import Distribution
 

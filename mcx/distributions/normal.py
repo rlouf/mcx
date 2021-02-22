@@ -1,6 +1,7 @@
 from jax import lax
 from jax import numpy as jnp
 from jax import random, scipy
+
 from mcx.distributions import constraints
 from mcx.distributions.distribution import Distribution
 from mcx.distributions.shapes import promote_shapes

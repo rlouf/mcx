@@ -1,7 +1,6 @@
 from functools import partial
 
-from jax import jit
-from jax import lax
+from jax import jit, lax
 from jax import numpy as jnp
 from jax import random
 from jax.scipy.special import gammaln, xlog1py, xlogy
