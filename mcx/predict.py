@@ -321,9 +321,9 @@ def sample_forward(
 
     out_axes: Union[int, Tuple[int, ...]]
     if len(model.variables) == 1:
-        out_axes = 1
+        out_axes = 0
     else:
-        out_axes = (1,) * len(model.variables)
+        out_axes = (0,) * len(model.variables)
 
     artifact = compiler.compile_to_sampler(model.graph, model.namespace)
     sampler = jax.jit(artifact.compiled_fn)
