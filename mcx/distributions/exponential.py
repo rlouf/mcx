@@ -5,7 +5,6 @@ from jax.scipy import stats
 
 from mcx.distributions import constraints
 from mcx.distributions.distribution import Distribution
-from mcx.distributions.shapes import broadcast_batch_shape
 
 
 class Exponential(Distribution):
@@ -14,7 +13,7 @@ class Exponential(Distribution):
 
     def __init__(self, lmbda):
         self.event_shape = ()
-        self.batch_shape = broadcast_batch_shape(jnp.shape(lmbda))
+        self.batch_shape = jnp.shape(lmbda)
         self.lmbda = lmbda
 
     def sample(self, rng_key, sample_shape=()):

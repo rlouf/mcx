@@ -1,14 +1,12 @@
 from jax import lax
+from jax import numpy as jnp
 
 
-def broadcast_batch_shape(*shapes):
-    """Compute the batch shape by broadcasting the arguments.
+def promote_shapes(*args):
+    """Preprend implicit leading singleton dimensions.
 
-    We use `lax.broadcast_shapes` to get the shape of broadcasted arguments. We
-    default the batch shape to (1,) when the distribution is initiated with
-    scalar values.
-
-    To see why we need to do that, consider the following model:
+    This is necessary for proper numpy broadcasting. Consider the following
+    model:
 
         >>> def toy_model():
         ...     sigma = jnp.array([1, 2, 3])
@@ -17,11 +15,23 @@ def broadcast_batch_shape(*shapes):
         ...     y <~ Normal(x, q)
 
     When sampling, the last line will trigger a broadcasting error since
-    Numpy's default is to broadcast (n,) to (1,n). To avoid this we explicit
-    the fact that a distribution initiated with scalar arguments has a batch
-    size of 1.
+    Numpy's default is to broadcast (n,) to (1,n). To avoid this we prepend
+    (1,) to the shape of `q`.
+
+    We add as many leading singleton dimensions as necessary for all variables
+    to have the same number of dimensions. See
+    `jax.numpy.lax_numpy._promote_shapes` for the reference implementation.
+
     """
-    broadcasted_shape = lax.broadcast_shapes(*shapes)
-    if len(broadcasted_shape) == 0:
-        return (1,)
-    return broadcasted_shape
+    if len(args) < 2:
+        return args
+    else:
+        shapes = [jnp.shape(arg) for arg in args]
+        batch_shape = lax.broadcast_shapes(*shapes)
+        num_dims = len(batch_shape)
+        return [
+            jnp.reshape(arg, (1,) * (num_dims - len(s)) + s)
+            if len(s) < num_dims
+            else arg
+            for arg, s in zip(args, shapes)
+        ]

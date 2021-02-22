@@ -1,10 +1,11 @@
+from jax import lax
 from jax import numpy as jnp
 from jax import random
 from jax.scipy import stats
 
 from mcx.distributions import constraints
 from mcx.distributions.distribution import Distribution
-from mcx.distributions.shapes import broadcast_batch_shape
+from mcx.distributions.shapes import promote_shapes
 
 
 class Gamma(Distribution):
@@ -17,12 +18,14 @@ class Gamma(Distribution):
 
     def __init__(self, a, loc, scale):
         self.event_shape = ()
-        self.batch_shape = broadcast_batch_shape(
+        a, loc, scale = promote_shapes(a, loc, scale)
+        batch_shape = lax.broadcast_shapes(
             jnp.shape(a), jnp.shape(loc), jnp.shape(scale)
         )
-        self.a = a
-        self.loc = loc
-        self.scale = scale
+        self.batch_shape = batch_shape
+        self.a = jnp.broadcast_to(a, batch_shape)
+        self.loc = jnp.broadcast_to(loc, batch_shape)
+        self.scale = jnp.broadcast_to(scale, batch_shape)
 
     def sample(self, rng_key, sample_shape=()):
         shape = sample_shape + self.batch_shape + self.event_shape

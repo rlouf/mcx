@@ -58,10 +58,10 @@ def test_logpdf_shape(case):
 #
 
 array2d_argument_expected_shapes = [
-    {"sample_shape": (), "expected_shape": (1, 2)},
-    {"sample_shape": (100,), "expected_shape": (100, 1, 2)},
-    {"sample_shape": (100, 10), "expected_shape": (100, 10, 1, 2)},
-    {"sample_shape": (1, 100), "expected_shape": (1, 100, 1, 2)},
+    {"sample_shape": (), "expected_shape": (2,)},
+    {"sample_shape": (100,), "expected_shape": (100, 2)},
+    {"sample_shape": (100, 10), "expected_shape": (100, 10, 2)},
+    {"sample_shape": (1, 100), "expected_shape": (1, 100, 2)},
 ]
 
 

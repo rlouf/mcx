@@ -44,22 +44,6 @@ def test_logpdf_edge_cases(case):
 # SAMPLING SHAPE
 #
 
-single_parameter_expected_shapes = [
-    {"sample_shape": (), "expected_shape": (1,)},
-    {"sample_shape": (100,), "expected_shape": (100, 1)},
-    {"sample_shape": (100, 10), "expected_shape": (100, 10, 1)},
-    {"sample_shape": (1, 100), "expected_shape": (1, 100, 1)},
-]
-
-
-@pytest.mark.parametrize("case", single_parameter_expected_shapes)
-def test_sample_single_parameter(rng_key, case):
-    samples = Categorical(jnp.array([0.2, 0.7, 0.1])).sample(
-        rng_key, case["sample_shape"]
-    )
-    assert samples.shape == case["expected_shape"]
-
-
 array_of_parameters_expected_shapes = [
     {
         "probs": jnp.array([[0.1, 0.9], [0.2, 0.3], [0.5, 0.5]]),
