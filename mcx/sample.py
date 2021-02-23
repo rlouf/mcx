@@ -538,9 +538,12 @@ def sample_loop(
         )
         chain = []
         state = init_state
-        for _, key in enumerate(progress):
-            state, _, ravelled_state = update_loop(state, key)
-            chain.append(ravelled_state)
+        try:
+            for _, key in enumerate(progress):
+                state, _, ravelled_state = update_loop(state, key)
+                chain.append(ravelled_state)
+        except KeyboardInterrupt:
+            pass
 
     chain = jnp.stack(chain)
     chain = jax.vmap(unravel_fn)(chain)
