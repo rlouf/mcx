@@ -17,7 +17,7 @@ from mcx.core.nodes import Op, Placeholder, SampleModelOp, SampleOp
 __all__ = [
     "logpdf",
     "logpdf_contributions",
-    "sample",
+    "sample_predictive",
     "sample_joint",
     "sample_posterior_predictive",
 ]
@@ -268,7 +268,7 @@ def _logpdf_core(graph: GraphicalModel):
 # --------------------------------------------------------
 
 
-def sample(model):
+def sample_predictive(model):
     """Sample from the model's predictive distribution."""
     graph = copy.deepcopy(model.graph)
 

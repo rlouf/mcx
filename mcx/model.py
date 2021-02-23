@@ -38,13 +38,13 @@ def log_prob_contributions(model: "model") -> FunctionType:
 
 
 def joint_sampler(model: "model") -> FunctionType:
-    sample_fn, _ = mcx.core.sample_joint(model)
-    return sample_fn
+    sample_joint_fn, _ = mcx.core.sample_joint(model)
+    return sample_joint_fn
 
 
 def predictive_sampler(model: "model") -> FunctionType:
-    call_fn, _ = mcx.core.sample(model)
-    return call_fn
+    sample_predictive_fn, _ = mcx.core.sample_predictive(model)
+    return sample_predictive_fn
 
 
 # -------------------------------------------------------------------
@@ -116,7 +116,7 @@ class model(Distribution):
 
         self.logpdf_fn, self.logpdf_src = mcx.core.logpdf(self)
         self.sample_joint_fn, self.sample_joint_src = mcx.core.sample_joint(self)
-        self.call_fn, self.call_src = mcx.core.sample(self)
+        self.sample_predictive_fn, self.sample_predictive_src = mcx.core.sample_predictive(self)
 
         functools.update_wrapper(self, model_fn)
 
@@ -133,7 +133,7 @@ class model(Distribution):
         to monkey patch them.
 
         """
-        return self.call_fn(rng_key, *args, **kwargs)
+        return self.sample_predictive_fn(rng_key, *args, **kwargs)
 
     def sample(self, rng_key, *args, **kwargs) -> Dict:
         """Sample from the joint distribution."""
@@ -212,7 +212,7 @@ class generative_function(object):
         self.model_fn = model_fn
         self.conditioning = trace
 
-        self.call_fn, self.call_src = mcx.core.sample_posterior_predictive(
+        self.call_fn, self.src = mcx.core.sample_posterior_predictive(
             self, trace.keys()
         )
         self.trace = trace
