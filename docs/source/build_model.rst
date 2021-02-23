@@ -5,16 +5,42 @@ Build models in MCX
 Syntax
 ------
 
-Bayesian models are often called *generative models* since they can generate
-random outcomes. MCX adheres to this description: models are functions that
-return a random value each time they are called. 
 
-MCX models thus look pretty much like any Python function. With two important
-particularities:
+MCX models are *generative functions*. Which means that called with a random
+number generator key (rng key) and its arguments it will return a value. This
+value will be different each time the function is called with a different rng
+key.
+
+.. code-block:: python
+
+  import mcx
+
+  @mcx.model
+  def coin_toss(alpha, beta=1):
+      p <~ Beta(1, 1)
+      head <~ Bernoulli(p)
+      return head
+
+>>> key_1 = jax.random.PRNGKey(2019)
+... coin_toss(key_1, 1.)
+1
+
+>>> key_2 = jax.random.PRNGKey(2020)
+... coin_toss(key_2, 1.)
+0
+
+At the same time, generative functions represent a multivariate distribution
+over the random variables included in the model. Which means you can condition
+the value of its random variables, compute forward samples from the
+distribution, or compute samples from the posterior distribution of the
+conditioned distribution.
+
+As you can see above, MCX models look pretty much like any Python function.
+With two important particularities:
 
 1. To signal that a function is a model it must be preceded with the
    `@mcx.model` decorator. Otherwise Python will interpret it as a regular
-   function and it will not work.
+   function.
 2. MCX uses the symbol `<~` for random variable assignments and `=` for
    deterministic assignments. As a result models are visually very similar
    to their mathematical counterpart.
@@ -35,9 +61,9 @@ coin:
 
 As we said, generative models behave like functions:
 
->>> coin_toss(10)
+>>> coin_toss(key_1, 10)
 4
->>> coin_toss(10)
+>>> coin_toss(key_2, 10)
 7
 
 Since the parameters are random variables, each call will return a different
@@ -54,17 +80,9 @@ cannot do when expressing a model. As time passes, code is written and PRs are
 merged these constraints will be relaxed and you will be able to written MCX
 code like you would regular python code.
 
-First any variable, random or deterministic, must be given a name. The
-following functions are invalid MCX code:
+First, random variables and returned variables must be given a name:
 
 .. code-block:: python
-
-    @mcx.model
-    def return_value_not_assigned():
-        """The returned variable must have a name."""
-        a <~ Normal(0, 1)
-        b <~ Gamma(1, a)
-        return a * b
 
     @mcx.model
     def random_argument_not_assigned():
@@ -73,15 +91,15 @@ following functions are invalid MCX code:
         return b
 
     @mcx.model
-    def deterministic_expression_not_assigned():
-        """You cannot use deterministic expressions as an argument.
-        """
+    def return_value_not_assigned():
+        """The returned variable must have a name."""
         a <~ Normal(0, 1)
-        b <~ Gamma(1, jnp.exp(a))
-        return b
+        b <~ Gamma(1, a)
+        return a * b
 
-Control flow is also not supported for the moment. MCX will not compile
-functions such as:
+The last condition will be relaxed soon. Control flow is also not supported for
+the moment, due to its use of JAX's jit-compilation (the documentation explains
+why). MCX will not compile functions such as:
 
 .. code-block:: python
 
@@ -107,24 +125,9 @@ functions such as:
 
         return total
 
-This will eventually be integrated to support models with stochastic support.
-Model closures are also currently not supported. MCX will not process code such
-as:
+Instead you can use JAX's `lax.cond`, `lax.switch`, `lax.scan` and
+`lax.fori_loop` constructs for now.
 
-.. code-block:: python
-
-    @mcx.model
-    def closure():
-        p <~ Beta(.5, .5)
-
-        @mcx.model
-        def toss():
-            is_head <~ Binomial(p)
-            return is_head
-
-        return toss
-
-These will eventually be supported as part of the implementation of non-parametrics.
 
 Call functions from a model
 ---------------------------
@@ -219,7 +222,7 @@ go.
   import mcx
         
   rng_key = jax.random.PRNGKey(0)
-  mcx.sample_forward(rng_key, model, **data)
+  mcx.sample(rng_key, model, args)
 
 Intervention
 ============
@@ -235,21 +238,4 @@ function:
         
   rng_key = jax.random.PRNGKey(0)
   model_c = model.do(rv=10)
-  mcx.sample_forward(rng_key, model_c, **data)
-
-
-Modify the graph dynamically
-============================
-
-We can also inspect the values of variables individually
-
->>> model["y"]
-
-You can also change the variables' distribution for quick iteration on the
-model:
-
->>> model['y'] = "Normal(0, 10)"
-
-This is pretty much all there is to known about how to express models with MCX.
-You can consult the section of the documentation on distributions to get
-acquainted with the distributions included with MCX.
+  mcx.sample(rng_key, model_c, args)

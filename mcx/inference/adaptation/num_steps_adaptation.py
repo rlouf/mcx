@@ -3,7 +3,10 @@
 This is a collection of re-usable adaptive schemes for monte carlo algorithms.
 The algorithms are used during the warm-up phase of the inference and are
 decorrelated from any particular algorithm (dynamic HMC's adaptive choice of
-path length is not included, for instance).
+path length is not included, for instance). Currently contains:
+
+    - `longest_batch_before_turn` uses a U-turn criterion to generate a collection
+      of number of integration steps;
 
 The Stan Manual [1]_ is a very good reference on automatic tuning of
 parameters used in Hamiltonian Monte Carlo.

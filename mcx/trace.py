@@ -202,6 +202,16 @@ class Trace(InferenceData):
 
         return dict_to_dataset(data=loglikelihoods, library=mcx)
 
+    # The following methods are implemented so the trace can be unpacked using **
+    def keys(self):
+        return self.raw.samples.keys()
+
+    def __getitem__(self, key):
+        return self.raw.samples[key]
+
+    def values(self, chain_id=0):
+        return [self.raw.samples[key][chain_id] for key in self.keys()]
+
     # The following methods are used to concatenate two traces or add new samples
     # to a trace.
 

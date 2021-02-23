@@ -38,4 +38,4 @@ jobs:
 
       - name: Check types with mypy
         run: |
-          mypy mcx tests
+          mypy mcx

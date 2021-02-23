@@ -6,11 +6,15 @@ import jax
 from jax import numpy as jnp
 from tqdm import tqdm
 
+from mcx.inference.adaptation import (
+    StanWarmupState,
+    stan_hmc_warmup,
+    stan_warmup_schedule,
+)
 from mcx.inference.integrators import velocity_verlet
 from mcx.inference.kernels import HMCInfo, HMCState, hmc_kernel
 from mcx.inference.metrics import gaussian_euclidean_metric
 from mcx.inference.proposals import hmc_proposal
-from mcx.inference.warmup import StanWarmupState, stan_hmc_warmup, stan_warmup_schedule
 
 
 class HMCParameters(NamedTuple):
