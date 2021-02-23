@@ -116,7 +116,10 @@ class model(Distribution):
 
         self.logpdf_fn, self.logpdf_src = mcx.core.logpdf(self)
         self.sample_joint_fn, self.sample_joint_src = mcx.core.sample_joint(self)
-        self.sample_predictive_fn, self.sample_predictive_src = mcx.core.sample_predictive(self)
+        (
+            self.sample_predictive_fn,
+            self.sample_predictive_src,
+        ) = mcx.core.sample_predictive(self)
 
         functools.update_wrapper(self, model_fn)
 

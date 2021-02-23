@@ -2,9 +2,9 @@ from .parser import parse
 from .target_functions import (
     logpdf,
     logpdf_contributions,
-    sample_predictive,
     sample_joint,
     sample_posterior_predictive,
+    sample_predictive,
 )
 
 __all__ = [
