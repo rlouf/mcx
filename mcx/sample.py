@@ -38,7 +38,7 @@ def sample_joint(
     keys = jax.random.split(rng_key, num_samples)
 
     # Set vmap's out axes for the random variables
-    out_axes = {rv: 1 for rv in model.random_variables}
+    out_axes = {rv: 0 for rv in model.random_variables}
 
     # Set vmap's in axes for the arguments
     in_axes: Tuple[Optional[int], ...] = (0,)
@@ -650,19 +650,21 @@ def get_initial_position(rng_key, model, model_args, observations, num_chains):
     # positions *for each chain separately*. However, if we naively use JAX's
     # `ravel_pytree` function on the dictionary with prior samples we will obtain
     # a single array with all positions for all chains.
-    initial_positions = jax.tree_util.tree_map(
+    reshaped_positions = jax.tree_util.tree_map(
         lambda x: x.reshape(num_chains, -1), initial_positions
     )
     flattened_positions = jnp.concatenate(
-        jax.tree_util.tree_leaves(initial_positions), axis=1
+        jax.tree_util.tree_leaves(reshaped_positions), axis=1
     )
 
     # We will use jax.vmap to map the computation over the different chains. The unravelling
     # function thus needs to unravel a single chain. `jnp.atleast_1d` is necessary to handle
     # the case where we sample a single chains.
-    sample_position_dict = jax.tree_util.tree_map(
-        lambda x: jnp.atleast_1d(x)[0], initial_positions
-    )
+    if num_chains == 1:
+        sample_position_dict = initial_positions
+    else:
+        sample_position_dict = jax.tree_util.tree_map(lambda x: x[0], initial_positions)
+
     _, unravel_fn = jax_ravel_pytree(sample_position_dict)
 
     return flattened_positions, unravel_fn
