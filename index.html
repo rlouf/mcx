@@ -13,7 +13,6 @@
     <script src="_static/underscore.js"></script>
     <script src="_static/doctools.js"></script>
     <script src="_static/language_data.js"></script>
-    <script async="async" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.7/latest.js?config=TeX-AMS-MML_HTMLorMML"></script>
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
     <link rel="next" title="Build models in MCX" href="build_model.html" />
@@ -44,8 +43,7 @@ MCX natively supports batching on GPU for faster inference and sequential
 inference for bayesian updating.</p>
 <p><strong>The best of usability and modularity</strong>
 MCX reconciles modularity with usability. It does offer “turn key” algorithms
-for users who just want something that works. But it also allows users to
-compose their own inference kernel from multiple parts.</p>
+for users who just want something that works. Or you can go your own way, and use MCX’s expressive modeling language to compile a model’s logpdf as a python function. Which you can then use with your algorithms or those of libraries like <a class="reference external" href="https://github.com/blackjax-devs/blackjax">BlackJAX</a>.</p>
 <div class="section" id="mcx-by-example">
 <h2>MCX by example<a class="headerlink" href="#mcx-by-example" title="Permalink to this headline">¶</a></h2>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">jax</span>
@@ -68,8 +66,15 @@ compose their own inference kernel from multiple parts.</p>
 <span class="c1"># Sample from the model posterior distribution using HMC</span>
 <span class="n">hmc_kernel</span> <span class="o">=</span> <span class="n">mcx</span><span class="o">.</span><span class="n">HMC</span><span class="p">(</span><span class="n">num_integration_steps</span><span class="o">=</span><span class="mi">100</span><span class="p">)</span>
 
-<span class="n">observations</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;x&#39;</span><span class="p">:</span> <span class="n">X</span><span class="p">,</span> <span class="s1">&#39;predictions&#39;</span><span class="p">:</span> <span class="n">y</span><span class="p">,</span> <span class="s1">&#39;lmbda&#39;</span><span class="p">:</span> <span class="mf">3.</span><span class="p">}</span>
-<span class="n">sampler</span> <span class="o">=</span> <span class="n">mcx</span><span class="o">.</span><span class="n">sample</span><span class="p">(</span><span class="n">rng_key</span><span class="p">,</span> <span class="n">linear_regression</span><span class="p">,</span> <span class="n">hmc_kernel</span><span class="p">,</span> <span class="o">**</span><span class="n">observations</span><span class="p">)</span>
+<span class="n">args</span> <span class="o">=</span> <span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="mf">3.</span><span class="p">)</span>
+<span class="n">observations</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;predictions&#39;</span><span class="p">:</span> <span class="n">y</span><span class="p">}</span>
+<span class="n">sampler</span> <span class="o">=</span> <span class="n">mcx</span><span class="o">.</span><span class="n">sample</span><span class="p">(</span>
+   <span class="n">rng_key</span><span class="p">,</span>
+   <span class="n">linear_regression</span><span class="p">,</span>
+   <span class="n">args</span><span class="p">,</span>
+   <span class="n">observations</span><span class="p">,</span>
+   <span class="n">hmc_kernel</span>
+<span class="p">)</span>
 <span class="n">trace</span> <span class="o">=</span> <span class="n">sampler</span><span class="o">.</span><span class="n">run</span><span class="p">()</span>
 </pre></div>
 </div>
@@ -77,32 +82,13 @@ compose their own inference kernel from multiple parts.</p>
 <div class="section" id="features">
 <h2>Features<a class="headerlink" href="#features" title="Permalink to this headline">¶</a></h2>
 <ul class="simple">
-<li><p>The HMC and empirical HMC algorithms with Stan warmup;</p></li>
+<li><p>HMC and NUTS algorithms with window adaptation;</p></li>
 <li><p>A dozen distributions;</p></li>
 <li><p>Batch sampling;</p></li>
 <li><p>Iterative sampling for more complex workflows;</p></li>
-<li><p>Sequential inference for bayesian updating;</p></li>
-<li><p>Sample millions of chains in parallel;</p></li>
+<li><p>Sample hundreds of thousands of chains in parallel;</p></li>
 <li><p>Fast inference on GPU.</p></li>
 </ul>
-</div>
-<div class="section" id="from-practice-to-research">
-<h2>From practice to research<a class="headerlink" href="#from-practice-to-research" title="Permalink to this headline">¶</a></h2>
-<p>MCX is highly flexible and can be seen as the combination of two decoupled
-libraries:</p>
-<ol class="arabic simple">
-<li><p><em>A probabilistic modeling language</em>; MCX models can be exported as a forward
-sampling function and a log-probability density functions which may be used
-with custom inference algorithms.</p></li>
-<li><p><em>An inference library</em>; MCX’s inference module is purposefully designed as a
-collection of loosely coupled elements. Advanced users are free to compose
-these elements in any way they see fit. It is not necessary to use the
-modeling language to build the log-probability density function, any python
-function will do.</p></li>
-</ol>
-<p>MCX tries to strike the right balance between customizability (for researchers)
-and sane defaults for people who want the benefits of inference without having
-to dig in the literature.</p>
 </div>
 <div class="section" id="quickstart">
 <h2>Quickstart<a class="headerlink" href="#quickstart" title="Permalink to this headline">¶</a></h2>
