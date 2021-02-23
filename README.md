@@ -30,6 +30,7 @@ Note that there are still many moving pieces in `mcx` and the API may change
 slightly.
 
 ```python
+import arviz as az
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -42,33 +43,32 @@ rng_key = jax.random.PRNGKey(0)
 
 x_data = np.random.normal(0, 5, size=(1000,1))
 y_data = 3 * x_data + np.random.normal(size=x_data.shape)
-observations = {'x': x_data, 'predictions': y_data}
 
 @mcx.model
 def linear_regression(x, lmbda=1.):
     scale <~ Exponential(lmbda)
-    coefs <~ Normal(np.zeros(np.shape(x)[-1]))
-    preds <~ Normal(np.dot(x, coefs), scale)
+    coefs <~ Normal(jnp.zeros(jnp.shape(x)[-1]), 1)
+    preds <~ Normal(jnp.dot(x, coefs), scale)
     return preds
     
-rng_key = jax.random.PRNGKey(0)
-prior_predictive = mcx.prior_predict(rng_key, model, (x_data,))
+prior_predictive = mcx.prior_predict(rng_key, linear_regression, (x_data,))
 
 posterior = mcx.sampler(
     rng_key,
     linear_regression,
-    (x_data, 3),
-    {'pred': y_data},
+    (x_data,),
+    {'preds': y_data},
     HMC(100),
 ).run()
 
-posterior_predictive = mcx.posterior_predict(rng_key, predict, (x_data,), trace)
+az.plot_trace(posterior)
+
+posterior_predictive = mcx.posterior_predict(rng_key, linear_regression, (x_data,), posterior)
 ```
 
 ## MCX's future
 
-MCX's core is very flexible, so we can start considering the following
-applications:
+We are currently considering the future directions:
 
 - **Neural network layers:** You can follow discussions about the API in [this Pull Request](https://github.com/rlouf/mcx/pull/16).
 - **Programs with stochastic support:** Discussion in this [Issue](https://github.com/rlouf/mcx/issues/37).
@@ -87,8 +87,9 @@ Like most PPL, MCX implements a batch sampling runtime:
 sampler = mcx.sampler(
     rng_key,
     linear_regression,
+    *args,
+    observations,
     kernel,
-    **observations
 )
 
 posterior = sampler.run()
@@ -108,8 +109,8 @@ two traces:
 posterior += sampler.run()
 ```
 
-By default MCX will sample using a python `for` loop and display a progress bar.
-For faster sampling (but without progress bar) you can use:
+By default MCX will sample in interactive mode using a python `for` loop and
+display a progress bar and various diagnostics. For faster sampling you can use:
 
 ```python
 posterior = sampler.run(compile=True)
@@ -134,8 +135,9 @@ opens many possibilities such as:
 samples = mcx.sampler(
     rng_key,
     linear_regression,
+    *args,
+    observations,
     kernel,
-    **observations
 )
 
 trace = mcx.Trace()
