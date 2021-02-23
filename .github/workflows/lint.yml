@@ -24,18 +24,6 @@ jobs:
         run: |
             pip install -r requirements-dev.txt
 
-      - name: Check order of imports with isort
+      - name: Run linters
         run: |
-          isort --profile black --check mcx tests
-
-      - name: Check PEP8 compliance with flake8
-        run: |
-          flake8 mcx tests --count --ignore=E501,E203,E731,W503 --show-source --statistics
-
-      - name: Check formatting with black
-        run: |
-          black --check mcx tests
-
-      - name: Check types with mypy
-        run: |
-          mypy mcx
+            make lint-checks

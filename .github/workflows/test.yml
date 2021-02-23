@@ -31,4 +31,4 @@ jobs:
       - name: Run the tests with pytest
         run: |
           pip install -r requirements-dev.txt
-          pytest -n 4 tests 
+          make test
