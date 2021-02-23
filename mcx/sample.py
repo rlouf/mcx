@@ -432,7 +432,7 @@ def sample_scan(
     """
     num_samples = jnp.shape(rng_keys)[0]
 
-    progress_bar = tqdm(range(num_samples))
+    progress_bar = tqdm(range(num_samples), leave=False)
     progress_bar.set_description(
         f"Collecting {num_samples:,} samples across {num_chains:,} chains",
         refresh=False,
