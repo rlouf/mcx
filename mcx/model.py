@@ -223,7 +223,9 @@ class generative_function(object):
 
     def __call__(self, rng_key, *args, **kwargs) -> jnp.DeviceArray:
         """Call the model as a generative function."""
-        return self.call_fn(rng_key, *self.trace.values(self.chain_id), *args, **kwargs)
+        return self.call_fn(
+            rng_key, *self.trace.chain_values(self.chain_id), *args, **kwargs
+        )
 
     @property
     def args(self) -> Tuple[str]:

@@ -15,7 +15,7 @@ def prior_predict(
     rng_key: jnp.ndarray,
     model: mcx.model,
     model_args: Tuple[Any],
-    num_samples: int = 100,
+    num_samples: int = 1000,
 ):
     return predict(rng_key, model, model_args, num_samples)
 
