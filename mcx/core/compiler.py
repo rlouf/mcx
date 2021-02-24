@@ -97,7 +97,7 @@ def compile_op(node: Op, graph: GraphicalModel):
     """Compile an Op by recursively compiling and including its
     upstream nodes.
     """
-    op_args = []
+    op_args = {}
     op_kwargs = {}
     for predecessor in graph.predecessors(node):
 
@@ -124,13 +124,19 @@ def compile_op(node: Op, graph: GraphicalModel):
         # bugs and should be corrected.
         # This also means we do not feed repeated arguments several times
         # when we should.
-        if graph[predecessor][node]["type"] == "arg":
-            op_args.append(pred_ast)
+        edge = graph[predecessor][node]
+        if edge["type"] == "arg":
+            for idx in edge["position"]:
+                if idx in op_args:
+                    raise IndexError("Duplicate argument position")
+                op_args[idx] = pred_ast
         else:
             for key in graph[predecessor][node]["key"]:
                 op_kwargs[key] = pred_ast
 
-    return node.cst_generator(*op_args, **op_kwargs)
+    args = [op_args[idx] for idx in sorted(op_args.keys())]
+
+    return node.cst_generator(*args, **op_kwargs)
 
 
 def compile_placeholder(node: Placeholder, graph: GraphicalModel):
