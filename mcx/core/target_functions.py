@@ -244,14 +244,14 @@ def _logpdf_core(graph: GraphicalModel):
         #
         # We cannot remove edges while iterating over the graph, hence the two-step
         # process.
-        to_remove = []
-        for e in graph.out_edges(node):
-            data = graph.get_edge_data(*e)
-            to_remove.append(e)
-            graph.add_edge(placeholder, e[1], **data)
+        # to_remove = []
+        successors = list(graph.successors(node))
+        for s in successors:
+            edge_data = graph.get_edge_data(node, s)
+            graph.add_edge(placeholder, s, **edge_data)
 
-        for e in to_remove:
-            graph.remove_edge(*e)
+        for s in successors:
+            graph.remove_edge(node, s)
 
     # The original MCX model may return one or many variables. None of
     # these variables should be returned, so we turn the `is_returned` flag

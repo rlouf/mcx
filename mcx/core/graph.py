@@ -36,7 +36,7 @@ class GraphicalModel(nx.DiGraph):
         if isinstance(node, Placeholder):
             for i, arg in enumerate(args):
                 self.add(arg)
-                self.add_edge(arg, node, type="arg", position=[0])
+                self.add_edge(arg, node, type="arg", position=[i])
 
         if isinstance(node, Op):
             for i, arg in enumerate(args):
