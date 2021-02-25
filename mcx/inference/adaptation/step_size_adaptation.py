@@ -171,7 +171,7 @@ class ReasonableStepSizeState(NamedTuple):
         The current step size in the search.
     """
 
-    rng_key: jax.random.PRNGKey
+    rng_key: jnp.ndarray
     direction: int
     previous_direction: int
     step_size: float
@@ -179,7 +179,7 @@ class ReasonableStepSizeState(NamedTuple):
 
 @partial(jax.jit, static_argnums=(1,))
 def find_reasonable_step_size(
-    rng_key: jax.random.PRNGKey,
+    rng_key: jnp.ndarray,
     kernel_generator: Callable[[float, jnp.DeviceArray], Callable],
     reference_hmc_state: HMCState,
     inverse_mass_matrix: jnp.DeviceArray,

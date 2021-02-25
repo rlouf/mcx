@@ -10,7 +10,7 @@ __all__ = ["gaussian_euclidean_metric"]
 
 
 KineticEnergy = Callable[[jnp.DeviceArray], float]
-MomentumGenerator = Callable[[jax.random.PRNGKey], jnp.DeviceArray]
+MomentumGenerator = Callable[[jnp.ndarray], jnp.DeviceArray]
 
 
 def gaussian_euclidean_metric(
@@ -35,7 +35,7 @@ def gaussian_euclidean_metric(
         mass_matrix_sqrt = jnp.sqrt(jnp.reciprocal(inverse_mass_matrix))
 
         @jax.jit
-        def momentum_generator(rng_key: jax.random.PRNGKey) -> jnp.DeviceArray:
+        def momentum_generator(rng_key: jnp.ndarray) -> jnp.DeviceArray:
             std = jax.random.normal(rng_key, shape)
             p = jnp.multiply(std, mass_matrix_sqrt)
             return p
@@ -52,7 +52,7 @@ def gaussian_euclidean_metric(
         mass_matrix_sqrt = cholesky_of_inverse(inverse_mass_matrix)
 
         @jax.jit
-        def momentum_generator(rng_key: jax.random.PRNGKey) -> jnp.DeviceArray:
+        def momentum_generator(rng_key: jnp.ndarray) -> jnp.DeviceArray:
             std = jax.random.normal(rng_key, shape)
             p = jnp.dot(std, mass_matrix_sqrt)
             return p
@@ -67,7 +67,7 @@ def gaussian_euclidean_metric(
     else:
         raise ValueError(
             "The mass matrix has the wrong number of dimensions:"
-            f" expected 1 or 2, got {jnp.dim(inverse_mass_matrix)}."
+            f" expected 1 or 2, got {jnp.ndim(inverse_mass_matrix)}."
         )
 
 

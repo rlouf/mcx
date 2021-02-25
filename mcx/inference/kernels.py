@@ -105,9 +105,7 @@ def hmc_kernel(
     """
 
     @jax.jit
-    def kernel(
-        rng_key: jax.random.PRNGKey, state: HMCState
-    ) -> Tuple[HMCState, HMCInfo]:
+    def kernel(rng_key: jnp.ndarray, state: HMCState) -> Tuple[HMCState, HMCInfo]:
         """Moves the chain by one step using the Hamiltonian dynamics.
 
         Parameters
@@ -219,9 +217,7 @@ def rwm_kernel(logpdf: Callable, proposal_generator: Callable) -> Callable:
     """
 
     @jax.jit
-    def kernel(
-        rng_key: jax.random.PRNGKey, state: RWMState
-    ) -> Tuple[RWMState, RWMInfo]:
+    def kernel(rng_key: jnp.ndarray, state: RWMState) -> Tuple[RWMState, RWMInfo]:
         """Moves the chain by one step using the Random Walk Metropolis algorithm.
 
         Parameters
