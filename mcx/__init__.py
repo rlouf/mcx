@@ -1,16 +1,15 @@
 from mcx.inference import HMC
 from mcx.model import (
-    evaluate,
-    generative_function,
     joint_sampler,
     log_prob,
     log_prob_contributions,
     model,
     predictive_sampler,
+    random_variable,
     seed,
 )
-from mcx.predict import posterior_predict, predict, prior_predict
-from mcx.sample import sample_joint, sampler
+from mcx.predict import posterior_predict, prior_predict
+from mcx.sample import sampler
 from mcx.trace import Trace
 
 from . import core, distributions, inference
@@ -22,13 +21,10 @@ __all__ = [
     "distributions",
     "inference",
     "model",
-    "generative_function",
+    "random_variable",
     "seed",
-    "evaluate",
     "prior_predict",
     "posterior_predict",
-    "predict",
-    "sample_joint",
     "log_prob",
     "log_prob_contributions",
     "predictive_sampler",

@@ -1,9 +1,8 @@
 """Sample from the multivariate distribution defined by the model."""
-from typing import Any, Callable, Dict, Iterator, Optional, Tuple
+from typing import Callable, Dict, Iterator, Tuple
 
 import jax
 import jax.numpy as jnp
-import numpy as np
 from jax.flatten_util import ravel_pytree as jax_ravel_pytree
 from tqdm import tqdm
 
@@ -12,48 +11,7 @@ from mcx.jax import progress_bar_factory
 from mcx.jax import ravel_pytree as mcx_ravel_pytree
 from mcx.trace import Trace
 
-__all__ = ["sample_joint", "sampler"]
-
-
-# -------------------------------------------------------------------
-#                 == THE PRIOR SAMPLER ==
-# -------------------------------------------------------------------
-
-
-def sample_joint(
-    rng_key: jnp.ndarray,
-    model: mcx.model,
-    model_args: Tuple,
-    num_samples=1,
-):
-    """Sample from the joint prior distribution.
-
-    Returns
-    -------
-    A dictionary {'var_name': samples} where the `samples` array is of
-    shape (var_dims, n_samples).
-    """
-    _ = validate_model_args(model, model_args)
-
-    keys = jax.random.split(rng_key, num_samples)
-
-    # Set vmap's out axes for the random variables
-    out_axes = {rv: 0 for rv in model.random_variables}
-
-    # Set vmap's in axes for the arguments
-    in_axes: Tuple[Optional[int], ...] = (0,)
-    sampler_args: Tuple[Any, ...] = (keys,)
-    for arg in model_args:
-        try:
-            sampler_args += (np.atleast_1d(arg),)
-        except RuntimeError:
-            sampler_args += (arg,)
-        in_axes += (None,)
-
-    samples = jax.vmap(mcx.joint_sampler(model), in_axes, out_axes)(*sampler_args)
-    samples = jax.tree_util.tree_map(lambda x: x.squeeze(), samples)
-
-    return samples
+__all__ = ["sampler"]
 
 
 # -------------------------------------------------------------------
@@ -114,7 +72,6 @@ class sampler(object):
         self,
         rng_key: jnp.ndarray,
         model: mcx.model,
-        model_args: Tuple,
         observations: Dict,
         evaluator,
         num_chains: int = 4,
@@ -155,19 +112,17 @@ class sampler(object):
         A sampler object.
 
         """
-        args_dict = validate_model_args(model, model_args)
+        # args_dict = validate_model_args(model, model_args)
         validate_conditioning_variables(model, observations)
 
         print("sampler: build the loglikelihood")
         transformed_model = evaluator.transform(model)
-        loglikelihood = build_loglikelihood(transformed_model, args_dict, observations)
-        loglikelihood_contributions = build_loglikelihoods(
-            model, args_dict, observations
-        )
+        loglikelihood = build_loglikelihood(transformed_model, observations)
+        loglikelihood_contributions = build_loglikelihoods(model, observations)
 
         print("sampler: find the initial states")
         initial_positions, unravel_fn = get_initial_position(
-            rng_key, model, model_args, observations, num_chains
+            rng_key, model, observations, num_chains
         )
         loglikelihood = flatten_loglikelihood(loglikelihood, unravel_fn)
         initial_state = evaluator.states(initial_positions, loglikelihood)
@@ -611,7 +566,7 @@ def validate_conditioning_variables(model, observations):
             )
 
 
-def build_loglikelihood(model, args, observations):
+def build_loglikelihood(model, observations):
     """We build the likelihood by partially applying the data.
 
     TODO
@@ -621,7 +576,7 @@ def build_loglikelihood(model, args, observations):
     do a quick experiment to confirm that is the case.
 
     """
-    loglikelihood = jax.partial(mcx.log_prob(model), **observations, **args)
+    loglikelihood = jax.partial(model.logpdf, **observations)
     return loglikelihood
 
 
@@ -630,21 +585,20 @@ def build_loglikelihoods(model, args, observations):
     of each variable.
     """
     loglikelihoods = jax.partial(
-        mcx.log_prob_contributions(model), **observations, **args
+        model.logpdf_contribs, **observations
     )
     return loglikelihoods
 
 
-def get_initial_position(rng_key, model, model_args, observations, num_chains):
+def get_initial_position(rng_key, model, observations, num_chains):
     """Get an initial position for the chain.
 
     While there surely are smarter way to initialize the chain we sample the
     first position from the prior joint distribution of the variables.
-    """
 
-    initial_positions = mcx.sample_joint(
-        rng_key, model, model_args, num_samples=num_chains
-    )
+    """
+    keys = jax.random.split(rng_key, num_chains)
+    initial_positions = jax.vmap(model.sample_joint, keys)
     for observed_var in observations.keys():
         initial_positions.pop(observed_var)
 

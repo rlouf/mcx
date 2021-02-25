@@ -61,6 +61,16 @@ class Distribution(ABC):
     def __init__(self, *args) -> None:
         pass
 
+    @classmethod
+    def evaluate(cls, values: jnp.DeviceArray):
+        num_values = jnp.shape(values)[1]
+
+        def sample_value(rng_key, *_, **_):
+            idx = jax.random.choce(rng_key, num_values)
+            return values[:, idx]
+
+        return sample_value
+
     @abstractmethod
     def sample(
         self, rng_key: jax.random.PRNGKey, sample_shape: Union[Tuple[()], Tuple[int]]
@@ -81,6 +91,17 @@ class Distribution(ABC):
             An array of shape sample_shape + batch_shape + event_shape with independent samples.
         """
         pass
+
+    def sample_joint(
+        self, rng_key: jax.random.PRNGKey, sample_shape: Union[Tuple[()], Tuple[int]]
+    ) -> jax.numpy.DeviceArray:
+        """Obtain samples from the joint distribution.
+
+        For simple distributions, predictive and joint distributions are the
+        same object. Nevertheless, we had this method for the compatibility
+        with the semantics of models.
+        """
+        return self.sample(rng_key, sample_shape)
 
     def forward(
         self,

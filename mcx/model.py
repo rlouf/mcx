@@ -1,6 +1,6 @@
 import functools
 from types import FunctionType, MethodType
-from typing import Dict, Tuple
+from typing import Any, Callable, Dict, Tuple
 
 import jax
 import jax.numpy as jnp
@@ -11,11 +11,12 @@ from mcx.trace import Trace
 
 __all__ = [
     "model",
-    "generative_function",
     "log_prob",
     "log_prob_contributions",
     "joint_sampler",
     "predictive_sampler",
+    "random_variable",
+    "seed",
 ]
 
 
@@ -46,6 +47,14 @@ def predictive_sampler(model: "model") -> FunctionType:
     sample_predictive_fn, _ = mcx.core.sample_predictive(model)
     return sample_predictive_fn
 
+
+# -------------------------------------------------------------------
+#                         == RANDOM OBJECTS ==
+# -------------------------------------------------------------------
+
+class random_variable(object):
+    def __init__(self, distribution: Distribution):
+        return
 
 # -------------------------------------------------------------------
 #                             == MODEL ==
@@ -121,26 +130,24 @@ class model(Distribution):
             self.sample_predictive_src,
         ) = mcx.core.sample_predictive(self)
 
+        self.args = ()
+        self.kwargs = {}
+
         functools.update_wrapper(self, model_fn)
 
-    def __call__(self, rng_key, *args, **kwargs) -> jnp.DeviceArray:
+    def __call__(self, *args, **kwargs) -> 'model':
         """Call the model as a generative function."""
-        return self.call(rng_key, *args, **kwargs)
+        self.args = args
+        self.kwargs = kwargs
+        return self
 
-    def call(self, rng_key, *args, **kwargs) -> jnp.DeviceArray:
-        """Returns a sample from the prior predictive distribution.
+    def sample(self, rng_key) -> Any:
+        """Sample from the predictive distribution."""
+        return self.sample_predictive_fn(rng_key, *self.args, **self.kwargs)
 
-        We redirect the call to __call__ to be able to seed the function
-        with a PRNG key. Indeed, special methods in python are attached
-        to the class and not on particular instances making it impossible
-        to monkey patch them.
-
-        """
-        return self.sample_predictive_fn(rng_key, *args, **kwargs)
-
-    def sample(self, rng_key, *args, **kwargs) -> Dict:
+    def sample_joint(self, rng_key) -> Dict:
         """Sample from the joint distribution."""
-        return self.sample_joint_fn(rng_key, *args, **kwargs)
+        return self.sample_joint_fn(rng_key, *self.args, **self.kwargs)
 
     def logpdf(self, *rv_and_args, **kwargs) -> jnp.DeviceArray:
         """Value of the log-probability density function of the distribution."""
@@ -176,12 +183,22 @@ class model(Distribution):
         self.call = MethodType(seeded_call, self)
         self.sample = MethodType(seeded_sample, self)
 
+    def evaluate(self, trace: Trace) -> Callable:
+        values = trace.raw
+        sample_posterior_fn, _ = mcx.core.sample_posterior_predictive(self)
+        sample_posterior_fn = jax.partial(sample_posterior_fn, values)
+
+        def sample(rng_key):
+            return sample_posterior_fn(rng_key, self.args, self.kwargs)
+
+        return sample
+
     @property
-    def args(self) -> Tuple[str]:
+    def arg_names(self) -> Tuple[str]:
         return self.graph.names["args"]
 
     @property
-    def kwargs(self) -> Tuple[str]:
+    def kwarg_names(self) -> Tuple[str]:
         return self.graph.names["kwargs"]
 
     @property
@@ -194,49 +211,3 @@ def seed(model: "model", rng_key: jnp.ndarray):
     seeded_model = mcx.model(model.model_fn)  # type: ignore
     seeded_model.seed(rng_key)
     return seeded_model
-
-
-# -------------------------------------------------------------------
-#                  == GENERATIVE FUNCTION ==
-# -------------------------------------------------------------------
-
-
-class generative_function(object):
-    def __init__(self, model_fn: FunctionType, trace: Trace, chain_id=0) -> None:
-        """Create a generative function.
-
-        We create a generative function, or stochastic program, by conditioning
-        the values of a model's random variables. A typical application is to
-        create a function that returns samples from the posterior predictive
-        distribution.
-
-        """
-        self.graph, self.namespace = mcx.core.parse(model_fn)
-        self.model_fn = model_fn
-        self.conditioning = trace
-
-        self.call_fn, self.src = mcx.core.sample_posterior_predictive(
-            self, trace.keys()
-        )
-        self.trace = trace
-        self.chain_id = chain_id
-
-    def __call__(self, rng_key, *args, **kwargs) -> jnp.DeviceArray:
-        """Call the model as a generative function."""
-        return self.call_fn(
-            rng_key, *self.trace.chain_values(self.chain_id), *args, **kwargs
-        )
-
-    @property
-    def args(self) -> Tuple[str]:
-        return self.graph.names["args"]
-
-    @property
-    def kwargs(self) -> Tuple[str]:
-        return self.graph.names["kwargs"]
-
-
-def evaluate(model: "model", trace: Trace):
-    """Evaluate the model at the posterior distribution."""
-    evaluated_model = mcx.generative_function(model.model_fn, trace)  # type: ignore
-    return evaluated_model
