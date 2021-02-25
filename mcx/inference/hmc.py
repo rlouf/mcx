@@ -92,7 +92,7 @@ class HMC:
 
     def warmup(
         self,
-        rng_key: jax.random.PRNGKey,
+        rng_key: jax.numpy.ndarray,
         initial_state: HMCState,
         kernel_factory: Callable,
         num_chains,

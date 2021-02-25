@@ -63,13 +63,13 @@ class Distribution(ABC):
 
     @abstractmethod
     def sample(
-        self, rng_key: jax.random.PRNGKey, sample_shape: Union[Tuple[()], Tuple[int]]
+        self, rng_key: jnp.ndarray, sample_shape: Union[Tuple[()], Tuple[int]]
     ) -> jax.numpy.DeviceArray:
         """Obtain samples from the distribution.
 
         Parameters
         ----------
-        rng_key: jax.random.PRNGKey
+        rng_key: jnp.ndarray
             The pseudo random number generator key to use to draw samples.
         sample_shape: Tuple[int]
             The number of independant, identically distributed samples to draw
@@ -84,7 +84,7 @@ class Distribution(ABC):
 
     def forward(
         self,
-        rng_key: jax.random.PRNGKey,
+        rng_key: jnp.ndarray,
         sample_shape: Union[Tuple[()], Tuple[int]] = (),
     ) -> jax.numpy.DeviceArray:
         """Generate forward samples from the distribution. Defined for compatibility with

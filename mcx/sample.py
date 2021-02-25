@@ -8,7 +8,7 @@ from jax.flatten_util import ravel_pytree as jax_ravel_pytree
 from tqdm import tqdm
 
 import mcx
-from mcx.diagnostics import online_gelman_rubin
+from mcx.diagnostics import divergences, online_gelman_rubin
 from mcx.jax import progress_bar_factory
 from mcx.jax import ravel_pytree as mcx_ravel_pytree
 from mcx.trace import Trace
@@ -322,8 +322,9 @@ class sampler(object):
         num_samples: int = 1000,
         num_warmup_steps: int = 1000,
         compile: bool = False,
-        metrics: Sequence[Callable[..., Tuple[Callable, Callable]]] = [
-            online_gelman_rubin
+        metrics: Sequence[Callable[..., Tuple[str, Callable, Callable]]] = [
+            divergences,
+            online_gelman_rubin,
         ],
         **warmup_kwargs,
     ) -> Trace:
@@ -485,7 +486,7 @@ def sample_loop(
     parameters: jnp.DeviceArray,
     rng_keys: jnp.DeviceArray,
     num_chains: int,
-    metrics: Sequence[Callable[..., Tuple[Callable, Callable]]],
+    metrics: Sequence[Callable[..., Tuple[str, Callable, Callable]]],
 ) -> Tuple:
     """Sample using a Python loop.
 
@@ -555,35 +556,42 @@ def sample_loop(
 
     _, unravel_fn = get_unravel_fn()
 
-    metrics_init, metrics_update = [], []
+    metrics_init, metrics_update, metrics_names = {}, {}, []
     for metric_func in metrics:
-        init_func, update_func = metric_func()
-        metrics_init.append(init_func)
-        metrics_update.append(update_func)
+        name, init_func, update_func = metric_func()
+        metrics_init[name] = init_func
+        metrics_update[name] = update_func
+        metrics_names.append(name)
 
-    metrics_state = [init_func(init_state) for init_func in metrics_init]
+    # Initialize the chain and metrics states
+    state = init_state
+    metrics_state = {m_name: metrics_init[m_name](state) for m_name in metrics_names}
 
-    with tqdm(rng_keys, unit="samples", mininterval=0.1) as progress:
+    with tqdm(rng_keys, unit="samples", mininterval=0.3) as progress:
         progress.set_description(
             f"Collecting {num_samples:,} samples across {num_chains:,} chains",
             refresh=False,
         )
         chain = []
-        state = init_state
         try:
+
             for _, key in enumerate(progress):
-                metrics_state = [
-                    update_func(state, m_state)
-                    for update_func, m_state in zip(metrics_update, metrics_state)
-                ]
-                state, _, ravelled_state = update_loop(state, key)
+                # Advance the chain by one step
+                state, info, ravelled_state = update_loop(state, key)
+                chain.append(ravelled_state)
+
+                # Update and diplay online metrics
+                metrics_state = {
+                    m_name: metrics_update[m_name](state, info, m_state)
+                    for m_name, m_state in metrics_state.items()
+                }
                 postfix_dict = {
-                    m_state.metric_name: f"{m_state.metric:0.2f}"
-                    for m_state in metrics_state
+                    m_name: f"{m_state.metric:0.2f}"
+                    for m_name, m_state in metrics_state.items()
                 }
                 if postfix_dict:
                     progress.set_postfix(postfix_dict)
-                chain.append(ravelled_state)
+
         except KeyboardInterrupt:
             pass
 

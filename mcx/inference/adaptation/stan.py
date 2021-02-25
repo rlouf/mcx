@@ -83,7 +83,7 @@ def stan_hmc_warmup(
     )
 
     def init(
-        rng_key: jax.random.PRNGKey, initial_state: HMCState, initial_step_size: int
+        rng_key: jnp.ndarray, initial_state: HMCState, initial_step_size: int
     ) -> StanWarmupState:
         """Initialize the warmup.
 
@@ -109,7 +109,7 @@ def stan_hmc_warmup(
 
     @jax.jit
     def update(
-        rng_key: jax.random.PRNGKey,
+        rng_key: jnp.ndarray,
         stage: int,
         is_middle_window_end: bool,
         chain_state: HMCState,
@@ -197,7 +197,7 @@ def stan_first_stage() -> Tuple[Callable, Callable]:
 
     @jax.jit
     def update(
-        state: Tuple[jax.random.PRNGKey, HMCState, HMCInfo, StanWarmupState]
+        state: Tuple[jnp.ndarray, HMCState, HMCInfo, StanWarmupState]
     ) -> StanWarmupState:
         rng_key, chain_state, chain_info, warmup_state = state
 
@@ -244,7 +244,7 @@ def stan_second_stage(
 
     @jax.jit
     def update(
-        state: Tuple[jax.random.PRNGKey, HMCState, HMCInfo, StanWarmupState]
+        state: Tuple[jnp.ndarray, HMCState, HMCInfo, StanWarmupState]
     ) -> StanWarmupState:
         """Move the warmup by one state when in a slow adaptation interval.
 
