@@ -1,5 +1,5 @@
 import pytest
-from jax import numpy as np
+from jax import numpy as jnp
 from jax import random
 
 from mcx.distributions import Normal
@@ -16,7 +16,7 @@ def rng_key():
 
 expected_logpdf_shapes = [
     {"x": 1, "mu": 0, "sigma": 1, "expected_shape": ()},
-    {"x": 1, "mu": np.array([1, 2]), "sigma": 1, "expected_shape": (2,)},
+    {"x": 1, "mu": jnp.array([1, 2]), "sigma": 1, "expected_shape": (2,)},
 ]
 
 
@@ -31,10 +31,22 @@ def test_logpdf_shape(case):
 #
 
 scalar_argument_expected_shapes = [
-    {"sample_shape": (), "expected_shape": (1,)},
-    {"sample_shape": (100,), "expected_shape": (100, 1)},
-    {"sample_shape": (100, 10), "expected_shape": (100, 10, 1)},
-    {"sample_shape": (1, 100), "expected_shape": (1, 100, 1)},
+    {"sample_shape": (), "expected_shape": ()},
+    {"sample_shape": (100,), "expected_shape": (100,)},
+    {
+        "sample_shape": (100, 10),
+        "expected_shape": (
+            100,
+            10,
+        ),
+    },
+    {
+        "sample_shape": (1, 100),
+        "expected_shape": (
+            1,
+            100,
+        ),
+    },
 ]
 
 
@@ -44,7 +56,6 @@ def test_sample_shape_scalar_arguments(rng_key, case):
     scalars. We test scalars arguments separately from array arguments
     since scalars are edge cases when it comes to broadcasting.
 
-    The trailing `1` in the result shapes stands for the batch size.
     """
     samples = Normal(0, 1).sample(rng_key, case["sample_shape"])
     assert samples.shape == case["expected_shape"]
@@ -53,25 +64,25 @@ def test_sample_shape_scalar_arguments(rng_key, case):
 array_argument_expected_shapes_zero_dim = [
     {
         "mu": 1,
-        "sigma": np.array([1, 2, 3]),
+        "sigma": jnp.array([1, 2, 3]),
         "sample_shape": (),
         "expected_shape": (3,),
     },
     {
-        "mu": np.array([1, 2, 3]),
+        "mu": jnp.array([1, 2, 3]),
         "sigma": 1,
         "sample_shape": (),
         "expected_shape": (3,),
     },
     {
         "mu": 1,
-        "sigma": np.array([[1, 2], [3, 4]]),
+        "sigma": jnp.array([[1, 2], [3, 4]]),
         "sample_shape": (),
         "expected_shape": (2, 2),
     },
     {
-        "mu": np.array([1, 2]),
-        "sigma": np.array([[1, 2], [3, 4]]),
+        "mu": jnp.array([1, 2]),
+        "sigma": jnp.array([[1, 2], [3, 4]]),
         "sample_shape": (),
         "expected_shape": (2, 2),
     },
@@ -88,25 +99,25 @@ def test_sample_shape_array_arguments_no_sample_shape(rng_key, case):
 array_argument_expected_shapes_one_dim = [
     {
         "mu": 1,
-        "sigma": np.array([1, 2, 3]),
+        "sigma": jnp.array([1, 2, 3]),
         "sample_shape": (100,),
         "expected_shape": (100, 3),
     },
     {
-        "mu": np.array([1, 2, 3]),
+        "mu": jnp.array([1, 2, 3]),
         "sigma": 1,
         "sample_shape": (100,),
         "expected_shape": (100, 3),
     },
     {
         "mu": 1,
-        "sigma": np.array([[1, 2], [3, 4]]),
+        "sigma": jnp.array([[1, 2], [3, 4]]),
         "sample_shape": (100,),
         "expected_shape": (100, 2, 2),
     },
     {
-        "mu": np.array([1, 2]),
-        "sigma": np.array([[1, 2], [3, 4]]),
+        "mu": jnp.array([1, 2]),
+        "sigma": jnp.array([[1, 2], [3, 4]]),
         "sample_shape": (100,),
         "expected_shape": (100, 2, 2),
     },
@@ -122,25 +133,25 @@ def test_sample_shape_array_arguments_1d_sample_shape(rng_key, case):
 array_argument_expected_shapes_two_dims = [
     {
         "mu": 1,
-        "sigma": np.array([1, 2, 3]),
+        "sigma": jnp.array([1, 2, 3]),
         "sample_shape": (100, 2),
         "expected_shape": (100, 2, 3),
     },
     {
-        "mu": np.array([1, 2, 3]),
+        "mu": jnp.array([1, 2, 3]),
         "sigma": 1,
         "sample_shape": (100, 3),
         "expected_shape": (100, 3, 3),
     },
     {
         "mu": 1,
-        "sigma": np.array([[1, 2], [3, 4]]),
+        "sigma": jnp.array([[1, 2], [3, 4]]),
         "sample_shape": (100, 2),
         "expected_shape": (100, 2, 2, 2),
     },
     {
-        "mu": np.array([1, 2]),
-        "sigma": np.array([[1, 2], [3, 4]]),
+        "mu": jnp.array([1, 2]),
+        "sigma": jnp.array([[1, 2], [3, 4]]),
         "sample_shape": (100, 2),
         "expected_shape": (100, 2, 2, 2),
     },

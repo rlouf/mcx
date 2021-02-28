@@ -2,7 +2,7 @@
 from typing import Callable, NamedTuple, Tuple
 
 import jax
-import jax.numpy as np
+import jax.numpy as jnp
 
 from mcx.inference.integrators import Integrator, IntegratorState
 
@@ -11,7 +11,7 @@ from mcx.inference.integrators import Integrator, IntegratorState
 # --------------------------------------------------------------------
 
 
-def binary_proposal(p: np.DeviceArray) -> Callable:
+def binary_proposal(p: jnp.DeviceArray) -> Callable:
     """Binary Random Walk proposal.
 
     Propose a new position that is one step away from the current positions.
@@ -26,7 +26,7 @@ def binary_proposal(p: np.DeviceArray) -> Callable:
     return propose
 
 
-def normal_proposal(sigma: np.DeviceArray) -> Callable:
+def normal_proposal(sigma: jnp.DeviceArray) -> Callable:
     """Normal Random Walk proposal.
 
     Propose a new position such that its distance to the current position is
@@ -35,7 +35,7 @@ def normal_proposal(sigma: np.DeviceArray) -> Callable:
     """
 
     @jax.jit
-    def propose(rng_key: jax.random.PRNGKey) -> np.DeviceArray:
+    def propose(rng_key: jax.random.PRNGKey) -> jnp.DeviceArray:
         return jax.random.norm(rng_key, sigma)
 
     return propose
@@ -109,7 +109,7 @@ def empirical_hmc_proposal(
         rng_key: jax.random.PRNGKey, state: HMCProposalState
     ) -> Tuple[HMCProposalState, HMCProposalInfo]:
         path_length = path_length_generator(rng_key)
-        num_integration_steps = np.clip(path_length / step_size, a_min=1).astype(int)
+        num_integration_steps = jnp.clip(path_length / step_size, a_min=1).astype(int)
         new_state = jax.lax.fori_loop(
             0,
             num_integration_steps,

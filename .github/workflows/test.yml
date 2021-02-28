@@ -1,6 +1,12 @@
 name: Run tests
 
-on: [push, pull_request]
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
 
 jobs:
   test:
@@ -25,4 +31,4 @@ jobs:
       - name: Run the tests with pytest
         run: |
           pip install -r requirements-dev.txt
-          pytest -n 4 tests 
+          make test

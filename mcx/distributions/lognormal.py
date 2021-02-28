@@ -1,9 +1,10 @@
-from jax import numpy as np
+from jax import lax
+from jax import numpy as jnp
 from jax import random
 
 from mcx.distributions import constraints
 from mcx.distributions.distribution import Distribution
-from mcx.distributions.shapes import broadcast_batch_shape
+from mcx.distributions.shapes import promote_shapes
 
 
 class LogNormal(Distribution):
@@ -12,16 +13,18 @@ class LogNormal(Distribution):
 
     def __init__(self, mu, sigma):
         self.event_shape = ()
-        self.batch_shape = broadcast_batch_shape(np.shape(mu), np.shape(sigma))
-        self.mu = mu
-        self.sigma = sigma
+        mu, sigma = promote_shapes(mu, sigma)
+        batch_shape = lax.broadcast_shapes(jnp.shape(mu), jnp.shape(sigma))
+        self.batch_shape = batch_shape
+        self.mu = jnp.broadcast_to(mu, batch_shape)
+        self.sigma = jnp.broadcast_to(sigma, batch_shape)
 
     def sample(self, rng_key, sample_shape):
         shape = sample_shape + self.batch_shape + self.event_shape
-        return np.exp(self.sigma * random.normal(rng_key, shape) + self.mu)
+        return jnp.exp(self.sigma * random.normal(rng_key, shape) + self.mu)
 
     @constraints.limit_to_support
     def logpdf(self, x):
-        return -((np.log(x) - self.mu) ** 2 / (2 * self.sigma ** 2)) - np.log(
-            self.sigma * x * np.sqrt(2 * np.pi)
+        return -((jnp.log(x) - self.mu) ** 2 / (2 * self.sigma ** 2)) - jnp.log(
+            self.sigma * x * jnp.sqrt(2 * jnp.pi)
         )

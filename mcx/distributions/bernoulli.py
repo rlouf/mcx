@@ -1,10 +1,9 @@
-from jax import numpy as np
+from jax import numpy as jnp
 from jax import random
 from jax.scipy.special import xlog1py, xlogy
 
 from mcx.distributions import constraints
 from mcx.distributions.distribution import Distribution
-from mcx.distributions.shapes import broadcast_batch_shape
 
 
 class Bernoulli(Distribution):
@@ -13,7 +12,7 @@ class Bernoulli(Distribution):
 
     def __init__(self, p):
         self.event_shape = ()
-        self.batch_shape = broadcast_batch_shape(np.shape(p))
+        self.batch_shape = jnp.shape(p)
         self.p = p * 1.0  # will fail if p is int
 
     def sample(self, rng_key, sample_shape=()):

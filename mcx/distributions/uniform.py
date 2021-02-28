@@ -1,9 +1,10 @@
-from jax import numpy as np
+from jax import lax
+from jax import numpy as jnp
 from jax import random
 
 from mcx.distributions import constraints
 from mcx.distributions.distribution import Distribution
-from mcx.distributions.shapes import broadcast_batch_shape
+from mcx.distributions.shapes import promote_shapes
 
 
 class Uniform(Distribution):
@@ -13,9 +14,11 @@ class Uniform(Distribution):
         self.support = constraints.closed_interval(lower, upper)
 
         self.event_shape = ()
-        self.batch_shape = broadcast_batch_shape(np.shape(lower), np.shape(upper))
-        self.lower = lower
-        self.upper = upper
+        lower, upper = promote_shapes(lower, upper)
+        batch_shape = lax.broadcast_shapes(jnp.shape(lower), jnp.shape(upper))
+        self.batch_shape = batch_shape
+        self.lower = jnp.broadcast_to(lower, batch_shape)
+        self.upper = jnp.broadcast_to(upper, batch_shape)
 
     def sample(self, rng_key, sample_shape=()):
         shape = sample_shape + self.batch_shape + self.event_shape
@@ -24,4 +27,4 @@ class Uniform(Distribution):
 
     @constraints.limit_to_support
     def logpdf(self, x):
-        return np.log(1.0 / (self.upper - self.lower))
+        return jnp.log(1.0 / (self.upper - self.lower))

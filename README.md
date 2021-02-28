@@ -1,5 +1,5 @@
 <h2 align="center">
-  /ˈmɪks/   
+  MCX
 </h2>
 
 <h3 align="center">
@@ -22,7 +22,7 @@ MCX's philosophy
 2. Models should be modular and re-usable.
 3. Inference should be performant and should leverage GPUs.
 
-See the [documentation](https://rlouf.github.io/mcx) for more information.  See [this issue](https://github.com/rlouf/mcx/issues/1) for an updated roadmap for v0.1.
+See the [documentation](https://rlouf.github.io/mcx) for more information. See [this issue](https://github.com/rlouf/mcx/issues/1) for an updated roadmap for v0.1.
 
 ## Current API
 
@@ -30,42 +30,45 @@ Note that there are still many moving pieces in `mcx` and the API may change
 slightly.
 
 ```python
+import arviz as az
 import jax
-import jax.numpy as np
-import numpy as onp
+import jax.numpy as jnp
+import numpy as np
+
 import mcx
-import mcx.distributions as dist
+from mcx.distributions import Exponential, Normal
+from mcx.inference import HMC
 
 rng_key = jax.random.PRNGKey(0)
 
-x_data = onp.random.normal(0, 5, size=(1000,1))
-y_data = 3 * x_data + onp.random.normal(size=x_data.shape)
-observations = {'x': x_data, 'predictions': y_data}
-
+x_data = np.random.normal(0, 5, size=(1000,1))
+y_data = 3 * x_data + np.random.normal(size=x_data.shape)
 
 @mcx.model
 def linear_regression(x, lmbda=1.):
-    sigma <~ dist.Exponential(lmbda)
-    coeffs_init = np.ones(x.shape[-1])
-    coeffs <~ dist.Normal(coeffs_init, sigma)
-    y = np.dot(x, coeffs)
-    predictions <~ dist.Normal(y, sigma)
-    return predictions
+    scale <~ Exponential(lmbda)
+    coefs <~ Normal(jnp.zeros(jnp.shape(x)[-1]), 1)
+    preds <~ Normal(jnp.dot(x, coefs), scale)
+    return preds
+    
+prior_predictive = mcx.prior_predict(rng_key, linear_regression, (x_data,))
 
-kernel = mcx.HMC(100)
-sampler = mcx.sampler(
+posterior = mcx.sampler(
     rng_key,
     linear_regression,
-    kernel,
-    **observations
-)
-posterior = sampler.run()
+    (x_data,),
+    {'preds': y_data},
+    HMC(100),
+).run()
+
+az.plot_trace(posterior)
+
+posterior_predictive = mcx.posterior_predict(rng_key, linear_regression, (x_data,), posterior)
 ```
 
 ## MCX's future
 
-MCX's core is very flexible, so we can start considering the following
-applications:
+We are currently considering the future directions:
 
 - **Neural network layers:** You can follow discussions about the API in [this Pull Request](https://github.com/rlouf/mcx/pull/16).
 - **Programs with stochastic support:** Discussion in this [Issue](https://github.com/rlouf/mcx/issues/37).
@@ -84,8 +87,9 @@ Like most PPL, MCX implements a batch sampling runtime:
 sampler = mcx.sampler(
     rng_key,
     linear_regression,
+    *args,
+    observations,
     kernel,
-    **observations
 )
 
 posterior = sampler.run()
@@ -105,8 +109,8 @@ two traces:
 posterior += sampler.run()
 ```
 
-By default MCX will sample using a python `for` loop and display a progress bar.
-For faster sampling (but without progress bar) you can use:
+By default MCX will sample in interactive mode using a python `for` loop and
+display a progress bar and various diagnostics. For faster sampling you can use:
 
 ```python
 posterior = sampler.run(compile=True)
@@ -131,8 +135,9 @@ opens many possibilities such as:
 samples = mcx.sampler(
     rng_key,
     linear_regression,
+    *args,
+    observations,
     kernel,
-    **observations
 )
 
 trace = mcx.Trace()
@@ -149,7 +154,7 @@ that of the batch sampler. However, both can be used successively:
 ```python
 trace = mcx.Trace()
 for i, sample in enumerate(samples):
-  print(do_something(sample)
+  print(do_something(sample))
   trace.append(sample)
   if i % 10 == 0:
     trace += sampler.run(100_000, compile=True)
