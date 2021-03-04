@@ -29,8 +29,8 @@ class Gamma(Distribution):
 
     def sample(self, rng_key, sample_shape=()):
         shape = sample_shape + self.batch_shape + self.event_shape
-        return random.gamma(rng_key, self.a, self.loc, self.scale, shape)
+        return random.gamma(rng_key, self.a, shape)
 
     @constraints.limit_to_support
     def logpdf(self, x):
-        return stats.gamma(x, self.a, self.loc, self.scale)
+        return stats.gamma.logpdf(x, self.a, self.loc, self.scale)
