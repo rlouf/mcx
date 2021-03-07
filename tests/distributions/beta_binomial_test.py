@@ -80,8 +80,8 @@ def test_logpdf_out_of_support(case):
 #
 
 expected_logpdf_shapes = [
-    {"a": 1, "b": 1, "n": 10, "expected_shape": ()},
-    {"a": jnp.array([1, 2]), "b": jnp.array([1, 2]), "n": 10, "expected_shape": (2,)},
+    {"a": 1, "b": 1, "n": 10, "x": 1, "expected_shape": ()},
+    {"a": jnp.array([1, 2]), "b": jnp.array([1, 2]), "n": 10, "x":1, "expected_shape": (2,)},
 ]
 
 
@@ -111,7 +111,7 @@ def test_sample_shape_scalar_arguments(rng_key, case):
 
     The trailing `1` in the result shapes stands for the batch size.
     """
-    samples = BetaBinomial(n=1, a=1, b=1).sample(rng_key, case["sample_shape"])
+    samples = BetaBinomial(n=1, a=1, b=1).sample(rng_key, sample_shape=case["sample_shape"])
     assert samples.shape == case["expected_shape"]
 
 
