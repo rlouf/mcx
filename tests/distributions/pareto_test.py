@@ -22,7 +22,7 @@ def pareto_variance(shape, scale):
         return jnp.inf
     else:
         numerator = (scale ** 2) * shape
-        denominator = ((shape - 1) **2 ) * (shape - 2)
+        denominator = ((shape - 1) ** 2) * (shape - 2)
         return numerator / denominator
 
 
@@ -33,7 +33,7 @@ def pareto_variance(shape, scale):
 sample_means = [
     {"shape": 2, "scale": 0.1, "expected": pareto_mean(shape=2, scale=0.1)},
     {"shape": 10, "scale": 1, "expected": pareto_mean(shape=10, scale=1)},
-    {"shape": 10, "scale": 10,  "expected": pareto_mean(shape=10, scale=10)},
+    {"shape": 10, "scale": 10, "expected": pareto_mean(shape=10, scale=10)},
     {"shape": 100, "scale": 10, "expected": pareto_mean(shape=100, scale=10)},
 ]
 

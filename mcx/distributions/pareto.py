@@ -1,5 +1,6 @@
+from jax import lax
 from jax import numpy as jnp
-from jax import lax, random
+from jax import random
 from jax.scipy import stats
 
 from mcx.distributions import constraints
@@ -17,7 +18,9 @@ class Pareto(Distribution):
         self.support = constraints.closed_interval(scale, jnp.inf)
         self.event_shape = ()
         shape, scale, loc = promote_shapes(shape, scale, loc)
-        batch_shape = lax.broadcast_shapes(jnp.shape(shape), jnp.shape(scale), jnp.shape(loc))
+        batch_shape = lax.broadcast_shapes(
+            jnp.shape(shape), jnp.shape(scale), jnp.shape(loc)
+        )
         self.batch_shape = batch_shape
         self.shape = jnp.broadcast_to(shape, batch_shape)
         self.scale = jnp.broadcast_to(scale, batch_shape)
