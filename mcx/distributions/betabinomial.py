@@ -22,9 +22,9 @@ class BetaBinomial(Distribution):
         n, a, b = promote_shapes(n, a, b)
         batch_shape = lax.broadcast_shapes(jnp.shape(n), jnp.shape(a), jnp.shape(b))
         self.batch_shape = batch_shape
-        self.a = jnp.broadcast_shape(a, batch_shape)
-        self.b = jnp.broadcast_shape(b, batch_shape)
-        self.n = jnp.broadcast_shape(n, batch_shape)
+        self.a = jnp.broadcast_to(a, batch_shape)
+        self.b = jnp.broadcast_to(b, batch_shape)
+        self.n = jnp.broadcast_to(n, batch_shape)
 
     def sample(self, rng_key, sample_shape=()):
         shape = sample_shape + self.batch_shape + self.event_shape
