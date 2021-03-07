@@ -1,10 +1,11 @@
-from jax import numpy as np
+from jax import lax
+from jax import numpy as jnp
 from jax import random
 from jax.scipy import stats
 
 from mcx.distributions import constraints
 from mcx.distributions.distribution import Distribution
-from mcx.distributions.shapes import broadcast_batch_shape
+from mcx.distributions.shapes import promote_shapes
 
 
 class Beta(Distribution):
@@ -16,9 +17,11 @@ class Beta(Distribution):
 
     def __init__(self, a, b):
         self.event_shape = ()
-        self.batch_shape = broadcast_batch_shape(np.shape(a), np.shape(b))
-        self.a = a
-        self.b = b
+        a, b = promote_shapes(a, b)
+        batch_shape = lax.broadcast_shapes(jnp.shape(a), jnp.shape(b))
+        self.batch_shape = batch_shape
+        self.a = jnp.broadcast_to(a, batch_shape)
+        self.b = jnp.broadcast_to(b, batch_shape)
 
     def sample(self, rng_key, sample_shape=()):
         shape = sample_shape + self.batch_shape + self.event_shape

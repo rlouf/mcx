@@ -1,5 +1,5 @@
 import pytest
-from jax import numpy as np
+from jax import numpy as jnp
 
 from mcx.distributions import Poisson
 
@@ -13,8 +13,8 @@ from mcx.distributions import Poisson
 #
 
 out_of_support_cases = [
-    {"x": -1.0, "expected": -np.inf},
-    {"x": 1.1, "expected": -np.inf},
+    {"x": -1.0, "expected": -jnp.inf},
+    {"x": 1.1, "expected": -jnp.inf},
 ]
 
 

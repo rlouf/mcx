@@ -3,20 +3,24 @@ from datetime import datetime
 from typing import Callable, Dict, NamedTuple, Optional, Tuple
 
 import jax
-from jax import numpy as np
+from jax import numpy as jnp
 from tqdm import tqdm
 
+from mcx.inference.adaptation import (
+    StanWarmupState,
+    stan_hmc_warmup,
+    stan_warmup_schedule,
+)
 from mcx.inference.integrators import velocity_verlet
 from mcx.inference.kernels import HMCInfo, HMCState, hmc_kernel
 from mcx.inference.metrics import gaussian_euclidean_metric
 from mcx.inference.proposals import hmc_proposal
-from mcx.inference.warmup import StanWarmupState, stan_hmc_warmup, stan_warmup_schedule
 
 
 class HMCParameters(NamedTuple):
     num_integration_steps: int
     step_size: Optional[float]
-    inverse_mass_matrix: Optional[np.DeviceArray]
+    inverse_mass_matrix: Optional[jnp.DeviceArray]
 
 
 class HMC:
@@ -24,7 +28,7 @@ class HMC:
         self,
         num_integration_steps: int = 10,
         step_size: float = None,
-        inverse_mass_matrix: np.DeviceArray = None,
+        inverse_mass_matrix: jnp.DeviceArray = None,
         is_mass_matrix_diagonal: bool = True,
         integrator: Callable = velocity_verlet,
     ):
@@ -100,10 +104,10 @@ class HMC:
 
         if not self.needs_warmup:
             parameters = HMCParameters(
-                np.ones(initial_state.position.shape[0], dtype=np.int32)
+                jnp.ones(initial_state.position.shape[0], dtype=jnp.int32)
                 * self.parameters.num_integration_steps,
-                np.ones(initial_state.position.shape[0]) * self.parameters.step_size,
-                np.array(
+                jnp.ones(initial_state.position.shape[0]) * self.parameters.step_size,
+                jnp.array(
                     [
                         self.parameters.inverse_mass_matrix
                         for _ in range(initial_state.position.shape[0])
@@ -121,7 +125,7 @@ class HMC:
             rng_keys, chain_state, initial_step_size
         )
 
-        schedule = np.array(stan_warmup_schedule(num_warmup_steps))
+        schedule = jnp.array(stan_warmup_schedule(num_warmup_steps))
 
         if accelerate:
 
@@ -183,7 +187,7 @@ class HMC:
             # The sampling process, the composition between scan and for loop
             # is identical for the warmup and the sampling.  Should we
             # generalize this to only call a single `scan` function?
-            stack = lambda y, *ys: np.stack((y, *ys))
+            stack = lambda y, *ys: jnp.stack((y, *ys))
             warmup_chain = jax.tree_multimap(stack, *chain)
 
         step_size, inverse_mass_matrix = jax.vmap(final, in_axes=(0,))(
@@ -192,7 +196,7 @@ class HMC:
         num_integration_steps = self.parameters.num_integration_steps
 
         parameters = HMCParameters(
-            np.ones(initial_state.position.shape[0], dtype=np.int32)
+            jnp.ones(initial_state.position.shape[0], dtype=jnp.int32)
             * num_integration_steps,
             step_size,
             inverse_mass_matrix,
@@ -306,7 +310,7 @@ class HMC:
 
         """
 
-        def potential(array: np.DeviceArray) -> float:
+        def potential(array: jnp.DeviceArray) -> float:
             return -loglikelihood(array)
 
         return potential

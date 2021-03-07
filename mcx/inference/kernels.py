@@ -3,7 +3,7 @@
 from typing import Callable, NamedTuple, Tuple
 
 import jax
-import jax.numpy as np
+import jax.numpy as jnp
 
 from mcx.inference.metrics import KineticEnergy, MomentumGenerator
 from mcx.inference.proposals import HMCProposalInfo, HMCProposalState, Proposer
@@ -19,7 +19,7 @@ __all__ = ["HMCState", "HMCInfo", "hmc_kernel", "RWMState", "RWMInfo", "rwm_kern
 class HMCState(NamedTuple):
     """Describes the state of the HMC algorithm."""
 
-    position: np.DeviceArray
+    position: jnp.DeviceArray
     potential_energy: float
     potential_energy_grad: float
 
@@ -141,10 +141,10 @@ def hmc_kernel(
         )
 
         delta_energy = energy - new_energy
-        delta_energy = np.where(np.isnan(delta_energy), -np.inf, delta_energy)
-        is_divergent = np.abs(delta_energy) > divergence_threshold
+        delta_energy = jnp.where(jnp.isnan(delta_energy), -jnp.inf, delta_energy)
+        is_divergent = jnp.abs(delta_energy) > divergence_threshold
 
-        p_accept = np.clip(np.exp(delta_energy), a_max=1)
+        p_accept = jnp.clip(jnp.exp(delta_energy), a_max=1)
         do_accept = jax.random.bernoulli(key_accept, p_accept)
         accept_state = (
             new_state,
@@ -189,7 +189,7 @@ def hmc_kernel(
 class RWMState(NamedTuple):
     """Describes the state of the Random Walk Metropolis algorithm."""
 
-    position: np.DeviceArray
+    position: jnp.DeviceArray
     log_prob: float
 
 
@@ -246,12 +246,12 @@ def rwm_kernel(logpdf: Callable, proposal_generator: Callable) -> Callable:
         new_state = RWMState(new_position, new_log_prob)
 
         delta = new_log_prob - log_prob
-        delta = np.where(np.isnan(delta), -np.inf, delta)
-        p_accept = np.clip(np.exp(delta), a_max=1)
+        delta = jnp.where(jnp.isnan(delta), -jnp.inf, delta)
+        p_accept = jnp.clip(jnp.exp(delta), a_max=1)
 
         do_accept = jax.random.bernoulli(key_accept, p_accept)
         accept_state = (new_state, RWMInfo(new_state, p_accept, True))
         reject_state = (state, RWMInfo(new_state, p_accept, False))
-        return np.where(do_accept, accept_state, reject_state)
+        return jnp.where(do_accept, accept_state, reject_state)
 
     return kernel

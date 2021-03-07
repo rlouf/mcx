@@ -1,18 +1,59 @@
-from datetime import datetime
-from typing import Callable, Iterator, Tuple
+"""Sample from the multivariate distribution defined by the model."""
+from typing import Any, Callable, Dict, Iterator, Optional, Tuple
 
 import jax
-import jax.numpy as np
+import jax.numpy as jnp
+import numpy as np
 from jax.flatten_util import ravel_pytree as jax_ravel_pytree
 from tqdm import tqdm
 
 import mcx
-from mcx import sample_forward
-from mcx.compiler import compile_to_loglikelihoods, compile_to_logpdf
+from mcx.jax import progress_bar_factory
 from mcx.jax import ravel_pytree as mcx_ravel_pytree
 from mcx.trace import Trace
 
-__all__ = ["sampler"]
+__all__ = ["sample_joint", "sampler"]
+
+
+# -------------------------------------------------------------------
+#                 == THE PRIOR SAMPLER ==
+# -------------------------------------------------------------------
+
+
+def sample_joint(
+    rng_key: jnp.ndarray,
+    model: mcx.model,
+    model_args: Tuple,
+    num_samples=1,
+):
+    """Sample from the joint prior distribution.
+
+    Returns
+    -------
+    A dictionary {'var_name': samples} where the `samples` array is of
+    shape (var_dims, n_samples).
+    """
+    _ = validate_model_args(model, model_args)
+
+    keys = jax.random.split(rng_key, num_samples)
+
+    # Set vmap's out axes for the random variables
+    out_axes = {rv: 0 for rv in model.random_variables}
+
+    # Set vmap's in axes for the arguments
+    in_axes: Tuple[Optional[int], ...] = (0,)
+    sampler_args: Tuple[Any, ...] = (keys,)
+    for arg in model_args:
+        try:
+            sampler_args += (np.atleast_1d(arg),)
+        except RuntimeError:
+            sampler_args += (arg,)
+        in_axes += (None,)
+
+    samples = jax.vmap(mcx.joint_sampler(model), in_axes, out_axes)(*sampler_args)
+    samples = jax.tree_util.tree_map(lambda x: x.squeeze(), samples)
+
+    return samples
 
 
 # -------------------------------------------------------------------
@@ -21,9 +62,9 @@ __all__ = ["sampler"]
 
 
 class sampler(object):
-    """The linear sampling runtime.
+    """Linear runtime to sample from the posterior distribution.
 
-    This runtime is encountered in every probabilistic programming library
+    The linear runtime is encountered in every probabilistic programming library
     (PPL). It allows the user to fetch a pre-defined number of samples from the
     model's posterior distribution. The output is one or several chains that
     contain the successive samples from the posterior.
@@ -71,11 +112,12 @@ class sampler(object):
 
     def __init__(
         self,
-        rng_key: jax.random.PRNGKey,
+        rng_key: jnp.ndarray,
         model: mcx.model,
+        model_args: Tuple,
+        observations: Dict,
         evaluator,
         num_chains: int = 4,
-        **observations,
     ):
         """Initialize the batch sampling runtime.
 
@@ -98,29 +140,34 @@ class sampler(object):
             The key passed to JAX's random number generator. The runtime is
             in charge of splitting the key as it is being used.
         model
-            The model whose posterior we want to sample.
+            The model whose posterior distribution we want to sample.
+        model_args
+            The arguments to pass to the model.
+        observations
+            A dictionary that contains the variables we condition on and their value.
         evaluator
             The evaluator that will be used to sampler the posterior.
         num_chains
             The number of chains that will be used concurrently for sampling.
-        observations
-            The variables we condition on and their values.
 
         Returns
         -------
         A sampler object.
 
         """
-        validate_conditioning_variables(model, **observations)
+        args_dict = validate_model_args(model, model_args)
+        validate_conditioning_variables(model, observations)
 
         print("sampler: build the loglikelihood")
         transformed_model = evaluator.transform(model)
-        loglikelihood = build_loglikelihood(transformed_model, **observations)
-        loglikelihood_contributions = build_loglikelihoods(model, **observations)
+        loglikelihood = build_loglikelihood(transformed_model, args_dict, observations)
+        loglikelihood_contributions = build_loglikelihoods(
+            model, args_dict, observations
+        )
 
         print("sampler: find the initial states")
         initial_positions, unravel_fn = get_initial_position(
-            rng_key, model, num_chains, **observations
+            rng_key, model, model_args, observations, num_chains
         )
         loglikelihood = flatten_loglikelihood(loglikelihood, unravel_fn)
         initial_state = evaluator.states(initial_positions, loglikelihood)
@@ -161,7 +208,7 @@ class sampler(object):
 
         Note
         ----
-        `update_chains` will be JIT-compiled every time the iterator is
+        `update_one_chain` will be JIT-compiled every time the iterator is
         initialized. Just watch for the overhead with big models.
 
         Returns
@@ -174,7 +221,7 @@ class sampler(object):
             _ = self.warmup(default_warmup_steps, compile=False)
 
         @jax.jit
-        def update_chains(rng_key, parameters, state):
+        def update_one_chain(rng_key, parameters, state):
             kernel = self.kernel_factory(*parameters)
             new_states, info = kernel(rng_key, state)
             return new_states, info
@@ -183,7 +230,7 @@ class sampler(object):
             while True:
                 _, rng_key = jax.random.split(rng_key)
                 keys = jax.random.split(rng_key, self.num_chains)
-                state, info = jax.vmap(update_chains, in_axes=(0, 0, 0))(
+                state, info = jax.vmap(update_one_chain, in_axes=(0, 0, 0))(
                     keys, parameters, state
                 )
                 yield (state, info)
@@ -207,9 +254,9 @@ class sampler(object):
 
         """
         new_state = next(self.sample_generator)
-        self.state, info = new_state
+        self.state, _ = new_state
         sample, sampling_info = self.evaluator.make_trace(
-            chain=new_state, ravel_fn=self.unravel_fn
+            chain=new_state, unravel_fn=self.unravel_fn
         )
         return sample, sampling_info
 
@@ -275,7 +322,7 @@ class sampler(object):
         num_warmup_steps: int = 1000,
         compile: bool = False,
         **warmup_kwargs,
-    ) -> np.DeviceArray:
+    ) -> Trace:
         """Run the posterior inference.
 
         For convenience we automatically run the warmup if it hasn't been run
@@ -307,7 +354,7 @@ class sampler(object):
             self.warmup(num_warmup_steps, compile, **warmup_kwargs)
 
         @jax.jit
-        def update_chain(rng_key, parameters, chain_state):
+        def update_one_chain(rng_key, parameters, chain_state):
             kernel = self.kernel_factory(*parameters)
             new_chain_state, info = kernel(rng_key, chain_state)
             return new_chain_state, info
@@ -323,11 +370,11 @@ class sampler(object):
         # samples increases.
         if compile:
             last_state, chain = sample_scan(
-                update_chain, self.state, self.parameters, rng_keys, self.num_chains
+                update_one_chain, self.state, self.parameters, rng_keys, self.num_chains
             )
         else:
             last_state, chain = sample_loop(
-                update_chain, self.state, self.parameters, rng_keys, self.num_chains
+                update_one_chain, self.state, self.parameters, rng_keys, self.num_chains
             )
 
         samples, sampling_info = self.evaluator.make_trace(
@@ -351,9 +398,9 @@ class sampler(object):
 
 def sample_scan(
     kernel: Callable,
-    init_state: np.DeviceArray,
-    parameters: np.DeviceArray,
-    rng_keys: np.DeviceArray,
+    init_state: jnp.DeviceArray,
+    parameters: jnp.DeviceArray,
+    rng_keys: jnp.DeviceArray,
     num_chains: int,
 ) -> Tuple:
     """Sample using JAX's scan.
@@ -383,33 +430,41 @@ def sample_scan(
     The last state of the chain as well as the full chain.
 
     """
-    num_samples = rng_keys.shape[0]
+    num_samples = jnp.shape(rng_keys)[0]
 
-    print(f"Draw {num_samples:,} samples from {num_chains:,} chains.", end=" ")
-    start = datetime.now()
+    progress_bar = tqdm(range(num_samples), leave=False)
+    progress_bar.set_description(
+        f"Collecting {num_samples:,} samples across {num_chains:,} chains",
+        refresh=False,
+    )
+    progress_bar_scan = progress_bar_factory(progress_bar, num_samples)
 
     @jax.jit
-    def update_scan(carry, key):
+    @progress_bar_scan
+    def update_scan(carry, x):
+        key = x[1]
         state, parameters = carry
         keys = jax.random.split(key, num_chains)
         state, info = jax.vmap(kernel, in_axes=(0, 0, 0))(keys, parameters, state)
         return (state, parameters), (state, info)
 
-    last_state, chain = jax.lax.scan(update_scan, (init_state, parameters), rng_keys)
+    last_state, chain = jax.lax.scan(
+        update_scan, (init_state, parameters), (jnp.arange(num_samples), rng_keys)
+    )
     last_chain_state = last_state[0]
 
     mcx.jax.wait_until_computed(chain)
     mcx.jax.wait_until_computed(last_state)
-    print(f"Done in {(datetime.now()-start).total_seconds():.1f} s.")
+    progress_bar.close()
 
     return last_chain_state, chain
 
 
 def sample_loop(
     kernel: Callable,
-    init_state: np.DeviceArray,
-    parameters: np.DeviceArray,
-    rng_keys: np.DeviceArray,
+    init_state: jnp.DeviceArray,
+    parameters: jnp.DeviceArray,
+    rng_keys: jnp.DeviceArray,
     num_chains: int,
 ) -> Tuple:
     """Sample using a Python loop.
@@ -427,7 +482,7 @@ def sample_loop(
     is slightly more complicated that we originally thought.
 
     While we can copy the implementation of `jax.lax.scan` (non-jitted version) to get
-    the same output `jax.tree_util.tree_multimap(np.stack, chain)`, this is slow for large
+    the same output `jax.tree_util.tree_multimap(jnp.stack, chain)`, this is slow for large
     numbers of samples. Since the work happens outside of the progress bar this can be
     very confusing for the user.
 
@@ -460,7 +515,7 @@ def sample_loop(
     The last state of the chain as well as the full chain.
 
     """
-    num_samples = rng_keys.shape[0]
+    num_samples = jnp.shape(rng_keys)[0]
 
     @jax.jit
     def update_loop(state, key):
@@ -483,101 +538,139 @@ def sample_loop(
         )
         chain = []
         state = init_state
-        for i, key in enumerate(progress):
-            state, _, ravelled_state = update_loop(state, key)
-            chain.append(ravelled_state)
+        try:
+            for _, key in enumerate(progress):
+                state, _, ravelled_state = update_loop(state, key)
+                chain.append(ravelled_state)
+        except KeyboardInterrupt:
+            pass
 
-    chain = np.stack(chain)
+    chain = jnp.stack(chain)
     chain = jax.vmap(unravel_fn)(chain)
     last_state = state
 
     return last_state, chain
 
 
-def validate_conditioning_variables(model, **kwargs):
-    """Check that all variables passed as arguments to the sampler
-    are random variables or arguments to the sampler. And converserly
-    that all of the model definition's positional arguments are given
-    a value.
+def validate_model_args(model, args):
+    """Validate the model arguments passed to the sampler."""
+    model_args = model.args
+    model_kwargs = model.kwargs
+    num_passed_args = len(args)
 
-    TODO: Move to model.py?
+    if not isinstance(args, tuple):
+        raise TypeError(
+            "Model arguments, even when there is only one, must be passed in a tuple."
+        )
+
+    if num_passed_args < len(model_args):
+        num_missing = len(model_args) - num_passed_args
+        if num_missing == 1:
+            raise TypeError(
+                f"{model.__name__}() missing 1 positional arguments: '{model_args[-1]}'"
+            )
+        else:
+            raise TypeError(
+                f"{model.__name__}() missing {num_missing} positional arguments: {', '.join(model_args[num_passed_args:])}"
+            )
+
+    all_args = model_args + model_kwargs
+    num_args = len(all_args)
+    if num_passed_args > num_args:
+        raise TypeError(
+            f"{model.__name__}() takes from {len(model_args)} to"
+            f" {num_args} positional arguments"
+            f" but {num_passed_args} were given"
+        )
+
+    args_dict = {}
+    for i, arg in enumerate(args):
+        args_dict[all_args[i]] = arg
+
+    return args_dict
+
+
+def validate_conditioning_variables(model, observations):
+    """Validate the conditioning variables passed to the sampler.
+
+    Conditioning variables must be random variables of the model.
+    MCX does not support conditioning on deterministic variables.
+
+    Note
+    ----
+    It seems that Oryx, the JAX-based PPL in the experimental section of the
+    Tensorflow Probability repo is able to do this by manipulating Jaxprs.
+
     """
-    conditioning_vars = set(kwargs.keys())
-    model_randvars = set(model.random_variables)
-    model_args = set(model.arguments)
-    available_vars = model_randvars.union(model_args)
-
-    # The variables passed as an argument to the initialization (variables
-    # on which the logpdf is conditionned) must be either a random variable
-    # or an argument to the model definition.
-    if not available_vars.issuperset(conditioning_vars):
-        unknown_vars = list(conditioning_vars.difference(available_vars))
-        unknown_str = ", ".join(unknown_vars)
-        raise AttributeError(
-            f"You passed a value for {unknown_str} which are neither random variables "
-            "nor arguments to the model definition."
-        )
-
-    # The user must provide a value for all of the model definition's
-    # positional arguments.
-    model_posargs = set(model.posargs)
-    if model_posargs.difference(conditioning_vars):
-        missing_vars = model_posargs.difference(conditioning_vars)
-        missing_str = ", ".join(missing_vars)
-        raise AttributeError(
-            f"You need to specify a value for the following arguments: {missing_str}"
-        )
+    model_randvars = model.random_variables
+    for rv in observations.keys():
+        if rv not in model_randvars:
+            raise KeyError(
+                f"The variable '{rv}' you are trying to condition on is not a random variable."
+                f" Expected one of {', '.join(model_randvars)}."
+            )
 
 
-def build_loglikelihood(model, **kwargs):
-    artifact = compile_to_logpdf(model.graph, model.namespace)
-    logpdf = artifact.compiled_fn
-    loglikelihood = jax.partial(logpdf, **kwargs)
+def build_loglikelihood(model, args, observations):
+    """We build the likelihood by partially applying the data.
+
+    TODO
+    ----
+    I am not 100% convinced that partially applying the data this
+    way allow to pre-compute gradients at compile time. We should
+    do a quick experiment to confirm that is the case.
+
+    """
+    loglikelihood = jax.partial(mcx.log_prob(model), **observations, **args)
     return loglikelihood
 
 
-def build_loglikelihoods(model, **kwargs):
+def build_loglikelihoods(model, args, observations):
     """Function to compute the loglikelihood contribution
     of each variable.
     """
-    artifact = compile_to_loglikelihoods(model.graph, model.namespace)
-    logpdf = artifact.compiled_fn
-    loglikelihoods = jax.partial(logpdf, **kwargs)
+    loglikelihoods = jax.partial(
+        mcx.log_prob_contributions(model), **observations, **args
+    )
     return loglikelihoods
 
 
-def get_initial_position(rng_key, model, num_chains, **kwargs):
-    conditioning_vars = set(kwargs.keys())
-    model_randvars = set(model.random_variables)
-    to_sample_vars = model_randvars.difference(conditioning_vars)
+def get_initial_position(rng_key, model, model_args, observations, num_chains):
+    """Get an initial position for the chain.
 
-    samples = sample_forward(rng_key, model, num_samples=num_chains, **kwargs)
-    initial_positions = dict((var, samples[var]) for var in to_sample_vars)
+    While there surely are smarter way to initialize the chain we sample the
+    first position from the prior joint distribution of the variables.
+    """
 
-    # A naive way to go about flattening the positions is to transform the
-    # dictionary of arrays that contain the parameter value to a list of
-    # dictionaries, one per position and then unravel the dictionaries.
-    # However, this approach takes more time than getting the samples in the
-    # first place.
-    #
-    # Luckily, JAX first sorts dictionaries by keys
-    # (https://github.com/google/jax/blob/master/jaxlib/pytree.cc) when
-    # raveling pytrees. We can thus ravel and stack parameter values in an
-    # array, sorting by key; this gives our flattened positions. We then build
-    # a single dictionary that contains the parameters value and use it to get
-    # the unraveling function using `unravel_pytree`.
-    positions = np.stack(
-        [np.ravel(samples[s]) for s in sorted(initial_positions.keys())], axis=1
+    initial_positions = mcx.sample_joint(
+        rng_key, model, model_args, num_samples=num_chains
+    )
+    for observed_var in observations.keys():
+        initial_positions.pop(observed_var)
+
+    # MCX's inference algorithms work on flat arrays, we thus have to ravel the
+    # positions before feeding them to the evaluators. We need to ravel the
+    # positions *for each chain separately*. However, if we naively use JAX's
+    # `ravel_pytree` function on the dictionary with prior samples we will obtain
+    # a single array with all positions for all chains.
+    reshaped_positions = jax.tree_util.tree_map(
+        lambda x: x.reshape(num_chains, -1), initial_positions
+    )
+    flattened_positions = jnp.concatenate(
+        jax.tree_util.tree_leaves(reshaped_positions), axis=1
     )
 
-    # np.atleast_1d is necessary to handle single chains
-    sample_position_dict = {
-        parameter: np.atleast_1d(values)[0]
-        for parameter, values in initial_positions.items()
-    }
+    # We will use jax.vmap to map the computation over the different chains. The unravelling
+    # function thus needs to unravel a single chain. `jnp.atleast_1d` is necessary to handle
+    # the case where we sample a single chains.
+    if num_chains == 1:
+        sample_position_dict = initial_positions
+    else:
+        sample_position_dict = jax.tree_util.tree_map(lambda x: x[0], initial_positions)
+
     _, unravel_fn = jax_ravel_pytree(sample_position_dict)
 
-    return positions, unravel_fn
+    return flattened_positions, unravel_fn
 
 
 def flatten_loglikelihood(logpdf, unravel_fn):

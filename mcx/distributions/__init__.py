@@ -23,9 +23,9 @@ __all__ = [
     "DiscreteUniform",
     "Exponential",
     "LogNormal",
+    "MvNormal",
     "Normal",
     "Pareto",
     "Poisson",
     "Uniform",
-    "MvNormal",
 ]
