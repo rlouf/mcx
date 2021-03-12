@@ -58,9 +58,9 @@ def test_sample_variance(rng_key, case):
     assert var == pytest.approx(case["expected"], abs=1e-2)
 
 
-# # #
-# # # LOGPDF CORRECTNESS
-# # #
+#
+# LOGPDF CORRECTNESS
+#
 
 out_of_support_cases = [
     {"a": 1, "b": 1, "n": 10, "x": 11, "expected": -jnp.inf},  # > 0
