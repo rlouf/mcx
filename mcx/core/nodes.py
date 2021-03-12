@@ -100,29 +100,6 @@ class SampleOp(Op):
         self.is_returned = is_returned
 
 
-class SampleModelOp(SampleOp):
-    """A SampleModelOp node.
-
-    SampleOps represent random variables that are defined by a MCX model.
-    """
-
-    def __init__(
-        self,
-        cst_generator: Callable,
-        scope: str,
-        name: str,
-        model_name: str,
-        graph,
-        is_returned=False,
-    ) -> None:
-        self.cst_generator = cst_generator
-        self.scope = scope
-        self.name = name
-        self.model_name = model_name
-        self.graph = graph
-        self.is_returned = is_returned
-
-
 @dataclass(frozen=True)
 class FunctionOp:
     """Function node.

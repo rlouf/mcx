@@ -15,7 +15,7 @@ __all__ = [
     "log_prob_contributions",
     "joint_sampler",
     "predictive_sampler",
-    "random_variable",
+    "rv",
     "seed",
 ]
 
@@ -26,7 +26,6 @@ __all__ = [
 # The functions into which a MCX model can be compiled to sample from
 # the different distributions it defines.
 # --------------------------------------------------------------------
-
 
 def log_prob(model: "model") -> FunctionType:
     logpdf_fn, _ = mcx.core.logpdf(model)
@@ -52,9 +51,96 @@ def predictive_sampler(model: "model") -> FunctionType:
 #                         == RANDOM OBJECTS ==
 # -------------------------------------------------------------------
 
-class random_variable(object):
+
+class rv(object):
     def __init__(self, distribution: Distribution):
         return
+
+
+# --------------------------------------------------------------------
+#                           == LOGPROB ==
+# --------------------------------------------------------------------
+
+
+@functools.singledispatch
+def logprob(arg):
+    raise TypeError
+
+
+@log_prob.register
+def _(arg: Distribution):
+    return arg.logpdf_sum
+
+
+@log_prob.register
+def _(arg: model):
+    logpdf_fn, _ = mcx.core.logpdf(model)
+    return logpdf_fn
+
+
+@log_prob.register
+def _(rv_list: list):
+    def compute_logdf(*values):
+        return jnp.sum(
+            jnp.array([dist.logpf_sum(val) for dist, val in zip(rv_list, values)])
+        )
+
+    return compute_logdf
+
+
+@log_prob.register
+def _(rv_dict: dict):
+    def compute_logdf(*values):
+        return jnp.sum(
+            jnp.array(
+                [dist.logpf_sum(val) for dist, val in zip(rv_dict.values(), values)]
+            )
+        )
+
+    return compute_logdf
+
+
+# --------------------------------------------------------------------
+#                           == SAMPLE ==
+# --------------------------------------------------------------------
+
+
+@functools.singledispatch
+def sample(arg):
+    raise TypeError
+
+
+@sample.register
+def _(arg: Distribution):
+    return arg.sample
+
+
+@sample.register
+def _(arg: model):
+    sample_fn, _ = mcx.core.sample_predictives(model)
+    return sample_fn
+
+
+@sample.register
+def _(rv_list: list):
+    num_vars = len(list)
+
+    def sample(rng_key):
+        keys = jax.random.split(rng_key, num_vars)
+        return [dist.sample(key) for dist, key in zip(rv_list, keys)]
+
+    return sample
+
+
+@log_prob.register
+def _(rv_dict: dict):
+    num_vars = len(rv_dict)
+
+    def sample(rng_key):
+        keys = jax.random.split(rng_key, num_vars)
+        return {var: rv_dict[var].sample(rng_key) for var, rng_key in zip(rv_dict, keys)}
+
+    return sample
 
 # -------------------------------------------------------------------
 #                             == MODEL ==
@@ -128,14 +214,14 @@ class model(Distribution):
         (
             self.sample_predictive_fn,
             self.sample_predictive_src,
-        ) = mcx.core.sample_predictive(self)
+        ) = mcx.core.sample_predictives(self)
 
         self.args = ()
         self.kwargs = {}
 
         functools.update_wrapper(self, model_fn)
 
-    def __call__(self, *args, **kwargs) -> 'model':
+    def __call__(self, *args, **kwargs) -> "model":
         """Call the model as a generative function."""
         self.args = args
         self.kwargs = kwargs

@@ -5,7 +5,7 @@ from mcx.model import (
     log_prob_contributions,
     model,
     predictive_sampler,
-    random_variable,
+    rv,
     seed,
 )
 from mcx.predict import posterior_predict, prior_predict
@@ -21,7 +21,7 @@ __all__ = [
     "distributions",
     "inference",
     "model",
-    "random_variable",
+    "rv",
     "seed",
     "prior_predict",
     "posterior_predict",

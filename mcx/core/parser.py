@@ -29,7 +29,6 @@ from mcx.core.nodes import (
     Name,
     Op,
     Placeholder,
-    SampleModelOp,
     SampleOp,
 )
 
@@ -316,11 +315,7 @@ class ModelDefinitionParser(cst.CSTVisitor):
             >>> x = f(a)
 
         We parse the right-hand side recursively to create the Op and its
-        parent which can be Constants, Placeholders or Ops.
-
-        TODO: For the sake of simplicity we currently explicitly disallow
-        expressions that return a tuple. It should be possible to define
-        multioutput ops to handle this situation.
+        parents which can be Constants, Placeholders or Ops.
 
         There are three broad situations to take into consideration. First,
         numerical constants:
@@ -328,7 +323,7 @@ class ModelDefinitionParser(cst.CSTVisitor):
             >>> a = 0
 
         which are parsed into a Constant node. Then transformations that include
-        function call, binary operatations, unary operations and result of a
+        function call, binary operations, unary operations and result of a
         comparison.
 
             >>> a = np.dot(x, y)
@@ -338,95 +333,57 @@ class ModelDefinitionParser(cst.CSTVisitor):
 
         These are parsed into `Op` nodes.
 
-        Finally, there are constants that are not encoded by a `ast.Constant`
-        nodes. Numpy arrays for instance:
+        The class `mcx.rv` signals the definition of a random variable:
+
+            >>> a = mcx.random_variable(dist.Normal(0, 1))
+
+        These expressions are parsed into `RandomOp` nodes.
+
+        Notes
+        -----
+        Some expressions are technically constants but are currently not
+        encoded as `ast.Constant` nodes. Numpy arrays for instance:
 
             >>> a = np.ones(10)
 
         These can be distinguished from regular Ops by the fact that they are
         not linked to a named variable. It is however hard to guess that these
         expressions are constant when parsing the tree. We thus parse them into
-        a named `Op` node, and rely from a further simplication step to turn
-        them into a constant.
+        a named `Op` node, and rely on further simplication steps to turn them
+        into a constant.
+
+        TODO
+        ----
+        For the sake of simplicity we currently explicitly disallow expressions
+        that return a tuple. It should be possible to define multioutput ops to
+        handle this situation. There is nothing that technically prevents this.
 
         """
-        op = self.recursive_visit(node.value)
-
-        # We restrict ourselves to single-output ops
+        # We restrict ourselves to single-output ops for now
         if len(node.targets) > 1:
             raise SyntaxError(MULTIPLE_RETURNED_VALUES_ERROR)
 
         single_target = node.targets[0].target
-        if isinstance(single_target, cst.Name):
-            op.name = single_target.value
-            self.named_variables[op.name] = op
+        variable_name = single_target.value
 
-    # ----------------------------------------------------------------
-    #         PARSE RANDOM VARIABLE ASSIGNMENTS (Sample Ops)
-    # ----------------------------------------------------------------
-
-    def visit_Comparison(self, node: cst.Comparison) -> None:
-        """Parse sample statements.
-
-        Sample statements are represented in MCX by the symbol `<~` which is
-        the combination of the `Lt` and `Invert` operators in Python. We thus
-        translate the succession of `<` and `~` in the Python AST into a single
-        `SampleOp` in MCX's graph.
-
-        The parser can encounter two situations. First, the object on the
-        right-hand side of the 'sample' operator is a MCX model:
-
-            >>> coef <~ Horseshoe(1.)
-
-        In this case the parser instantiates the model, parses it and merges
-        its graph with the current graph.
-
-        Otherwise the assumes that the object on the right hand-side of the operator has
-        the same API as the `mcx.distributions.Distribution` class
-
-            >>> a <~ Normal(0, 1)
-            ... a <~ dist.Normal(0, 1)
-
-        And builds a SampleOp from the expression.
-
-        """
-        if len(node.comparisons) != 1:
-            return
-
-        operator = node.comparisons[0].operator
-        comparator = node.comparisons[0].comparator
-        if isinstance(operator, cst.LessThan) and isinstance(
-            comparator, cst.UnaryOperation
-        ):
-            if isinstance(node.left, cst.Tuple):
-                raise SyntaxError(MULTIPLE_RETURNED_VALUES_ERROR)
-
-            if isinstance(node.left, cst.Name):
-                variable_name = node.left.value
-            else:
-                return
-
-            expression = comparator.expression
-
-            if variable_name in self.named_variables:
-                raise SyntaxError(DUPLICATE_VARIABLE_NAME_ERROR)
-
-            # Eval the object on the righ-hand side of the <~ operator
-            # This eval is necessary to check whether object sampled
-            # from is a model or a distribution. And in the former case
-            # to merge to the current graph.
-            if isinstance(expression, cst.Call):
-                fn_call_path = unroll_call_path(expression.func)
-            else:
-                raise SyntaxError(
-                    "Expressions on the right-hand-side of <~ must be models or distributions. "
-                    f"Found the node {expression} instead."
-                )
+        # Unroll the call path on the right-hand-side. If it is a
+        # random variable definition, parse into a SampleOp.
+        expression = node.value
+        if isinstance(expression, cst.Call):
+            fn_call_path = unroll_call_path(expression.func)
 
             fn_obj = eval(fn_call_path, self.namespace)
-            if isinstance(fn_obj, mcx.model):
-                op = self.recursive_visit(comparator.expression)
-                modelsample_op = SampleModelOp(
+            if isinstance(fn_obj, mcx.random_variable):
+                op = self.recursive_visit(expression.args.value)
+
+                fn_call_path = unroll_call_path(expression.args.value.func)
+                fn_obj = eval(fn_call_path, self.namespace)
+                if not isinstance(fn_obj, mcx.Distribution) and not isinstance(fn_obj, mcx.model):
+                    raise SyntaxError(
+                        "Random variables can only be defined from mcx.Distribution or a mcx.model"
+                    )
+
+                modelsample_op = SampleOp(
                     op.cst_generator,
                     self.scope,
                     variable_name,
@@ -435,18 +392,13 @@ class ModelDefinitionParser(cst.CSTVisitor):
                 )
                 self.graph = nx.relabel_nodes(self.graph, {op: modelsample_op})
                 self.named_variables[variable_name] = modelsample_op
-            elif issubclass(fn_obj, mcx.distributions.Distribution):
-                op = self.recursive_visit(comparator.expression)
-                sample_op = SampleOp(
-                    op.cst_generator, self.scope, variable_name, fn_obj
-                )
-                self.graph = nx.relabel_nodes(self.graph, {op: sample_op})
-                self.named_variables[variable_name] = sample_op
-            else:
-                raise SyntaxError(
-                    "Expressions on the right-hand-side of <~ must be models or distributions. "
-                    f"Found {fn_call_path} instead."
-                )
+                return None
+
+            op = self.recursive_visit(expression.func)
+            single_target = node.targets[0].target
+            if isinstance(single_target, cst.Name):
+                op.name = single_target.value
+                self.named_variables[op.name] = op
 
     # ----------------------------------------------------------------
     #            RECURSIVELY PARSE THE RHS OF STATEMENTS

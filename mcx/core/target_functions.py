@@ -149,6 +149,14 @@ def _logpdf_core(graph: GraphicalModel):
             [cst.Arg(name)],
         )
 
+    """
+    Replace everything with:
+    cst.Call(
+        cst.Attribute(cst.Name("mcx"), cst.Name("logprob"))
+        [cst.Arg(cst.generator(*args, **kwargs))]
+    )
+    """
+
     def samplemodelop_to_logpdf(model_name, *args, **kwargs):
         name = kwargs.pop("var_name")
         return cst.Call(
