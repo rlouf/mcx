@@ -102,10 +102,22 @@ def test_logpdf_shape(case):
 #
 
 expected_sample_shapes = [
-    {"sample_shape": (), "expected_shape": (1,)},
-    {"sample_shape": (100,), "expected_shape": (100, 1)},
-    {"sample_shape": (100, 10), "expected_shape": (100, 10, 1)},
-    {"sample_shape": (1, 100), "expected_shape": (1, 100, 1)},
+    {"sample_shape": (), "expected_shape": ()},
+    {"sample_shape": (100,), "expected_shape": (100,)},
+    {
+        "sample_shape": (100, 10),
+        "expected_shape": (
+            100,
+            10,
+        ),
+    },
+    {
+        "sample_shape": (1, 100),
+        "expected_shape": (
+            1,
+            100,
+        ),
+    },
 ]
 
 
