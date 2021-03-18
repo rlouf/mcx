@@ -39,18 +39,17 @@ def logpdf(model):
 
         args = list(args)
         if len(args) == 1:
-            return cst.Name(args[0].value)
+            return args[0]
         elif len(args) == 2:
-            left = cst.Name(args[0].value)
-            right = cst.Name(args[1].value)
+            left = args[0]
+            right = args[1]
             return add(left, right)
 
         right = args.pop()
         left = args.pop()
         expr = add(left, right)
-        for _ in args:
-            right = args.pop()
-            expr = add(expr, right)
+        for arg in args:
+            expr = add(expr, arg)
 
         return expr
 
