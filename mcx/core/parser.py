@@ -507,7 +507,7 @@ class ModelDefinitionParser(cst.CSTVisitor):
                 # were introduced in the graph, and nodes are deleted/re-inserted
                 # when transforming to get logpdf and samplers.
                 func = kwargs["__name__"]
-                return cst.Call(func, args)
+                return cst.Call(func, args, lpar=node.lpar, rpar=node.rpar)
 
             op = Op(to_call_cst, self.scope)
             self.graph.add(op, *args, __name__=func)
@@ -601,7 +601,9 @@ class ModelDefinitionParser(cst.CSTVisitor):
             right = self.recursive_visit(node.right)
 
             def to_binary_operation_cst(left, right):
-                return cst.BinaryOperation(left, node.operator, right=right)
+                return cst.BinaryOperation(
+                    left, node.operator, right=right, lpar=node.lpar, rpar=node.rpar
+                )
 
             op = Op(to_binary_operation_cst, self.scope)
             self.graph.add(op, left, right)
@@ -612,7 +614,9 @@ class ModelDefinitionParser(cst.CSTVisitor):
             expression = self.recursive_visit(node.expression)
 
             def to_unary_operation_cst(expression):
-                return cst.UnaryOperation(node.operator, expression)
+                return cst.UnaryOperation(
+                    node.operator, expression, lpar=node.lpar, rpar=node.rpar
+                )
 
             op = Op(to_unary_operation_cst, self.scope)
             self.graph.add(op, expression)
