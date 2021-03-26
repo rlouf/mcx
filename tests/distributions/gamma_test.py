@@ -56,7 +56,130 @@ def test_logpdf_out_of_support(case):
 # LOGPDF SHAPES
 #
 
+expected_logpdf_shapes = [
+    {
+        "x": jnp.array([1]),
+        "a": jnp.array([0]),
+        "loc": jnp.array([0]),
+        "scale": jnp.array([1]),
+        "expected_shape": (1,),
+    },
+    {
+        "x": jnp.array(1),
+        "a": jnp.array(0),
+        "loc": jnp.array(0),
+        "scale": jnp.array(1),
+        "expected_shape": (),
+    },
+    {
+        "x": jnp.ones((5)),
+        "a": jnp.array(0),
+        "loc": jnp.array(0),
+        "scale": jnp.array(1),
+        "expected_shape": (5,),
+    },
+    {
+        "x": jnp.array([1, 2]),
+        "a": jnp.array([[1, 2]]),
+        "loc": jnp.array([0, 1]),
+        "scale": jnp.array([[1, 2], [2, 1]]),
+        "expected_shape": (2, 2),
+    },
+    {
+        "x": jnp.array([1, 2]),
+        "a": jnp.array([1, 2]),
+        "loc": jnp.array([0, 1]),
+        "scale": jnp.array([1, 2]),
+        "expected_shape": (2,),
+    },
+    {
+        "x": jnp.array(1),
+        "a": jnp.array([1, 2]),
+        "loc": jnp.array([0, 1]),
+        "scale": jnp.array([5]),
+        "expected_shape": (2,),
+    },
+]
+
+
+@pytest.mark.parametrize("case", expected_logpdf_shapes)
+def test_logpdf_shape(case):
+    log_prob = Gamma(a=case["a"], loc=case["loc"], scale=case["scale"]).logpdf(
+        case["x"]
+    )
+    assert log_prob.shape == case["expected_shape"]
+
 
 #
 # SAMPLING SHAPES
 #
+
+
+@pytest.mark.parametrize(
+    ["a", "scale", "loc", "sample_shape", "expected_shape"],
+    [
+        [jnp.array(1), jnp.array(1), jnp.array(1), (5,), (5,)],  # 5 1d samples
+        [
+            jnp.array([1, 2]),
+            jnp.array([1, 1.5]),
+            jnp.array([2, 3]),
+            (5,),
+            (5, 2),
+        ],  # 5 samples from 2 gamma distributions
+        [jnp.array([1, 2]), jnp.array([1, 2]), jnp.array([1, 2]), (5, 2), (5, 2, 2)],
+        [
+            jnp.array([1, 2, 3, 4]),
+            jnp.array([1, 2, 5, 10]),
+            jnp.array([-1, 0, 1, 2]),
+            (10,),
+            (10, 4),
+        ],  # 10 samples from 4 Gamma distributions
+        [
+            jnp.array([[1, 2], [5, 10]]),
+            jnp.array([[1, 2], [4, 6]]),
+            jnp.array([[0, -1], [3, 4]]),
+            (5, 2),
+            (5, 2, 2, 2),
+        ],  # 10 samples from a 2x2 batch of Gammas.
+    ],
+)
+def test_sampling_shape(a, scale, loc, sample_shape, expected_shape, rng_key):
+    assert (
+        Gamma(a=a, scale=scale, loc=loc).sample(rng_key, sample_shape).shape
+        == expected_shape
+    )
+
+
+@pytest.mark.parametrize(
+    ["a", "scale", "loc", "expected_shape"],
+    [
+        [jnp.array(1), jnp.array(1), jnp.array(1), ()],  # 1 sample from 1d Gamma
+        [
+            jnp.array([1, 2]),
+            jnp.array([1, 2]),
+            jnp.array([1, 2]),
+            (2,),
+        ],  # 1 sample from 2 independent Gamma
+        [
+            jnp.array(1),
+            jnp.array([1, 2]),
+            jnp.array(1),
+            (2,),
+        ],  # 1 sample from 2 independent Gamma (2d loc)
+        [
+            jnp.array([5, 5]),
+            jnp.array(1),
+            jnp.array(1),
+            (2,),
+        ],  # 1 sample from 2 independent Gamma (2d a)
+        [
+            jnp.array([[1, 2], [5, 10]]),
+            jnp.array([[1, 2], [5, 10]]),
+            jnp.array([[1, 2], [5, 10]]),
+            (2, 2),
+        ],  # 2 samples from 2 Gamma
+        [2 * jnp.ones((2, 2, 2)), jnp.array([1]), jnp.array([1]), (2, 2, 2)],
+    ],
+)
+def test_sampling_noshape(a, scale, loc, expected_shape, rng_key):
+    assert Gamma(a=a, scale=scale, loc=loc).sample(rng_key).shape == expected_shape
