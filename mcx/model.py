@@ -222,7 +222,25 @@ class generative_function(object):
         self.chain_id = chain_id
 
     def __call__(self, rng_key, *args, **kwargs) -> jnp.DeviceArray:
-        """Call the model as a generative function."""
+        """Call the model as a generative function.
+
+        The `sample_posterior_predictive` function's signature depends on
+        whether the original model has keyword arguments.
+        
+            >>> @mcx.model
+            ... def model(x):
+            ...     a <~ dist.Normal(0, 1)
+            ...     return a
+
+        will compile into `posterior_predictive(x, a)` while
+
+            >>> @mcx.model
+            ... def model(x=None):
+            ...     a <~ dist.Normal(0, 1)
+            ...     return a
+
+        will compile into `posterior_predictive(a, x=None)` while
+        """
         return self.call_fn(
             rng_key, *self.trace.chain_values(self.chain_id), *args, **kwargs
         )
