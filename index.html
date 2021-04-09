@@ -4,7 +4,8 @@
 <html>
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="generator" content="Docutils 0.17: http://docutils.sourceforge.net/" />
+
     <title>MCX: XLA-rated Bayesian inference &#8212; mcx  documentation</title>
     <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
     <link rel="stylesheet" href="_static/alabaster.css" type="text/css" />
@@ -32,7 +33,7 @@
 
           <div class="body" role="main">
             
-  <div class="section" id="mcx-xla-rated-bayesian-inference">
+  <section id="mcx-xla-rated-bayesian-inference">
 <h1>MCX: XLA-rated Bayesian inference<a class="headerlink" href="#mcx-xla-rated-bayesian-inference" title="Permalink to this headline">¶</a></h1>
 <p><strong>Intuitive modeling language</strong>
 MCX is a bayesian modeling language and inference library built on top of
@@ -44,7 +45,7 @@ inference for bayesian updating.</p>
 <p><strong>The best of usability and modularity</strong>
 MCX reconciles modularity with usability. It does offer “turn key” algorithms
 for users who just want something that works. Or you can go your own way, and use MCX’s expressive modeling language to compile a model’s logpdf as a python function. Which you can then use with your algorithms or those of libraries like <a class="reference external" href="https://github.com/blackjax-devs/blackjax">BlackJAX</a>.</p>
-<div class="section" id="mcx-by-example">
+<section id="mcx-by-example">
 <h2>MCX by example<a class="headerlink" href="#mcx-by-example" title="Permalink to this headline">¶</a></h2>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">jax</span>
 <span class="kn">from</span> <span class="nn">jax</span> <span class="kn">import</span> <span class="n">numpy</span> <span class="k">as</span> <span class="n">jnp</span>
@@ -78,8 +79,8 @@ for users who just want something that works. Or you can go your own way, and us
 <span class="n">trace</span> <span class="o">=</span> <span class="n">sampler</span><span class="o">.</span><span class="n">run</span><span class="p">()</span>
 </pre></div>
 </div>
-</div>
-<div class="section" id="features">
+</section>
+<section id="features">
 <h2>Features<a class="headerlink" href="#features" title="Permalink to this headline">¶</a></h2>
 <ul class="simple">
 <li><p>HMC and NUTS algorithms with window adaptation;</p></li>
@@ -89,16 +90,16 @@ for users who just want something that works. Or you can go your own way, and us
 <li><p>Sample hundreds of thousands of chains in parallel;</p></li>
 <li><p>Fast inference on GPU.</p></li>
 </ul>
-</div>
-<div class="section" id="quickstart">
+</section>
+<section id="quickstart">
 <h2>Quickstart<a class="headerlink" href="#quickstart" title="Permalink to this headline">¶</a></h2>
 <div class="toctree-wrapper compound">
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="build_model.html">Build models in MCX</a></li>
 </ul>
 </div>
-</div>
-</div>
+</section>
+</section>
 
 
           </div>

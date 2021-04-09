@@ -4,7 +4,8 @@
 <html>
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="generator" content="Docutils 0.17: http://docutils.sourceforge.net/" />
+
     <title>Build models in MCX &#8212; mcx  documentation</title>
     <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
     <link rel="stylesheet" href="_static/alabaster.css" type="text/css" />
@@ -32,9 +33,9 @@
 
           <div class="body" role="main">
             
-  <div class="section" id="build-models-in-mcx">
+  <section id="build-models-in-mcx">
 <h1>Build models in MCX<a class="headerlink" href="#build-models-in-mcx" title="Permalink to this headline">¶</a></h1>
-<div class="section" id="syntax">
+<section id="syntax">
 <h2>Syntax<a class="headerlink" href="#syntax" title="Permalink to this headline">¶</a></h2>
 <p>MCX models are <em>generative functions</em>. Which means that called with a random
 number generator key (rng key) and its arguments it will return a value. This
@@ -98,7 +99,7 @@ value. If you want to generate a large number of values, you can simply iterate:
 <div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">value</span> <span class="o">=</span> <span class="p">[</span><span class="n">coin_toss</span><span class="p">(</span><span class="mi">10</span><span class="p">)</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">100</span><span class="p">)]</span>
 </pre></div>
 </div>
-<div class="section" id="caveats">
+<section id="caveats">
 <h3>Caveats<a class="headerlink" href="#caveats" title="Permalink to this headline">¶</a></h3>
 <p>The MCX language is still young and comes with a few caveats, things that you
 cannot do when expressing a model. As time passes, code is written and PRs are
@@ -147,9 +148,9 @@ why). MCX will not compile functions such as:</p>
 </div>
 <p>Instead you can use JAX’s <cite>lax.cond</cite>, <cite>lax.switch</cite>, <cite>lax.scan</cite> and
 <cite>lax.fori_loop</cite> constructs for now.</p>
-</div>
-</div>
-<div class="section" id="call-functions-from-a-model">
+</section>
+</section>
+<section id="call-functions-from-a-model">
 <h2>Call functions from a model<a class="headerlink" href="#call-functions-from-a-model" title="Permalink to this headline">¶</a></h2>
 <p>You can call other (deterministic) python functions inside a generative model
 as long as they only use python operators or functions implemented in
@@ -169,8 +170,8 @@ scipy’s methods).</p>
       <span class="k">return</span> <span class="n">Normal</span><span class="p">(</span><span class="n">y</span><span class="p">,</span> <span class="n">sigma</span><span class="p">)</span>
 </pre></div>
 </div>
-</div>
-<div class="section" id="models-are-multivariate-distributions">
+</section>
+<section id="models-are-multivariate-distributions">
 <h2>Models are (multivariate) distributions<a class="headerlink" href="#models-are-multivariate-distributions" title="Permalink to this headline">¶</a></h2>
 <p>Most distributions can be seen as the result of a generative process. For
 instance you can re-implement the exponential distribution in MCX as</p>
@@ -210,8 +211,8 @@ possible to compose MCX models as follows</p>
 </pre></div>
 </div>
 <p>Which encourages code re-use and modularity.</p>
-</div>
-<div class="section" id="querying-debugging-the-model">
+</section>
+<section id="querying-debugging-the-model">
 <h2>Querying / Debugging the model<a class="headerlink" href="#querying-debugging-the-model" title="Permalink to this headline">¶</a></h2>
 <p>MCX translates model definitions in an intermediate representation (a graph)
 which can be dynamically queried and modified at runtime. Three features of MCX
@@ -238,8 +239,8 @@ function:</p>
 <span class="n">mcx</span><span class="o">.</span><span class="n">sample</span><span class="p">(</span><span class="n">rng_key</span><span class="p">,</span> <span class="n">model_c</span><span class="p">,</span> <span class="n">args</span><span class="p">)</span>
 </pre></div>
 </div>
-</div>
-</div>
+</section>
+</section>
 
 
           </div>
