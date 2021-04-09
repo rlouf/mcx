@@ -14,7 +14,7 @@ class Poisson(Distribution):
         self.batch_shape = jnp.shape(lmbda)
         self.lmbda = lmbda
 
-    def sample(self, rng_key, sample_shape):
+    def sample(self, rng_key, sample_shape=()):
         shape = sample_shape + self.batch_shape + self.event_shape
         return random.poisson(rng_key, self.lmbda, shape)
 

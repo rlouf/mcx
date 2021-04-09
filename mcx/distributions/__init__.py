@@ -7,6 +7,7 @@ from .dirichlet import Dirichlet
 from .discrete_uniform import DiscreteUniform
 from .distribution import Distribution
 from .exponential import Exponential
+from .gamma import Gamma
 from .lognormal import LogNormal
 from .mvnormal import MvNormal
 from .normal import Normal
@@ -23,6 +24,7 @@ __all__ = [
     "Dirichlet",
     "DiscreteUniform",
     "Exponential",
+    "Gamma",
     "LogNormal",
     "MvNormal",
     "Normal",
