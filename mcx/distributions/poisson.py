@@ -7,7 +7,7 @@ from mcx.distributions.distribution import Distribution
 
 class Poisson(Distribution):
     parameters = {"lambda": constraints.positive}
-    support = constraints.positive_integer
+    support = constraints.whole_number
 
     def __init__(self, lmbda):
         self.event_shape = ()
@@ -18,5 +18,6 @@ class Poisson(Distribution):
         shape = sample_shape + self.batch_shape + self.event_shape
         return random.poisson(rng_key, self.lmbda, shape)
 
+    @constraints.limit_to_support
     def logpdf(self, k):
         return scipy.stats.poisson.logpmf(k, self.lmbda)

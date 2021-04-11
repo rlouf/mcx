@@ -22,6 +22,7 @@ def rng_key():
 out_of_support_cases = [
     {"x": -1.0, "lmbda": 1.0, "expected": -jnp.inf},
     {"x": 1.0, "lmbda": 0.0, "expected": -jnp.inf},
+    {"x": 1.1, "lmbda": 1.0, "expected": -jnp.inf},
 ]
 
 
