@@ -20,28 +20,15 @@ def rng_key():
 #
 
 out_of_support_cases = [
-    {"x": -1.0, "lmbda": 1.0, "expected": -jnp.inf},
-    {"x": 1.0, "lmbda": 0.0, "expected": -jnp.inf},
-    {"x": 1.1, "lmbda": 1.0, "expected": -jnp.inf},
+    {"x": -1.0, "expected": -jnp.inf},
+    {"x": 1.1, "expected": -jnp.inf},
 ]
 
 
 @pytest.mark.parametrize("case", out_of_support_cases)
 def test_logpdf_out_of_support(case):
-    logprob = Poisson(case["lmbda"]).logpdf(case["x"])
-    assert jnp.isclose(logprob, case["expected"])
-
-
-cases = [
-    {"x": 0.0, "expected": -1.0, "lmbda": 1.0},
-    {"x": 0.0, "expected": -5.0, "lmbda": 5.0},
-]
-
-
-@pytest.mark.parametrize("case", cases)
-def test_logpdf_at_zero(case):
-    logprob = Poisson(case["lmbda"]).logpdf(case["x"])
-    assert jnp.isclose(logprob, case["expected"])
+    logprob = Poisson(1.0).logpdf(case["x"])
+    assert logprob == case["expected"]
 
 
 #
@@ -52,10 +39,8 @@ def test_logpdf_at_zero(case):
 @pytest.mark.parametrize(
     ["lmbda", "sample_shape", "expected_shape"],
     [
-        # 5 1d samples
-        [jnp.array(1), (5,), (5,)],
-        # 5 samples from 2 poisson distributions
-        [jnp.array([1, 2]), (5,), (5, 2)],
+        [jnp.array(1), (5,), (5,)],  # 5 1d samples
+        [jnp.array([1, 2]), (5,), (5, 2)],  # 5 samples from 2 poisson distributions
         [jnp.array([1, 2]), (5, 2), (5, 2, 2)],
         [
             jnp.array([1, 2, 0, 0]),
@@ -70,8 +55,7 @@ def test_logpdf_at_zero(case):
     ],
 )
 def test_sampling_shape(lmbda, expected_shape, sample_shape, rng_key):
-    poisson_samples = Poisson(lmbda=lmbda).sample(rng_key, sample_shape)
-    assert poisson_samples.shape == expected_shape
+    assert Poisson(lmbda=lmbda).sample(rng_key, sample_shape).shape == expected_shape
 
 
 @pytest.mark.parametrize(
