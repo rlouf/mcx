@@ -34,7 +34,6 @@ __all__ = [
     "interval",
     "integer",
     "integer_interval",
-    "whole_number",
     "positive_integer",
     "positive",
     "probability",
@@ -221,7 +220,6 @@ integer = _Integer()
 integer_interval = _IntegerInterval
 interval = _Interval
 positive_integer = _IntegerGreaterThan(0)
-whole_number = _IntegerGreaterThan(-1)
 positive = _GreaterThan(0.0)
 positive_definite = _PositiveDefinite()
 probability = _Interval(0.0, 1.0)

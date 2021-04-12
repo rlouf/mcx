@@ -7,7 +7,7 @@ from mcx.distributions.distribution import Distribution
 
 class Poisson(Distribution):
     parameters = {"lambda": constraints.positive}
-    support = constraints.whole_number
+    support = constraints.positive_integer
 
     def __init__(self, lmbda):
         self.event_shape = ()
