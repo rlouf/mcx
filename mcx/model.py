@@ -218,15 +218,22 @@ class generative_function(object):
         self.call_fn, self.src = mcx.core.sample_posterior_predictive(
             self, trace.keys()
         )
-        self.trace = trace
-        self.chain_id = chain_id
+
+        if isinstance(trace, Trace):
+            self.posterior = trace.chain(chain_id)
+        elif isinstance(trace, dict):
+            self.posterior = trace
+        else:
+            raise TypeError(
+                "You need to initiate the generative function with a Trace object or a dictionnary"
+            )
 
     def __call__(self, rng_key, *args, **kwargs) -> jnp.DeviceArray:
         """Call the model as a generative function.
 
         The `sample_posterior_predictive` function's signature depends on
         whether the original model has keyword arguments.
-        
+
             >>> @mcx.model
             ... def model(x):
             ...     a <~ dist.Normal(0, 1)
@@ -239,11 +246,28 @@ class generative_function(object):
             ...     a <~ dist.Normal(0, 1)
             ...     return a
 
-        will compile into `posterior_predictive(a, x=None)` while
+        will compile into `posterior_predictive(a, x=None)`. This is
+        problematic since it reverses the order of the variables. We thus fetch
+        the list of arg names and build a dictionary which, to each argument
+        name, associates the value that is passed to the function.
+
         """
-        return self.call_fn(
-            rng_key, *self.trace.chain_values(self.chain_id), *args, **kwargs
-        )
+        # We transform args into kwargs
+        all_args = self.graph.names["args"] + self.graph.names["kwargs"]
+        num_args = len(all_args)
+        num_passed_args = len(args) + len(kwargs)
+        if num_passed_args > num_args:
+            raise TypeError(
+                f"{model.__name__}() takes from {len(self.graph.args)} to"
+                f" {num_args} positional arguments"
+                f" but {num_passed_args} were given"
+            )
+
+        args_dict = {}
+        for i, arg in enumerate(args):
+            args_dict[all_args[i]] = arg
+
+        return self.call_fn(rng_key, **args_dict, **kwargs, **self.posterior)
 
     @property
     def args(self) -> Tuple[str]:
