@@ -82,7 +82,7 @@ coin:</p>
 
 <span class="nd">@mcx</span><span class="o">.</span><span class="n">model</span>
 <span class="k">def</span> <span class="nf">coin_toss</span><span class="p">(</span><span class="n">N</span><span class="p">):</span>
-    <span class="n">p</span> <span class="o">&lt;~</span> <span class="n">Beta</span><span class="p">(</span><span class="o">.</span><span class="mi">5</span><span class="p">,</span> <span class="o">.</span><span class="mi">5</span><span class="p">)</span>
+    <span class="n">p</span> <span class="o">&lt;~</span> <span class="n">Beta</span><span class="p">(</span><span class="mf">.5</span><span class="p">,</span> <span class="mf">.5</span><span class="p">)</span>
     <span class="n">successes</span> <span class="o">&lt;~</span> <span class="n">Binomial</span><span class="p">(</span><span class="n">N</span><span class="p">,</span> <span class="n">p</span><span class="p">)</span>
     <span class="k">return</span> <span class="n">successes</span>
 </pre></div>
@@ -125,9 +125,9 @@ the moment, due to its use of JAX’s jit-compilation (the documentation explain
 why). MCX will not compile functions such as:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@mcx</span><span class="o">.</span><span class="n">model</span>
 <span class="k">def</span> <span class="nf">if_else</span><span class="p">():</span>
-    <span class="n">a</span> <span class="o">&lt;~</span> <span class="n">Bernoulli</span><span class="p">(</span><span class="o">.</span><span class="mi">5</span><span class="p">)</span>
+    <span class="n">a</span> <span class="o">&lt;~</span> <span class="n">Bernoulli</span><span class="p">(</span><span class="mf">.5</span><span class="p">)</span>
 
-    <span class="k">if</span> <span class="n">a</span> <span class="o">&gt;</span> <span class="o">.</span><span class="mi">3</span><span class="p">:</span>
+    <span class="k">if</span> <span class="n">a</span> <span class="o">&gt;</span> <span class="mf">.3</span><span class="p">:</span>
         <span class="n">b</span> <span class="o">&lt;~</span> <span class="n">Normal</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
     <span class="k">else</span><span class="p">:</span>
         <span class="n">b</span> <span class="o">&lt;~</span> <span class="n">Normal</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
@@ -164,7 +164,7 @@ scipy’s methods).</p>
 
 <span class="nd">@mcx</span><span class="o">.</span><span class="n">model</span>
 <span class="k">def</span> <span class="nf">one_dimensional_linear_regression</span><span class="p">(</span><span class="n">X</span><span class="p">):</span>
-      <span class="n">sigma</span> <span class="o">&lt;~</span> <span class="n">Exponential</span><span class="p">(</span><span class="o">.</span><span class="mi">3</span><span class="p">)</span>
+      <span class="n">sigma</span> <span class="o">&lt;~</span> <span class="n">Exponential</span><span class="p">(</span><span class="mf">.3</span><span class="p">)</span>
       <span class="n">mu</span> <span class="o">&lt;~</span> <span class="n">Normal</span><span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">zeros_like</span><span class="p">(</span><span class="n">X</span><span class="p">))</span>
       <span class="n">y</span> <span class="o">=</span> <span class="n">multiply</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">mu</span><span class="p">)</span>
       <span class="k">return</span> <span class="n">Normal</span><span class="p">(</span><span class="n">y</span><span class="p">,</span> <span class="n">sigma</span><span class="p">)</span>
@@ -203,7 +203,7 @@ possible to compose MCX models as follows</p>
 
 <span class="nd">@mcx</span><span class="o">.</span><span class="n">model</span>
 <span class="k">def</span> <span class="nf">one_dimensional_linear_regression</span><span class="p">(</span><span class="n">X</span><span class="p">):</span>
-    <span class="n">sigma</span> <span class="o">&lt;~</span> <span class="n">Exponential</span><span class="p">(</span><span class="o">.</span><span class="mi">3</span><span class="p">)</span>
+    <span class="n">sigma</span> <span class="o">&lt;~</span> <span class="n">Exponential</span><span class="p">(</span><span class="mf">.3</span><span class="p">)</span>
     <span class="n">mu</span> <span class="o">&lt;~</span> <span class="n">HorseShoe</span><span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">zeros_like</span><span class="p">(</span><span class="n">X</span><span class="p">),</span> <span class="mf">1.</span><span class="p">,</span> <span class="mf">1.</span><span class="p">)</span>
     <span class="n">z</span> <span class="o">=</span> <span class="n">X</span> <span class="o">*</span> <span class="n">mu</span>
     <span class="n">y</span> <span class="o">&lt;~</span> <span class="n">Normal</span><span class="p">(</span><span class="n">mu</span><span class="p">,</span> <span class="n">sigma</span><span class="p">)</span>
