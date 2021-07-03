@@ -212,8 +212,8 @@ class Trace(InferenceData):
     def values(self):
         return self.raw.samples
 
-    def chain_values(self, chain_id=0):
-        return [self.raw.samples[key][chain_id] for key in self.keys()]
+    def chain(self, chain_id=0):
+        return {key: self.raw.samples[key][chain_id] for key in self.keys()}
 
     # The following methods are used to concatenate two traces or add new samples
     # to a trace.
