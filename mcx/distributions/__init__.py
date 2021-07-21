@@ -9,6 +9,7 @@ from .distribution import Distribution
 from .exponential import Exponential
 from .gamma import Gamma
 from .halfnormal import HalfNormal
+from .inverse_gamma import InverseGamma
 from .lognormal import LogNormal
 from .mvnormal import MvNormal
 from .normal import Normal
@@ -26,6 +27,7 @@ __all__ = [
     "DiscreteUniform",
     "Exponential",
     "Gamma",
+    "InverseGamma",
     "LogNormal",
     "MvNormal",
     "HalfNormal",
