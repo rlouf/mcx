@@ -7,3 +7,4 @@ nord-pygments==0.0.3
 pytest==6.1.2
 pytest-xdist==2.1.0
 Sphinx==3.3.1
+emcee==3.0.2
